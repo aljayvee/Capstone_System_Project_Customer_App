@@ -8,8 +8,10 @@ import RegisterScreen from '../screens/RegisterScreen';
 import CustomerPortalScreen from '../screens/CustomerPortalScreen';
 import ServiceListScreen from '../screens/ServiceListScreen';
 import OrderFormScreen from '../screens/OrderFormScreen';
-import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderConfirmationScreen from '../screens/OrderConfirmationScreen';
+import WaitingForDispatcherScreen from '../screens/WaitingForDispatcherScreen';
+import CustomerChatScreen from '../screens/CustomerChatScreen';
+import CustomerLocationScreen from '../screens/CustomerLocationScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -50,14 +52,24 @@ export default function AppNavigator() {
           options={{ title: 'Order Details' }}
         />
         <Stack.Screen
-          name="Checkout"
-          component={CheckoutScreen}
-          options={{ title: 'Checkout & Payment' }}
-        />
-        <Stack.Screen
           name="OrderConfirmation"
           component={OrderConfirmationScreen}
           options={{ title: 'Order Confirmation', headerBackVisible: false }}
+        />
+        <Stack.Screen
+          name="WaitingForDispatcher"
+          component={WaitingForDispatcherScreen}
+          options={{ title: 'Order Status', headerBackVisible: false }}
+        />
+        <Stack.Screen
+          name="CustomerChat"
+          component={CustomerChatScreen}
+          options={{ title: 'Live Chat' }}
+        />
+        <Stack.Screen
+          name="CustomerLocation"
+          component={CustomerLocationScreen}
+          options={{ title: 'Delivery Locations' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

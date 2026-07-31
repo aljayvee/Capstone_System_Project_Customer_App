@@ -10,10 +10,15 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "config": {
-        "googleMapsApiKey": "AIzaSy_STUB_KEY_FOR_DEV_TESTING"
+        "googleMapsApiKey": "AIzaSyDjpIACipK3uRk_-qTuzKpyXZDVtP5Yjjo"
+      },
+      "bundleIdentifier": "com.astrowarden.CustomerApp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -23,9 +28,10 @@
       "predictiveBackGestureEnabled": false,
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSy_STUB_KEY_FOR_DEV_TESTING"
+          "apiKey": "AIzaSyDjpIACipK3uRk_-qTuzKpyXZDVtP5Yjjo"
         }
-      }
+      },
+      "package": "com.astrowarden.CustomerApp"
     },
     "web": {
       "output": "single",
@@ -43,6 +49,11 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b3e551d1-d422-4e09-8f27-d1d76237a1c4"
+      }
     }
   }
 }

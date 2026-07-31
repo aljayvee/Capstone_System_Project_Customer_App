@@ -12,7 +12,7 @@ describe('CheckoutScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders price calculation breakdown and MapView component', async () => {
+  it('renders price calculation breakdown and MapView component for Pabili', async () => {
     const mockRoute: any = {
       params: {
         user: { id: 'u1', username: 'testuser' },
@@ -36,22 +36,19 @@ describe('CheckoutScreen', () => {
     expect(res.getByText('₱70.00')).toBeTruthy();
 
     expect(res.getByTestId('price-distance-fee')).toBeTruthy();
-    expect(res.getByText('₱10.00')).toBeTruthy(); // Math.floor(2.5) * 5 = 10
+    expect(res.getByText('₱8.00')).toBeTruthy();
 
     expect(res.getByTestId('price-grand-total')).toBeTruthy();
   });
 
-  it('tests COD restriction for Bills Payment > ₱3000', async () => {
+  it('selects payment methods for Pabili order', async () => {
     const mockRoute: any = {
       params: {
         user: { id: 'u1', username: 'testuser' },
         orderPayload: {
-          selectedServices: ['Bills Payment'],
-          billsInfo: {
-            biller: 'Electric Co',
-            accountNo: 'ELE-12345',
-            amount: 4500, // > 3000
-          },
+          selectedServices: ['Pabili'],
+          pabiliCats: ['Grocery'],
+          catItems: { Grocery: ['Rice'] },
         },
       },
     };
@@ -60,20 +57,11 @@ describe('CheckoutScreen', () => {
       <CheckoutScreen navigation={mockNavigation} route={mockRoute} />
     );
 
-    // COD warning displayed
-    expect(res.getByTestId('cod-disabled-warning')).toBeTruthy();
-    expect(
-      res.getByText('⚠️ Cash on Delivery (COD) is unavailable for bills > ₱3,000.')
-    ).toBeTruthy();
-
-    // Attempt pressing COD
-    await fireEvent.press(res.getByTestId('payment-option-COD'));
-
-    // Select GCash instead
     await fireEvent.press(res.getByTestId('payment-option-GCash'));
+    await fireEvent.press(res.getByTestId('payment-option-COD'));
   });
 
-  it('submits order and navigates to OrderConfirmationScreen', async () => {
+  it('submits Pabili order and navigates to OrderConfirmationScreen', async () => {
     const mockRoute: any = {
       params: {
         user: { id: 'u1', username: 'testuser' },
@@ -96,10 +84,9 @@ describe('CheckoutScreen', () => {
         finalOrder: expect.objectContaining({
           services: ['Pabili'],
           baseFee: 70,
-          distanceFee: 10,
+          distanceFee: 8,
         }),
       })
     );
   });
 });
-

@@ -9,26 +9,14 @@ export interface UserData {
   phone?: string;
 }
 
-export interface PadalaDetails {
-  item: string;
-  sender: string;
-  receiver: string;
-  receiverPhone: string;
-}
-
-export interface BillsDetails {
-  biller: string;
-  accountNo: string;
-  amount: number;
-}
-
 export interface OrderPayload {
   selectedServices: string[];
-  pabiliCats?: string[];
+  pabiliCats: string[];
   catItems?: Record<string, string[]>;
-  padalaInfo?: PadalaDetails;
-  billsInfo?: BillsDetails;
   totalPurchaseAmount?: number;
+  deliveryAddress?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface FinalOrder {
@@ -55,6 +43,8 @@ export type RootStackParamList = {
   OrderForm: { user: UserData; selectedServices: string[] };
   Checkout: { user: UserData; orderPayload: OrderPayload };
   OrderConfirmation: { user: UserData; finalOrder: FinalOrder };
+  WaitingForDispatcher: { user: UserData; orderId: string; finalOrder?: FinalOrder };
+  CustomerChat: { user: UserData; orderId: string };
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

@@ -5,29 +5,27 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { RootStackScreenProps, FinalOrder } from '../navigation/types';
-import { database } from '../firebase/config';
-import { ref, set } from 'firebase/database';
+import { saveCustomerLocation } from '../firebase/location';
+import { API_BASE_URL } from '../config/api';
 
 export default function CheckoutScreen({ route, navigation }: RootStackScreenProps<'Checkout'>) {
   const { user, orderPayload } = route.params || {
     user: { id: 'test-user', username: 'testuser', firstName: 'Test', lastName: 'User' },
-    orderPayload: { selectedServices: ['Pabili'] },
+    orderPayload: { selectedServices: ['Pabili'], pabiliCats: ['Grocery'], catItems: { Grocery: ['Item 1'] } },
   };
 
-  const services = orderPayload?.selectedServices || ['Pabili'];
+  const services = ['Pabili'];
+  const latitude = orderPayload?.latitude || 6.671;
+  const longitude = orderPayload?.longitude || 124.6644;
 
-  // Distance estimation
+  // Distance estimation for Pabili
   const distanceKm = 2.5;
   const baseFee = 70;
-  const distanceFee = Math.floor(distanceKm) * 5; // ₱10
-
-  // Purchase subtotal calculation
-  const billsAmount = orderPayload?.billsInfo?.amount || 0;
-  const totalPurchaseAmount = orderPayload?.totalPurchaseAmount || billsAmount;
+  const distanceFee = Math.floor(distanceKm) * 4; // ₱10
+  const totalPurchaseAmount = orderPayload?.totalPurchaseAmount || 0;
 
   // Commission calculation
   let commission = 0;
@@ -39,30 +37,17 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
 
   const grandTotal = baseFee + distanceFee + commission + totalPurchaseAmount;
 
-  // COD Restriction check
-  const isCodRestricted =
-    services.includes('Bills Payment') && billsAmount > 3000;
-
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'GCash' | 'Bank Transfer'>(
-    isCodRestricted ? 'GCash' : 'COD'
-  );
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'GCash' | 'Bank Transfer'>('COD');
 
   const handleSelectPayment = (method: 'COD' | 'GCash' | 'Bank Transfer') => {
-    if (method === 'COD' && isCodRestricted) {
-      Alert.alert(
-        'COD Unavailable',
-        'Cash on Delivery is unavailable for bills over ₱3,000.'
-      );
-      return;
-    }
     setPaymentMethod(method);
   };
 
-  const handlePlaceOrder = () => {
-    const orderId = `SGO-${Date.now().toString().slice(-6)}`;
+  const handlePlaceOrder = async () => {
+    const orderId = `PABILI-${Date.now().toString().slice(-6)}`;
     const finalOrder: FinalOrder = {
       orderId,
-      services,
+      services: ['Pabili'],
       payload: orderPayload,
       baseFee,
       distanceKm,
@@ -71,52 +56,75 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
       subtotal: totalPurchaseAmount,
       grandTotal,
       paymentMethod,
-      status: 'Order Placed',
+      status: 'PENDING',
       createdAt: Date.now(),
     };
 
-    // Save to Firebase
+    // 1. Save GPS Location to Firebase Realtime Database
     try {
-      const orderRef = ref(database, `orders/${user.id}`);
-      set(orderRef, {
-        orderId,
-        services: services.join(', '),
-        status: 'Order Placed',
-        grandTotal,
-        paymentMethod,
-        timestamp: Date.now(),
-      });
+      await saveCustomerLocation(user.id, latitude, longitude, 'Tacurong City Delivery Location');
     } catch (e) {
-      console.log('Firebase write optional in test:', e);
+      console.error('[Firebase RTDB] Location write warning:', e);
     }
 
-    navigation.navigate('OrderConfirmation', { user, finalOrder });
+    // 2. Save Order details exclusively into MariaDB database (`errand_system_db`)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/orders/pabili`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          customerId: user.id,
+          customerName: `${user.firstName} ${user.lastName}`.trim(),
+          pabiliCats: orderPayload.pabiliCats,
+          catItems: orderPayload.catItems,
+          totalPurchaseAmount,
+          baseFee,
+          distanceKm,
+          distanceFee,
+          commission,
+          grandTotal,
+          paymentMethod,
+          deliveryAddress: orderPayload.deliveryAddress || 'Tacurong City',
+          latitude,
+          longitude,
+        }),
+      });
+      if (response && response.ok) {
+        const data = await response.json();
+        console.log('[MariaDB Backend] Pabili order saved to errand_system_db:', data);
+      }
+    } catch (err) {
+      console.error('[MariaDB Backend] Error saving Pabili order to errand_system_db:', err);
+    }
+
+    navigation.navigate('WaitingForDispatcher', { user, orderId, finalOrder });
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <Text style={styles.headerTitle}>Checkout & Payment</Text>
-      <Text style={styles.subTitle}>Review order summary and select payment method</Text>
+      <Text style={styles.subTitle}>Review Pabili order summary and select payment method</Text>
 
       {/* MAP PREVIEW */}
       <View style={styles.mapCard}>
-        <Text style={styles.cardTitle}>📍 Delivery Route Map Preview</Text>
+        <Text style={styles.cardTitle}>📍 Delivery Location Map Preview</Text>
         <View style={styles.mapWrapper}>
           <MapView
             testID="map-view"
-            provider={PROVIDER_GOOGLE}
             style={styles.map}
             initialRegion={{
-              latitude: 6.671,
-              longitude: 124.6644,
+              latitude,
+              longitude,
               latitudeDelta: 0.015,
               longitudeDelta: 0.015,
             }}
           >
             <Marker
               testID="customer-marker"
-              coordinate={{ latitude: 6.671, longitude: 124.6644 }}
-              title="Delivery Location"
+              coordinate={{ latitude, longitude }}
+              title="Customer GPS Location"
+              description="Tacurong City Delivery Spot"
             />
           </MapView>
         </View>
@@ -124,31 +132,19 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
 
       {/* ORDER SUMMARY */}
       <View style={styles.card} testID="order-summary-card">
-        <Text style={styles.cardTitle}>📋 Order Summary</Text>
+        <Text style={styles.cardTitle}>📋 Pabili Order Summary</Text>
         <Text style={styles.summaryItem}>
-          <Text style={styles.boldText}>Services:</Text> {services.join(' / ')}
+          <Text style={styles.boldText}>Service:</Text> Pabili (Personal Shopper)
         </Text>
         {orderPayload?.pabiliCats && (
           <Text style={styles.summaryItem}>
-            <Text style={styles.boldText}>Pabili Stores:</Text>{' '}
+            <Text style={styles.boldText}>Store Categories:</Text>{' '}
             {orderPayload.pabiliCats.join(', ')}
-          </Text>
-        )}
-        {orderPayload?.padalaInfo && (
-          <Text style={styles.summaryItem}>
-            <Text style={styles.boldText}>Parcel:</Text>{' '}
-            {orderPayload.padalaInfo.item} (To: {orderPayload.padalaInfo.receiverPhone})
-          </Text>
-        )}
-        {orderPayload?.billsInfo && (
-          <Text style={styles.summaryItem}>
-            <Text style={styles.boldText}>Biller:</Text>{' '}
-            {orderPayload.billsInfo.biller} (Acc: {orderPayload.billsInfo.accountNo})
           </Text>
         )}
       </View>
 
-      {/* ITEMIZED PRICE BREAKDOWN */}
+      {/* ITEMIZIED PRICE BREAKDOWN */}
       <View style={styles.card} testID="price-breakdown-card">
         <Text style={styles.cardTitle}>💰 Price Breakdown</Text>
         
@@ -158,19 +154,19 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
         </View>
 
         <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Distance Fee ({distanceKm} km @ ₱5/km):</Text>
+          <Text style={styles.priceLabel}>Distance Fee ({distanceKm} km @ ₱4/km):</Text>
           <Text style={styles.priceVal} testID="price-distance-fee">₱{distanceFee}.00</Text>
         </View>
 
         {totalPurchaseAmount > 0 && (
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Purchase Subtotal:</Text>
+            <Text style={styles.priceLabel}>Items Purchase Subtotal:</Text>
             <Text style={styles.priceVal}>₱{totalPurchaseAmount.toFixed(2)}</Text>
           </View>
         )}
 
         <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Service Commission:</Text>
+          <Text style={styles.priceLabel}>Shopper Commission:</Text>
           <Text style={styles.priceVal} testID="price-commission">₱{commission}.00</Text>
         </View>
 
@@ -186,37 +182,24 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
       <View style={styles.card} testID="payment-options-card">
         <Text style={styles.cardTitle}>💳 Select Payment Method</Text>
 
-        {isCodRestricted && (
-          <View style={styles.warningBox} testID="cod-disabled-warning">
-            <Text style={styles.warningText}>
-              ⚠️ Cash on Delivery (COD) is unavailable for bills &gt; ₱3,000.
-            </Text>
-          </View>
-        )}
-
-        {/* COD Option */}
         <TouchableOpacity
           testID="payment-option-COD"
           style={[
             styles.paymentTile,
             paymentMethod === 'COD' && styles.paymentTileSelected,
-            isCodRestricted && styles.paymentTileDisabled,
           ]}
           onPress={() => handleSelectPayment('COD')}
-          disabled={isCodRestricted}
         >
           <Text
             style={[
               styles.paymentText,
               paymentMethod === 'COD' && styles.paymentTextSelected,
-              isCodRestricted && styles.paymentTextDisabled,
             ]}
           >
-            💵 Cash on Delivery (COD) {isCodRestricted ? '(Unavailable)' : ''}
+            💵 Cash on Delivery (COD)
           </Text>
         </TouchableOpacity>
 
-        {/* GCash Option */}
         <TouchableOpacity
           testID="payment-option-GCash"
           style={[
@@ -235,7 +218,6 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
           </Text>
         </TouchableOpacity>
 
-        {/* Bank Transfer Option */}
         <TouchableOpacity
           testID="payment-option-Bank Transfer"
           style={[
@@ -260,7 +242,7 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
         style={styles.submitBtn}
         onPress={handlePlaceOrder}
       >
-        <Text style={styles.submitBtnText}>Place Order Now</Text>
+        <Text style={styles.submitBtnText}>Place Pabili Order Now</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -283,14 +265,10 @@ const styles = StyleSheet.create({
   grandTotalRow: { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 10, marginTop: 6 },
   grandTotalLabel: { fontSize: 16, fontWeight: 'bold', color: '#F62459' },
   grandTotalVal: { fontSize: 18, fontWeight: 'bold', color: '#F62459' },
-  warningBox: { backgroundColor: '#FEF3C7', padding: 10, borderRadius: 8, marginBottom: 12 },
-  warningText: { color: '#92400E', fontSize: 12, fontWeight: '600' },
   paymentTile: { backgroundColor: '#F9FAFB', padding: 14, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', marginBottom: 10 },
   paymentTileSelected: { backgroundColor: '#FFEEF3', borderColor: '#F62459' },
-  paymentTileDisabled: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB', opacity: 0.6 },
   paymentText: { fontSize: 15, fontWeight: '600', color: '#374151' },
   paymentTextSelected: { color: '#F62459', fontWeight: 'bold' },
-  paymentTextDisabled: { color: '#9CA3AF' },
   submitBtn: { backgroundColor: '#F62459', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   submitBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
 });

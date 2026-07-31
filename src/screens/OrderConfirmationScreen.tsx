@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { RootStackScreenProps } from '../navigation/types';
 
 export const TRACKING_STEPS = [
@@ -136,7 +136,6 @@ export default function OrderConfirmationScreen({
         <View style={styles.mapWrapper}>
           <MapView
             testID="confirmation-map-view"
-            provider={PROVIDER_GOOGLE}
             style={styles.map}
             initialRegion={{
               latitude: 6.671,
