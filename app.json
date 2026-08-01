@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "config": {
-        "googleMapsApiKey": "AIzaSyDjpIACipK3uRk_-qTuzKpyXZDVtP5Yjjo"
+        "googleMapsApiKey": "***"
       },
       "bundleIdentifier": "com.astrowarden.CustomerApp",
       "infoPlist": {
