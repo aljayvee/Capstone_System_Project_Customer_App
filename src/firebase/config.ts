@@ -7,7 +7,7 @@ declare const process: { env: Record<string, string | undefined> };
 const firebaseConfig = {
   databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL || 'https://capstonedata-3589c-default-rtdb.asia-southeast1.firebasedatabase.app/',
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'capstonedata-3589c',
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBH2sYvDSKUUb1bZRN-MVGXvv5irU6QfJE',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'capstonedata-3589c.firebaseapp.com',
 };
 
