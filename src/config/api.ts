@@ -31,7 +31,11 @@ const rawUrl =
   getDynamicHostIp() ||
   (Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000');
 
-export const API_BASE_URL = rawUrl.replace(/\/+$/, '');
+// Strip a trailing slash and, if present, a trailing "/api" segment — apiClient.ts
+// always appends its own "/api", so API_BASE_URL must be the bare host:port. A
+// value with "/api" already baked in (e.g. a hand-edited .env) would otherwise
+// silently double up to "/api/api" and break every request.
+export const API_BASE_URL = rawUrl.replace(/\/+$/, '').replace(/\/api$/, '');
 
 export const ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/api/auth/login`,

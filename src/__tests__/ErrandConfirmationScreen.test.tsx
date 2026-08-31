@@ -1,19 +1,20 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import OrderConfirmationScreen from '../screens/OrderConfirmationScreen';
+import ErrandConfirmationScreen from '../screens/ErrandConfirmationScreen';
 
 const mockNavigation: any = {
   navigate: jest.fn(),
   goBack: jest.fn(),
+  reset: jest.fn(),
 };
 
-describe('OrderConfirmationScreen', () => {
+describe('ErrandConfirmationScreen', () => {
   it('renders receipt summary, tracking stepper, and map preview', async () => {
     const mockRoute: any = {
       params: {
         user: { id: 'u1', username: 'testuser' },
-        finalOrder: {
-          orderId: 'SGO-889900',
+        finalErrand: {
+          errandId: 'SGO-889900',
           services: ['Pabili', 'Padala'],
           payload: {},
           baseFee: 70,
@@ -23,19 +24,19 @@ describe('OrderConfirmationScreen', () => {
           subtotal: 0,
           grandTotal: 130,
           paymentMethod: 'GCash',
-          status: 'Order Placed',
+          status: 'Errand Placed',
           createdAt: Date.now(),
         },
       },
     };
 
     const res: any = await render(
-      <OrderConfirmationScreen navigation={mockNavigation} route={mockRoute} />
+      <ErrandConfirmationScreen navigation={mockNavigation} route={mockRoute} />
     );
 
     // Digital receipt checks
     expect(res.getByTestId('digital-receipt')).toBeTruthy();
-    expect(res.getByTestId('order-id-text')).toBeTruthy();
+    expect(res.getByTestId('errand-id-text')).toBeTruthy();
     expect(res.getByText('SGO-889900')).toBeTruthy();
     expect(res.getByTestId('grand-total-text')).toBeTruthy();
     expect(res.getByText('₱130.00')).toBeTruthy();
@@ -44,14 +45,17 @@ describe('OrderConfirmationScreen', () => {
     expect(res.getByTestId('tracking-stepper')).toBeTruthy();
     expect(res.getByTestId('tracking-step-0')).toBeTruthy();
 
-    // Map preview check
-    expect(res.getByTestId('confirmation-map-view')).toBeTruthy();
+    // Map preview placeholder renders inline instead of a live MapView — a
+    // MapView directly inside this ScrollView crashes on Android. The real
+    // MapView only mounts inside MapPreviewField's own full-screen modal,
+    // which is covered separately by MapPreviewField's own tests.
+    expect(res.getByTestId('confirmation-map-preview-field')).toBeTruthy();
 
     // Back to dashboard press
     await fireEvent.press(res.getByTestId('back-to-dashboard-button'));
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('CustomerPortal', {
-      user: mockRoute.params.user,
+    expect(mockNavigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'CustomerPortal', params: { user: mockRoute.params.user } }],
     });
-  });
+  }, 15000);
 });
-

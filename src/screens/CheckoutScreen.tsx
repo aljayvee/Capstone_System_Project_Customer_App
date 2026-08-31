@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,269 +6,300 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import { RootStackScreenProps, FinalOrder } from '../navigation/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MapPin, ClipboardList, Wallet, CreditCard, Banknote, Smartphone, Landmark, CheckCircle2 } from 'lucide-react-native';
+import { RootStackScreenProps, FinalErrand } from '../navigation/types';
 import { saveCustomerLocation } from '../firebase/location';
-import { API_BASE_URL } from '../config/api';
+import { apiClient } from '../services/apiClient';
+import MapPreviewField from '../components/MapPreviewField';
+import { useThemeColor } from '../hooks/useThemeColor';
+import { useRateConfig } from '../hooks/useRateConfig';
+import { fetchQuote, type FeeQuote } from '../services/quoteService';
+import FeeBreakdownCard from '../components/FeeBreakdownCard';
+import { FontFamily, FontSizes, FontWeights, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
 
 export default function CheckoutScreen({ route, navigation }: RootStackScreenProps<'Checkout'>) {
-  const { user, orderPayload } = route.params || {
+  const { user, errandPayload } = route.params || {
     user: { id: 'test-user', username: 'testuser', firstName: 'Test', lastName: 'User' },
-    orderPayload: { selectedServices: ['Pabili'], pabiliCats: ['Grocery'], catItems: { Grocery: ['Item 1'] } },
+    errandPayload: { selectedServices: ['Pabili'], pabiliCats: ['Grocery'], catItems: { Grocery: ['Item 1'] } },
   };
 
+  const { colors, isDark } = useThemeColor();
+  const { isTablet } = useResponsive();
+  const { rateConfig, baseFee } = useRateConfig();
+
   const services = ['Pabili'];
-  const latitude = orderPayload?.latitude || 6.671;
-  const longitude = orderPayload?.longitude || 124.6644;
+  const latitude = errandPayload?.latitude || 6.671;
+  const longitude = errandPayload?.longitude || 124.6644;
 
-  // Distance estimation for Pabili
-  const distanceKm = 2.5;
-  const baseFee = 70;
-  const distanceFee = Math.floor(distanceKm) * 4; // ₱10
-  const totalPurchaseAmount = orderPayload?.totalPurchaseAmount || 0;
+  const totalPurchaseAmount = errandPayload?.totalPurchaseAmount || 0;
+  const storeCount = Math.max(1, errandPayload?.pabiliCats?.length || 1);
 
-  // Commission calculation
-  let commission = 0;
-  if (totalPurchaseAmount > 3000) {
-    commission = Math.round(totalPurchaseAmount * 0.1);
-  } else if (totalPurchaseAmount > 0) {
-    commission = 50;
-  }
-
-  const grandTotal = baseFee + distanceFee + commission + totalPurchaseAmount;
+  const itemUnits = Object.values(errandPayload?.catItems ?? {}).reduce(
+    (sum, items) => sum + (Array.isArray(items) ? items.length : 0),
+    0
+  );
 
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'GCash' | 'Bank Transfer'>('COD');
+  const [quote, setQuote] = useState<FeeQuote | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchQuote({
+      estimatedCost: totalPurchaseAmount,
+      storeCount,
+      itemUnits,
+      isCod: paymentMethod === 'COD',
+    }).then((result) => {
+      if (!cancelled) setQuote(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [totalPurchaseAmount, storeCount, itemUnits, paymentMethod]);
+
+  const fees = quote?.fees ?? null;
+  const grandTotal = quote?.grandTotal ?? null;
 
   const handleSelectPayment = (method: 'COD' | 'GCash' | 'Bank Transfer') => {
     setPaymentMethod(method);
   };
 
-  const handlePlaceOrder = async () => {
-    const orderId = `PABILI-${Date.now().toString().slice(-6)}`;
-    const finalOrder: FinalOrder = {
-      orderId,
+  const handlePlaceErrand = async () => {
+    const errandId = `PABILI-${Date.now().toString().slice(-6)}`;
+    const finalErrand: FinalErrand = {
+      errandId,
       services: ['Pabili'],
-      payload: orderPayload,
-      baseFee,
-      distanceKm,
-      distanceFee,
-      commission,
+      payload: errandPayload,
+      baseFee: fees?.baseFee ?? baseFee,
+      distanceKm: 0,
+      distanceFee: fees?.distanceFee ?? 0,
+      commission: fees?.groceryFee ?? 0,
       subtotal: totalPurchaseAmount,
-      grandTotal,
+      grandTotal: grandTotal ?? 0,
       paymentMethod,
       status: 'PENDING',
       createdAt: Date.now(),
     };
 
-    // 1. Save GPS Location to Firebase Realtime Database
     try {
       await saveCustomerLocation(user.id, latitude, longitude, 'Tacurong City Delivery Location');
     } catch (e) {
       console.error('[Firebase RTDB] Location write warning:', e);
     }
 
-    // 2. Save Order details exclusively into MariaDB database (`errand_system_db`)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/orders/pabili`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          customerId: user.id,
-          customerName: `${user.firstName} ${user.lastName}`.trim(),
-          pabiliCats: orderPayload.pabiliCats,
-          catItems: orderPayload.catItems,
-          totalPurchaseAmount,
-          baseFee,
-          distanceKm,
-          distanceFee,
-          commission,
-          grandTotal,
-          paymentMethod,
-          deliveryAddress: orderPayload.deliveryAddress || 'Tacurong City',
-          latitude,
-          longitude,
-        }),
+      await apiClient.post('/errands/pabili', {
+        errandId,
+        customerId: user.id,
+        customerName: `${user.firstName} ${user.lastName}`.trim(),
+        pabiliCats: errandPayload.pabiliCats,
+        catItems: errandPayload.catItems,
+        totalPurchaseAmount,
+        baseFee: fees?.baseFee ?? baseFee,
+        distanceKm: 0,
+        distanceFee: fees?.distanceFee ?? 0,
+        commission: fees?.groceryFee ?? 0,
+        grandTotal: grandTotal ?? 0,
+        paymentMethod,
+        deliveryAddress: errandPayload.deliveryAddress || 'Tacurong City',
+        latitude,
+        longitude,
       });
-      if (response && response.ok) {
-        const data = await response.json();
-        console.log('[MariaDB Backend] Pabili order saved to errand_system_db:', data);
-      }
     } catch (err) {
-      console.error('[MariaDB Backend] Error saving Pabili order to errand_system_db:', err);
+      console.error('[MariaDB Backend] Error saving Pabili errand to errand_system_db:', err);
     }
 
-    navigation.navigate('WaitingForDispatcher', { user, orderId, finalOrder });
+    if (navigation?.navigate) {
+      navigation.navigate('WaitingForDispatcher', {
+        user,
+        errandId,
+        finalErrand,
+      });
+    }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.headerTitle}>Checkout & Payment</Text>
-      <Text style={styles.subTitle}>Review Pabili order summary and select payment method</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.headerTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>Confirm Your Errand</Text>
+        <Text style={[styles.subTitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>Review pickup, fees, and payment details.</Text>
 
-      {/* MAP PREVIEW */}
-      <View style={styles.mapCard}>
-        <Text style={styles.cardTitle}>📍 Delivery Location Map Preview</Text>
-        <View style={styles.mapWrapper}>
-          <MapView
-            testID="map-view"
-            style={styles.map}
-            initialRegion={{
-              latitude,
-              longitude,
-              latitudeDelta: 0.015,
-              longitudeDelta: 0.015,
-            }}
-          >
-            <Marker
-              testID="customer-marker"
-              coordinate={{ latitude, longitude }}
-              title="Customer GPS Location"
-              description="Tacurong City Delivery Spot"
-            />
-          </MapView>
-        </View>
-      </View>
-
-      {/* ORDER SUMMARY */}
-      <View style={styles.card} testID="order-summary-card">
-        <Text style={styles.cardTitle}>📋 Pabili Order Summary</Text>
-        <Text style={styles.summaryItem}>
-          <Text style={styles.boldText}>Service:</Text> Pabili (Personal Shopper)
-        </Text>
-        {orderPayload?.pabiliCats && (
-          <Text style={styles.summaryItem}>
-            <Text style={styles.boldText}>Store Categories:</Text>{' '}
-            {orderPayload.pabiliCats.join(', ')}
-          </Text>
-        )}
-      </View>
-
-      {/* ITEMIZIED PRICE BREAKDOWN */}
-      <View style={styles.card} testID="price-breakdown-card">
-        <Text style={styles.cardTitle}>💰 Price Breakdown</Text>
-        
-        <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Base Delivery Fee:</Text>
-          <Text style={styles.priceVal} testID="price-base-fee">₱{baseFee}.00</Text>
-        </View>
-
-        <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Distance Fee ({distanceKm} km @ ₱4/km):</Text>
-          <Text style={styles.priceVal} testID="price-distance-fee">₱{distanceFee}.00</Text>
-        </View>
-
-        {totalPurchaseAmount > 0 && (
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Items Purchase Subtotal:</Text>
-            <Text style={styles.priceVal}>₱{totalPurchaseAmount.toFixed(2)}</Text>
+        {/* SUMMARY CARD */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+          <View style={styles.cardTitleRow}>
+            <ClipboardList size={18} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>Shopping List Summary</Text>
           </View>
-        )}
-
-        <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Shopper Commission:</Text>
-          <Text style={styles.priceVal} testID="price-commission">₱{commission}.00</Text>
+          <Text style={[styles.summaryItem, { color: colors.textMedium }]} maxFontSizeMultiplier={1.2}>
+            <Text style={[styles.boldText, { color: colors.textDark }]}>Service: </Text>
+            {errandPayload?.selectedServices?.join(', ') || 'Pabili (Personal Shopper)'}
+          </Text>
+          {errandPayload?.pabiliCats && (
+            <Text style={[styles.summaryItem, { color: colors.textMedium }]} maxFontSizeMultiplier={1.2}>
+              <Text style={[styles.boldText, { color: colors.textDark }]}>Store Categories: </Text>
+              {errandPayload.pabiliCats.join(', ')}
+            </Text>
+          )}
         </View>
 
-        <View style={[styles.priceRow, styles.grandTotalRow]}>
-          <Text style={styles.grandTotalLabel}>Grand Total:</Text>
-          <Text style={styles.grandTotalVal} testID="price-grand-total">
-            ₱{grandTotal.toFixed(2)}
-          </Text>
+        {/* DELIVERY LOCATION PREVIEW */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+          <View style={styles.cardTitleRow}>
+            <MapPin size={18} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>Delivery Location</Text>
+          </View>
+          <MapPreviewField
+            testID="map-preview-field"
+            center={{ latitude, longitude }}
+            label="Delivery Location"
+            addressText={errandPayload?.deliveryAddress || 'Tacurong City Delivery Location'}
+          />
         </View>
-      </View>
 
-      {/* PAYMENT OPTIONS */}
-      <View style={styles.card} testID="payment-options-card">
-        <Text style={styles.cardTitle}>💳 Select Payment Method</Text>
+        {/* FEE BREAKDOWN */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+          <View style={styles.cardTitleRow}>
+            <Wallet size={18} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>Fee Breakdown</Text>
+          </View>
+          <FeeBreakdownCard breakdown={quote} testIDPrefix="price" />
+        </View>
+
+        {/* PAYMENT METHOD */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+          <View style={styles.cardTitleRow}>
+            <CreditCard size={18} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>Select Payment Method</Text>
+          </View>
+
+          {[
+            { id: 'COD', label: 'Cash on Delivery (COD)', icon: Banknote },
+            { id: 'GCash', label: 'GCash / E-Wallet', icon: Smartphone },
+            { id: 'Bank Transfer', label: 'Online Bank Transfer', icon: Landmark },
+          ].map((item) => {
+            const isSelected = paymentMethod === item.id;
+            const IconComponent = item.icon;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                testID={`payment-option-${item.id}`}
+                style={[
+                  styles.paymentTile,
+                  {
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected
+                      ? isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFF0F5'
+                      : isDark ? 'rgba(255,255,255,0.03)' : colors.bgGray,
+                  },
+                ]}
+                onPress={() => handleSelectPayment(item.id as any)}
+              >
+                <View style={styles.paymentRow}>
+                  <IconComponent size={20} color={isSelected ? colors.primary : colors.textGray} />
+                  <Text
+                    style={[
+                      styles.paymentText,
+                      { color: isSelected ? colors.primary : colors.textDark },
+                    ]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+                {isSelected && <CheckCircle2 size={18} color={colors.primary} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <TouchableOpacity
-          testID="payment-option-COD"
-          style={[
-            styles.paymentTile,
-            paymentMethod === 'COD' && styles.paymentTileSelected,
-          ]}
-          onPress={() => handleSelectPayment('COD')}
+          testID="submit-errand-button"
+          activeOpacity={0.85}
+          style={[styles.submitBtn, { backgroundColor: colors.primary }, Shadows.liftedUp]}
+          onPress={handlePlaceErrand}
         >
-          <Text
-            style={[
-              styles.paymentText,
-              paymentMethod === 'COD' && styles.paymentTextSelected,
-            ]}
-          >
-            💵 Cash on Delivery (COD)
-          </Text>
+          <Text style={styles.submitBtnText} maxFontSizeMultiplier={1.25}>Place Pabili Errand Now</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          testID="payment-option-GCash"
-          style={[
-            styles.paymentTile,
-            paymentMethod === 'GCash' && styles.paymentTileSelected,
-          ]}
-          onPress={() => handleSelectPayment('GCash')}
-        >
-          <Text
-            style={[
-              styles.paymentText,
-              paymentMethod === 'GCash' && styles.paymentTextSelected,
-            ]}
-          >
-            📱 GCash (E-Wallet)
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          testID="payment-option-Bank Transfer"
-          style={[
-            styles.paymentTile,
-            paymentMethod === 'Bank Transfer' && styles.paymentTileSelected,
-          ]}
-          onPress={() => handleSelectPayment('Bank Transfer')}
-        >
-          <Text
-            style={[
-              styles.paymentText,
-              paymentMethod === 'Bank Transfer' && styles.paymentTextSelected,
-            ]}
-          >
-            🏦 Bank Transfer
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        testID="submit-order-button"
-        style={styles.submitBtn}
-        onPress={handlePlaceOrder}
-      >
-        <Text style={styles.submitBtnText}>Place Pabili Order Now</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8F8', padding: 20 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
-  subTitle: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
-  card: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  mapCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 12 },
-  mapWrapper: { height: 180, borderRadius: 8, overflow: 'hidden' },
-  map: { width: '100%', height: '100%' },
-  summaryItem: { fontSize: 14, color: '#374151', marginBottom: 6 },
-  boldText: { fontWeight: 'bold' },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  priceLabel: { fontSize: 14, color: '#4B5563' },
-  priceVal: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-  grandTotalRow: { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 10, marginTop: 6 },
-  grandTotalLabel: { fontSize: 16, fontWeight: 'bold', color: '#F62459' },
-  grandTotalVal: { fontSize: 18, fontWeight: 'bold', color: '#F62459' },
-  paymentTile: { backgroundColor: '#F9FAFB', padding: 14, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', marginBottom: 10 },
-  paymentTileSelected: { backgroundColor: '#FFEEF3', borderColor: '#F62459' },
-  paymentText: { fontSize: 15, fontWeight: '600', color: '#374151' },
-  paymentTextSelected: { color: '#F62459', fontWeight: 'bold' },
-  submitBtn: { backgroundColor: '#F62459', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  submitBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl * 2,
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
+  },
+  headerTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    marginBottom: Spacing.xs,
+  },
+  subTitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    marginBottom: Spacing.md,
+  },
+  card: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  cardTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+  },
+  summaryItem: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    marginBottom: 6,
+  },
+  boldText: {
+    fontFamily: FontFamily.bold,
+  },
+  paymentTile: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  paymentText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+  },
+  submitBtn: {
+    padding: moderateScale(11, 0.2),
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    minHeight: moderateScale(48, 0.2),
+  },
+  submitBtnText: {
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+  },
 });

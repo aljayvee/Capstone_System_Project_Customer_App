@@ -9,6 +9,8 @@ export const FontFamily = {
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
+  mono: 'JetBrainsMono_500Medium',
+  monoBold: 'JetBrainsMono_700Bold',
 } as const;
 
 export const LightColors = {
@@ -118,16 +120,16 @@ export type ThemeColors = Record<keyof typeof LightColors, string>;
  * quietly different in the other.
  */
 export const FontSizes = {
-  xs: 12,
+  xs: 10,
   /** Material's practical minimum. */
-  sm: 14,
+  sm: 11.5,
   /** Body. */
-  base: 16,
-  md: 18,
-  lg: 20,
-  xl: 22,
-  xxl: 26,
-  huge: 32,
+  base: 12.5,
+  md: 14,
+  lg: 15.5,
+  xl: 17.5,
+  xxl: 21,
+  huge: 26,
 } as const;
 
 export const FontWeights = {
@@ -141,11 +143,11 @@ export const FontWeights = {
 export const Spacing = {
   xs: 4,
   sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  huge: 32,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  xxl: 30,
+  huge: 40,
 } as const;
 
 export const BorderRadius = {
@@ -174,3 +176,19 @@ export const Shadows = {
     elevation: 8,
   },
 } as const;
+
+// Responsive Layout & Container Tokens
+export {
+  scale,
+  verticalScale,
+  moderateScale,
+  moderateVerticalScale,
+  scaledFontSize,
+  useResponsive,
+  Breakpoints,
+  MAX_CONTENT_WIDTH,
+  getDeviceCategory,
+  getAspectRatioCategory,
+  clamp,
+} from '../utils/responsive';
+

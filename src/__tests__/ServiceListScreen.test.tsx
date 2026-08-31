@@ -28,7 +28,7 @@ describe('ServiceListScreen', () => {
     expect(res.getByTestId('selected-badge-Pabili')).toBeTruthy();
   });
 
-  it('navigates to OrderFormScreen when Continue is pressed', async () => {
+  it('navigates to ErrandFormScreen when Continue is pressed', async () => {
     const res: any = await render(
       <ServiceListScreen navigation={mockNavigation} route={mockRoute} />
     );
@@ -37,7 +37,7 @@ describe('ServiceListScreen', () => {
 
     await fireEvent.press(res.getByTestId('continue-button'));
 
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('OrderForm', {
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('ErrandForm', {
       user: mockRoute.params.user,
       selectedServices: ['Pabili'],
     });

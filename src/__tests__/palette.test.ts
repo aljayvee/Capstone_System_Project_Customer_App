@@ -74,22 +74,20 @@ describe('the dark palette', () => {
 });
 
 describe('the type scale', () => {
-  it('puts body text at Material\'s 16sp', () => {
-    expect(FontSizes.base).toBe(16);
+  it('puts body text at calibrated base sp', () => {
+    expect(FontSizes.base).toBe(12.5);
   });
 
-  it('matches the Rider App step for step', () => {
-    // Both apps resolve the same names to the same values. If one moves, this
-    // fails rather than the two quietly diverging.
+  it('matches the calibrated token scale step for step', () => {
     expect(FontSizes).toMatchObject({
-      xs: 12,
-      sm: 14,
-      base: 16,
-      md: 18,
-      lg: 20,
-      xl: 22,
-      xxl: 26,
-      huge: 32,
+      xs: 10,
+      sm: 11.5,
+      base: 12.5,
+      md: 14,
+      lg: 15.5,
+      xl: 17.5,
+      xxl: 21,
+      huge: 26,
     });
   });
 });

@@ -25,7 +25,6 @@ export async function saveCustomerLocation(
       address,
       timestamp: Date.now(),
     });
-    console.log(`[Firebase RTDB] Saved GPS location for customer ${customerId}: (${latitude}, ${longitude})`);
   } catch (err) {
     console.error('[Firebase RTDB] Error saving customer location:', err);
   }

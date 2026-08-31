@@ -7,6 +7,11 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    // lucide-react-native's package.json "react-native"/"import" export condition
+    // points at an ESM-only .mjs build that jest-expo's transform pipeline never
+    // matches (it only transforms .js/.jsx/.ts/.tsx) — redirect to the package's
+    // own CJS build instead of trying to teach Jest to transform .mjs globally.
+    '^lucide-react-native$': '<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
   },
   testPathIgnorePatterns: ['/node_modules/', '/.expo/'],
   collectCoverageFrom: [
