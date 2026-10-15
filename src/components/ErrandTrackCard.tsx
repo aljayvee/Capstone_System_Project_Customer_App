@@ -22,6 +22,8 @@ import { formatErrandId } from '../utils/formatErrandId';
 import { formatDuration, formatDistance } from '../utils/format';
 import { useRiderLiveLocation } from '../hooks/useRiderLiveLocation';
 import { useErrandEta } from '../hooks/useErrandEta';
+import { useOsmTilesAvailable } from '../config/mapTiles';
+import { chosenMapFor, engineForMap, useMapChoice } from '../config/mapChoice';
 import { toEtaWindow, formatEtaWindow, formatEtaBreakdown } from '../utils/eta';
 import { formatDelayNotice } from '../hooks/useErrandEta';
 import { useLiveRoute } from '../hooks/useLiveRoute';
@@ -38,7 +40,7 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
     location: riderLocation,
     freshness: gpsFreshness,
     label: gpsLabel,
-  } = useRiderLiveLocation(errand?.riderId ?? null);
+  } = useRiderLiveLocation(errand?.riderId ?? null, errand?.id ?? null);
 
   const { telemetry: etaTelemetry, delayNotice } = useErrandEta(errand?.id ?? null);
 
@@ -61,9 +63,15 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
     .filter((p: any) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
     .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0));
 
+  const osmTilesUp = useOsmTilesAvailable(true);
+
   const waypoints = pinpoints
     .filter((p: any) => !p.departedAt && !p.arrivedAt)
     .map((p: any) => ({ latitude: p.latitude, longitude: p.longitude }));
+
+  // Shared with TrackTab: one map per errand (config/mapChoice.ts).
+  const errandKey = errand?.id ? String(errand.id) : null;
+  const chosenMap = chosenMapFor(errandKey);
 
   const {
     coordinates: routeCoordinates,
@@ -71,11 +79,21 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
     deliveryLegCoordinates,
     distanceMeters,
     durationSeconds,
-  } = useLiveRoute(
-    riderLocation,
-    customerCoordinate,
-    waypoints
-  );
+    pickupDistanceMeters,
+    pickupDurationSeconds,
+    deliveryDistanceMeters,
+    deliveryDurationSeconds,
+    nextStopRoadMeters,
+    degraded: routeDegraded,
+    lineEngine: routeLineEngine,
+    unroutable: routeUnroutable,
+  } = useLiveRoute(riderLocation, customerCoordinate, waypoints, {
+    // The rider's own route and map (see TrackTab), reused for this errand,
+    // then on the chosen map's roads only.
+    choose: 'fastest',
+    errandId: errandKey ?? undefined,
+    provider: chosenMap ? engineForMap(chosenMap) : osmTilesUp ? undefined : 'google',
+  });
 
   const stage = getErrandProgressStage({
     status: errand.status,
@@ -83,6 +101,7 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
     pinpoints: errand.pinpoints,
     riderLocation,
     destination: customerCoordinate,
+    nextStopRoadMeters,
   });
 
   const etaWindow = toEtaWindow(errand?.etaLowAt, errand?.etaHighAt);
@@ -93,6 +112,17 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
   const hasEta = etaText != null;
   const delayNoticeText = formatDelayNotice(delayNotice);
   const isDelivered = String(errand?.status || '').toUpperCase() === 'DELIVERED';
+  // The map opens only for the delivery run (TrackTab has the same rule).
+  // While the rider is shopping this card shows the ETA and distance to the
+  // store instead, and cannot be opened into a map.
+  const delivering = stage.index >= 3;
+  const mapStyle = useMapChoice(errandKey, {
+    lineEngine: routeLineEngine,
+    routeFailed: routeDegraded,
+    osmTilesUp,
+    unroutable: routeUnroutable,
+  });
+  const shownMeters = delivering ? distanceMeters : pickupDistanceMeters ?? distanceMeters;
 
   return (
     <View
@@ -178,7 +208,8 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
               borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#DCFCE7',
             },
           ]}
-          onPress={() => setIsMapOpen(true)}
+          onPress={delivering ? () => setIsMapOpen(true) : undefined}
+          disabled={!delivering}
           testID={`view-live-map-${errand.orderId}`}
         >
           <View style={styles.mapHeroHeader}>
@@ -192,18 +223,24 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
                 <Navigation size={16} color={isDark ? '#34D399' : '#059669'} strokeWidth={2.4} />
               </View>
               <View>
-                <Text style={[styles.mapHeroTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>Live Route Tracking</Text>
+                <Text style={[styles.mapHeroTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+                  {delivering ? 'Live Route Tracking' : 'Rider is shopping'}
+                </Text>
                 <Text style={[styles.mapHeroSub, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
-                  {riderLocation && gpsFreshness === 'LIVE'
-                    ? 'Tap to view live turn-by-turn map'
-                    : 'View errand path & destinations'}
+                  {!delivering
+                    ? 'The live map opens when your rider is on the way to you'
+                    : riderLocation && gpsFreshness === 'LIVE'
+                      ? 'Tap to view live turn-by-turn map'
+                      : 'View errand path & destinations'}
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.expandBtn, { backgroundColor: colors.primary }]}>
-              <Maximize2 size={13} color="#FFFFFF" strokeWidth={2.4} />
-            </View>
+            {delivering && (
+              <View style={[styles.expandBtn, { backgroundColor: colors.primary }]}>
+                <Maximize2 size={13} color="#FFFFFF" strokeWidth={2.4} />
+              </View>
+            )}
           </View>
 
           {/* Dynamic ETA & Distance Chips */}
@@ -229,7 +266,9 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
                 >
                   <MapPin size={12} color={colors.primary} strokeWidth={2.2} />
                   <Text style={[styles.metricChipText, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
-                    {distanceMeters != null ? `${formatDistance(distanceMeters)} away` : 'Distance pending'}
+                    {shownMeters != null
+                      ? `${formatDistance(shownMeters)} ${delivering ? 'away' : 'to the store'}`
+                      : 'Distance pending'}
                   </Text>
                 </View>
               </>
@@ -360,7 +399,15 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
                 deliveryLegCoordinates={deliveryLegCoordinates}
                 distanceMeters={distanceMeters}
                 durationSeconds={durationSeconds}
+                pickupDistanceMeters={pickupDistanceMeters}
+                pickupDurationSeconds={pickupDurationSeconds}
+                deliveryDistanceMeters={deliveryDistanceMeters}
+                deliveryDurationSeconds={deliveryDurationSeconds}
+                // A straight-line guess is drawn dashed; on either map.
+                degraded={routeDegraded}
                 phase={stage.index >= 3 ? 'delivering' : 'shopping'}
+                mapStyle={mapStyle}
+                lineEngine={routeLineEngine}
               />
             )}
           </View>

@@ -30,7 +30,8 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
 
   const handleContinue = () => {
     if (selectedServices.length === 0) return;
-    navigation.navigate('ErrandForm', { user, selectedServices });
+    // Pabili's step 1 is the store search since 2026-10-10.
+    navigation.navigate('StoreSearch', { user });
   };
 
   return (
@@ -39,7 +40,7 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+          style={styles.backBtn}
           testID="back-button"
         >
           <ChevronLeft size={22} color={colors.textDark} />

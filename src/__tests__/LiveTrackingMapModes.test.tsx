@@ -145,6 +145,87 @@ describe('Focus and Full', () => {
   });
 });
 
+describe('the ETA badge', () => {
+  const legs = {
+    distanceMeters: 55700,
+    durationSeconds: 3300,
+    pickupDistanceMeters: 52900,
+    pickupDurationSeconds: 3600,
+    deliveryDistanceMeters: 2800,
+    deliveryDurationSeconds: 300,
+  };
+
+  it('quotes the run to the store while shopping, not the whole errand', async () => {
+    const res = await draw({ phase: 'shopping', ...legs });
+    expect(res.getByText(/To store/)).toBeTruthy();
+    expect(res.getByText(/52\.9 km/)).toBeTruthy();
+    expect(res.queryByText(/55\.7 km/)).toBeNull();
+  });
+
+  it('quotes the run to the customer once delivering', async () => {
+    const res = await draw({ phase: 'delivering', ...legs });
+    expect(res.getByText(/To you/)).toBeTruthy();
+    expect(res.getByText(/2\.8 km/)).toBeTruthy();
+  });
+
+  it('falls back to the unlabelled total when no leg figures arrived', async () => {
+    const res = await draw({ phase: 'shopping', distanceMeters: 55700, durationSeconds: 3300 });
+    expect(res.getByText(/55\.7 km/)).toBeTruthy();
+    expect(res.queryByText(/To store/)).toBeNull();
+  });
+});
+
+describe('the map under the line, the same as the rider sees', () => {
+  it('is Google unless the server drew the route on OpenStreetMap', async () => {
+    const res = await draw({ phase: 'delivering' });
+    expect(res.queryByTestId('osm-tiles')).toBeNull();
+    expect(res.getByTestId('mock-map-view').props.mapType).toBe('standard');
+  });
+
+  it('draws our OpenStreetMap tiles in place of Google, with the credit', async () => {
+    const res = await draw({ phase: 'delivering', mapStyle: 'osm' });
+    expect(res.getByTestId('osm-tiles').props.urlTemplate).toMatch(/\/tiles\/\{z\}\/\{x\}\/\{y\}\.png$/);
+    expect(res.getByTestId('mock-map-view').props.mapType).toBe('none');
+    expect(res.getByText('© OpenStreetMap contributors')).toBeTruthy();
+  });
+
+  it('draws the rider from an image, which Android cannot lose on a redraw', async () => {
+    const res = await draw({ phase: 'delivering' });
+    const rider = res.getByTestId('mock-marker-animated');
+    expect(rider.props.image).toBeTruthy();
+    expect(rider.props.children).toBeUndefined();
+  });
+});
+
+describe('the link from the rider to the route', () => {
+  // About 50 m south of the rider, as when their phone sits off the road.
+  const fromNearby = [
+    { latitude: 6.68855, longitude: 124.6788 },
+    { latitude: 6.6875, longitude: 124.6788 },
+  ];
+
+  it('joins a rider standing off the road to where the route starts', async () => {
+    const res = await draw({ phase: 'shopping', pickupLegCoordinates: fromNearby });
+    const link = res.getByTestId('route-link');
+    expect(link.props.coordinates[0]).toMatchObject({ latitude: RIDER.latitude, longitude: RIDER.longitude });
+    expect(link.props.coordinates[1]).toMatchObject(fromNearby[0]);
+  });
+
+  it('is not drawn when the route already starts at the rider', async () => {
+    const res = await draw({
+      phase: 'shopping',
+      pickupLegCoordinates: [{ latitude: RIDER.latitude, longitude: RIDER.longitude }, fromNearby[1]],
+    });
+    expect(res.queryByTestId('route-link')).toBeNull();
+  });
+
+  it('is not drawn to a route that starts far from the rider', async () => {
+    // line(6) starts over a kilometre away: not a route from here.
+    const res = await draw({ phase: 'shopping' });
+    expect(res.queryByTestId('route-link')).toBeNull();
+  });
+});
+
 describe('the stores on the map', () => {
   it('keeps a finished stop visible rather than removing it', async () => {
     // Only the ROUTING drops a completed store; the marker stays so the

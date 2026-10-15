@@ -8,16 +8,12 @@ export function useThemeColor() {
     return context;
   } catch {
     // Fallback if component is rendered outside ThemeProvider
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === 'dark';
-    const colors = isDark ? DarkColors : LightColors;
-
     return {
-      themeMode: 'system' as ThemeMode,
+      themeMode: 'light' as ThemeMode,
       setThemeMode: async (_mode: ThemeMode) => {},
-      colors,
-      isDark,
-      colorScheme: (colorScheme ?? 'light') as 'light' | 'dark',
+      colors: LightColors,
+      isDark: false,
+      colorScheme: 'light' as 'light' | 'dark',
     };
   }
 }

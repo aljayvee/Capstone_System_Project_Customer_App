@@ -2,7 +2,19 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Star, Pencil, Trash2 } from 'lucide-react-native';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { FontSizes, FontWeights, Spacing, BorderRadius, Shadows, FontFamily } from '../../config/theme';
+import {
+  FontSizes,
+  FontWeights,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  FontFamily,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../../config/theme';
 import { getLocationTypeIcon } from '../../utils/locationLabelIcons';
 import { SavedLocation } from './types';
 
@@ -16,63 +28,106 @@ export interface SavedLocationCardProps {
 export default function SavedLocationCard({ location, onSetDefault, onEdit, onDelete }: SavedLocationCardProps) {
   const { colors, isDark } = useThemeColor();
   const Icon = getLocationTypeIcon(location.label);
+  const doorDetails = [location.streetName, location.landmark]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' • ');
 
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: location.isDefault ? colors.primary : colors.border },
-        location.isDefault && styles.cardDefault,
+        {
+          backgroundColor: colors.card,
+          borderColor: location.isDefault ? colors.primary : colors.border,
+          borderWidth: location.isDefault ? 1.5 : 1,
+        },
         Shadows.soft,
       ]}
+      testID={`saved-location-card-${location.id}`}
     >
-      <View style={[styles.iconBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : colors.primaryLight }]}>
-        <Icon size={18} color={colors.primary} strokeWidth={2} />
-      </View>
-
-      <View style={styles.info}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.textDark }]} numberOfLines={1}>
-            {location.label}
-          </Text>
-          {location.isDefault && (
-            <View style={[styles.defaultBadge, { backgroundColor: colors.primary }]}>
-              <Star size={10} color="#FFFFFF" fill="#FFFFFF" />
-              <Text style={styles.defaultBadgeText}>Default</Text>
-            </View>
-          )}
+      <TouchableOpacity
+        style={styles.cardContent}
+        activeOpacity={location.isDefault ? 1 : 0.7}
+        onPress={() => {
+          if (!location.isDefault) {
+            onSetDefault(location);
+          }
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ selected: location.isDefault }}
+        accessibilityLabel={
+          location.isDefault
+            ? `${location.label}, Default delivery location`
+            : `Set ${location.label} as default delivery location`
+        }
+        testID={`saved-location-select-${location.id}`}
+      >
+        <View style={[styles.iconBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : colors.primaryLight }]}>
+          <Icon size={18} color={colors.primary} strokeWidth={2} />
         </View>
-        <Text style={[styles.address, { color: colors.textGray }]} numberOfLines={2}>
-          {location.address}
-        </Text>
-      </View>
+
+        <View style={styles.info}>
+          <View style={styles.titleRow}>
+            <Text
+              style={[styles.title, { color: colors.textDark }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+            >
+              {location.label}
+            </Text>
+            {location.isDefault && (
+              <View style={[styles.defaultBadge, { backgroundColor: colors.primary }]} testID={`saved-location-default-badge-${location.id}`}>
+                <Star size={10} color="#FFFFFF" fill="#FFFFFF" />
+                <Text
+                  style={styles.defaultBadgeText}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                >
+                  Default
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text
+            style={[styles.address, { color: colors.textGray }]}
+            numberOfLines={2}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+          >
+            {location.address}
+          </Text>
+          {doorDetails ? (
+            <Text
+              style={[styles.doorDetails, { color: colors.textMedium }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+              testID={`saved-location-details-${location.id}`}
+            >
+              {doorDetails}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
 
       <View style={styles.actions}>
-        {!location.isDefault && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}
-            onPress={() => onSetDefault(location)}
-            accessibilityRole="button"
-            accessibilityLabel={`Set ${location.label} as default location`}
-          >
-            <Star size={15} color={colors.textMedium} strokeWidth={2} />
-          </TouchableOpacity>
-        )}
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}
           onPress={() => onEdit(location)}
+          hitSlop={PortalTouchTargets.compactHitSlop}
           accessibilityRole="button"
           accessibilityLabel={`Edit ${location.label}`}
+          testID={`edit-location-${location.id}`}
         >
-          <Pencil size={15} color={colors.textMedium} strokeWidth={2} />
+          <Pencil size={16} color={colors.textMedium} strokeWidth={2} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : colors.dangerBg }]}
           onPress={() => onDelete(location)}
+          hitSlop={PortalTouchTargets.compactHitSlop}
           accessibilityRole="button"
           accessibilityLabel={`Delete ${location.label}`}
+          testID={`delete-location-${location.id}`}
         >
-          <Trash2 size={15} color={colors.danger} strokeWidth={2} />
+          <Trash2 size={16} color={colors.danger} strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </View>
@@ -82,24 +137,34 @@ export default function SavedLocationCard({ location, onSetDefault, onEdit, onDe
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    alignItems: 'stretch',
+    borderRadius: BorderRadius.md,
     marginBottom: Spacing.sm,
     borderWidth: 1,
+    overflow: 'hidden',
   },
-  cardDefault: { borderWidth: 1.5 },
+  cardContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: Spacing.md,
+    paddingRight: Spacing.xs,
+  },
   iconBadge: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
-  info: { flex: 1, marginRight: Spacing.sm },
+  info: { flex: 1, marginRight: Spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-  title: { fontFamily: FontFamily.bold, fontSize: FontSizes.md, flexShrink: 1 },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.subheading,
+    flexShrink: 1,
+  },
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -108,12 +173,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  defaultBadgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: FontFamily.bold },
-  address: { fontFamily: FontFamily.regular, fontSize: FontSizes.xs, marginTop: 2, lineHeight: 16 },
-  actions: { flexDirection: 'column', gap: 4 },
+  defaultBadgeText: {
+    color: '#FFFFFF',
+    fontSize: PortalFontSizes.micro,
+    fontFamily: FontFamily.bold,
+  },
+  address: {
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    marginTop: 2,
+  },
+  doorDetails: {
+    fontFamily: FontFamily.medium,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    marginTop: 2,
+  },
+  actions: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: 6,
+    paddingRight: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
   actionBtn: {
-    width: 30,
-    height: 30,
+    width: 36,
+    height: 36,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',

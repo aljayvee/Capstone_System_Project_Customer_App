@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, ClipboardList, Wallet, CreditCard, Banknote, Smartphone, Landmark, CheckCircle2 } from 'lucide-react-native';
+import { MapPin, ClipboardList, Wallet, CreditCard } from 'lucide-react-native';
 import { RootStackScreenProps, FinalErrand } from '../navigation/types';
 import { saveCustomerLocation } from '../firebase/location';
 import { apiClient } from '../services/apiClient';
@@ -16,6 +16,8 @@ import { useThemeColor } from '../hooks/useThemeColor';
 import { useRateConfig } from '../hooks/useRateConfig';
 import { fetchQuote, type FeeQuote } from '../services/quoteService';
 import FeeBreakdownCard from '../components/FeeBreakdownCard';
+import { PaymentMethodTile } from '../components/PaymentMethodTile';
+import { PAYMENT_METHODS, type PaymentMethodId } from '../services/paymentMethodStrategy';
 import { FontFamily, FontSizes, FontWeights, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
 
 export default function CheckoutScreen({ route, navigation }: RootStackScreenProps<'Checkout'>) {
@@ -24,7 +26,7 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
     errandPayload: { selectedServices: ['Pabili'], pabiliCats: ['Grocery'], catItems: { Grocery: ['Item 1'] } },
   };
 
-  const { colors, isDark } = useThemeColor();
+  const { colors } = useThemeColor();
   const { isTablet } = useResponsive();
   const { rateConfig, baseFee } = useRateConfig();
 
@@ -40,7 +42,7 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
     0
   );
 
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'GCash' | 'Bank Transfer'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>('COD');
   const [quote, setQuote] = useState<FeeQuote | null>(null);
 
   useEffect(() => {
@@ -61,12 +63,18 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
   const fees = quote?.fees ?? null;
   const grandTotal = quote?.grandTotal ?? null;
 
-  const handleSelectPayment = (method: 'COD' | 'GCash' | 'Bank Transfer') => {
+  const handleSelectPayment = (method: PaymentMethodId) => {
     setPaymentMethod(method);
   };
 
   const handlePlaceErrand = async () => {
     const errandId = `PABILI-${Date.now().toString().slice(-6)}`;
+    // The name the backend's payment_modes catalogue actually holds
+    // (`"GCash / PayMaya"`, not the id `"GCASH"`) — the same lookup the
+    // chat-embedded PaymentModeSelectionModal uses, so this screen no longer
+    // speaks a vocabulary the server doesn't recognise.
+    const backendPaymentName =
+      PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.backendName ?? paymentMethod;
     const finalErrand: FinalErrand = {
       errandId,
       services: ['Pabili'],
@@ -89,6 +97,13 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
     }
 
     try {
+      // NOTE: this screen and /errands/pabili are both unreachable from the
+      // live navigator (see AppNavigator.tsx) and this route does not exist
+      // server-side — ErrandFormScreen -> ErrandItemsScreen -> POST /errands
+      // is the live checkout path. Left as-is: fixing the endpoint would mean
+      // guessing at /errands' real request contract for a screen nothing
+      // calls, which is a bigger change than the payment-vocabulary mismatch
+      // this pass was scoped to.
       await apiClient.post('/errands/pabili', {
         errandId,
         customerId: user.id,
@@ -101,7 +116,7 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
         distanceFee: fees?.distanceFee ?? 0,
         commission: fees?.groceryFee ?? 0,
         grandTotal: grandTotal ?? 0,
-        paymentMethod,
+        paymentMethod: backendPaymentName,
         deliveryAddress: errandPayload.deliveryAddress || 'Tacurong City',
         latitude,
         longitude,
@@ -110,7 +125,13 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
       console.error('[MariaDB Backend] Error saving Pabili errand to errand_system_db:', err);
     }
 
-    if (navigation?.navigate) {
+    if (navigation?.replace) {
+      navigation.replace('WaitingForDispatcher', {
+        user,
+        errandId,
+        finalErrand,
+      });
+    } else if (navigation?.navigate) {
       navigation.navigate('WaitingForDispatcher', {
         user,
         errandId,
@@ -173,44 +194,17 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
             <Text style={[styles.cardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>Select Payment Method</Text>
           </View>
 
-          {[
-            { id: 'COD', label: 'Cash on Delivery (COD)', icon: Banknote },
-            { id: 'GCash', label: 'GCash / E-Wallet', icon: Smartphone },
-            { id: 'Bank Transfer', label: 'Online Bank Transfer', icon: Landmark },
-          ].map((item) => {
-            const isSelected = paymentMethod === item.id;
-            const IconComponent = item.icon;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                testID={`payment-option-${item.id}`}
-                style={[
-                  styles.paymentTile,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected
-                      ? isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFF0F5'
-                      : isDark ? 'rgba(255,255,255,0.03)' : colors.bgGray,
-                  },
-                ]}
-                onPress={() => handleSelectPayment(item.id as any)}
-              >
-                <View style={styles.paymentRow}>
-                  <IconComponent size={20} color={isSelected ? colors.primary : colors.textGray} />
-                  <Text
-                    style={[
-                      styles.paymentText,
-                      { color: isSelected ? colors.primary : colors.textDark },
-                    ]}
-                    maxFontSizeMultiplier={1.2}
-                  >
-                    {item.label}
-                  </Text>
-                </View>
-                {isSelected && <CheckCircle2 size={18} color={colors.primary} />}
-              </TouchableOpacity>
-            );
-          })}
+          {PAYMENT_METHODS.map((method) => (
+            <PaymentMethodTile
+              key={method.id}
+              method={method}
+              selected={paymentMethod === method.id}
+              // No live /payment-modes fetch on this screen. Every method
+              // left in PAYMENT_METHODS is Active in the catalogue (seed.ts).
+              available
+              onPress={() => handleSelectPayment(method.id)}
+            />
+          ))}
         </View>
 
         <TouchableOpacity
@@ -271,24 +265,6 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontFamily: FontFamily.bold,
-  },
-  paymentTile: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  paymentText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
   },
   submitBtn: {
     padding: moderateScale(11, 0.2),

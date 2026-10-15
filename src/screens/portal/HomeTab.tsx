@@ -1,45 +1,63 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Dimensions,
-  FlatList,
-  RefreshControl,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ImageBackground,
-  Alert,
 } from 'react-native';
 import {
-  Bike,
   ChevronRight,
-  ShoppingBag,
   Store,
-  Pill,
-  Utensils,
-  ShoppingBasket,
-  Plus,
   ArrowRight,
+  Search,
   Sparkles,
-  MapPin,
+  Clock,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import StatusBadge from '../../components/StatusBadge';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMaintenanceNotice } from '../../hooks/useMaintenanceNotice';
+import MaintenanceNoticeBanner from '../../components/MaintenanceNoticeBanner';
 import HomeSkeleton, {
-  LocationCardSkeleton,
-  ActiveErrandSkeleton,
   CategoriesBentoSkeleton,
   RecentActivitySkeleton,
 } from '../../components/HomeSkeleton';
-import ErrandDetailsModal from '../../components/ErrandDetailsModal';
-import MerchantCategoriesModal from '../../components/MerchantCategoriesModal';
+import ConfirmModal from '../../components/ConfirmModal';
+import { checkNewlyUpdatedApp, getInstalledAppVersion } from '../../services/appUpdateService';
+import NearbyStoresRow from '../../components/NearbyStoresRow';
+import PopularStoresRow from '../../components/PopularStoresRow';
+import AccountReminder from '../../components/home/AccountReminder';
+import { ActiveErrandsFab } from '../../components/home/ActiveErrandsFab';
+import { BlurTargetView } from 'expo-blur';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { useRateConfig } from '../../hooks/useRateConfig';
-import { BorderRadius, FontSizes, Spacing, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../../config/theme';
-import { formatErrandId } from '../../utils/formatErrandId';
+import {
+  BorderRadius,
+  FontSizes,
+  Spacing,
+  FontFamily,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalFontSizeMultipliers,
+  PortalTouchTargets,
+} from '../../config/theme';
 import { useCategoryImages } from '../../hooks/useCategoryImages';
 import { useMerchantCategories } from '../../hooks/useMerchantCategories';
+import {
+  type BackendMerchantCategory,
+  getCategorySearchAffinities,
+  recordCategorySearchAffinity,
+  prioritizeCategoriesWithAffinity,
+} from '../../services/merchantCategories';
+import { getCategoryIcon } from '../../constants/pabili';
+import { formatErrandId } from '../../utils/formatErrandId';
+import { formatItemLabel } from '../../utils/format';
 
 export interface HomeTabProps {
   user: any;
@@ -53,6 +71,13 @@ export interface HomeTabProps {
   onRefresh?: () => void;
   onViewTrack: () => void;
   onNavigateErrands?: () => void;
+  onScroll?: (event: any) => void;
+  onScrollBeginDrag?: (event: any) => void;
+  onScrollEndDrag?: (event: any) => void;
+  /** Height of the portal header overlaying the top of Home (0: none). */
+  headerSpace?: number;
+  /** How much of that header shows now, animated; the search bar sits under it. */
+  headerOffset?: SharedValue<number>;
 }
 
 /**
@@ -61,13 +86,13 @@ export interface HomeTabProps {
 function formatItemSummary(errand: any): string {
   if (Array.isArray(errand.items) && errand.items.length > 0) {
     const list = errand.items.map(
-      (it: any) => `${it.quantity ? `${it.quantity}x ` : ''}${it.name || it.itemName || 'Item'}`
+      (it: any) => `${it.quantity ? `${it.quantity}x ` : ''}${formatItemLabel(it.name || it.itemName || 'Item', it.size)}`
     );
     return list.slice(0, 3).join(', ') + (list.length > 3 ? ` +${list.length - 3} more` : '');
   }
   if (Array.isArray(errand.pabiliDetails) && errand.pabiliDetails.length > 0) {
     const list = errand.pabiliDetails.map(
-      (it: any) => `${it.quantity ? `${it.quantity}x ` : ''}${it.itemName || it.name || 'Item'}`
+      (it: any) => `${it.quantity ? `${it.quantity}x ` : ''}${formatItemLabel(it.itemName || it.name || 'Item', it.size)}`
     );
     return list.slice(0, 3).join(', ') + (list.length > 3 ? ` +${list.length - 3} more` : '');
   }
@@ -93,82 +118,116 @@ function formatRelativeDate(dateStr?: string | Date): string {
   }
 }
 
-/**
- * Visual defaults for a category tile: icon, tint, and the stock photo used
- * when the owner has not set one in the portal.
- *
- * Deliberately no size hint. This used to carry an `isHero` flag that decided
- * which tile got the large slot by matching the category NAME, which meant the
- * mosaic's shape depended on which categories the owner happened to activate.
- * Size is decided by position in the grid now; this function answers only
- * "what does this category look like". The `imageUrl` here
- * is a FALLBACK only — an owner-set `store_cat_image` always wins, so the grid
- * looks like Tacurong's actual stores rather than stock photography as soon as
- * the categories are photographed.
- */
-function getMerchantCategoryButtonMeta(catName: string, primaryColor: string) {
+function getCategoryTestId(catName: string): string {
   const lower = String(catName || '').toLowerCase();
+  if (lower.includes('supermarket') || lower.includes('grocery') || lower.includes('mall')) return 'malls';
+  if (lower.includes('pharmacy') || lower.includes('health') || lower.includes('med')) return 'pharmacy';
+  if (lower.includes('bakery') || lower.includes('bread') || lower.includes('pastr')) return 'bakery';
+  if (lower.includes('food') || lower.includes('restaurant') || lower.includes('cafe')) return 'restaurant';
+  if (lower.includes('retail') || lower.includes('merchandise') || lower.includes('goods')) return 'retail';
+  return lower.replace(/[^a-z0-9]/g, '_');
+}
 
-  if (lower.includes('supermarket') || lower.includes('grocery') || lower.includes('mall')) {
-    return {
-      aliasId: 'malls',
-      label: 'Malls & Grocery',
-      Icon: Store,
-      iconColor: '#FFFFFF',
-      bgLight: '#EFF6FF',
-      imageUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80',
-    };
-  }
-  if (lower.includes('pharmacy') || lower.includes('health') || lower.includes('med')) {
-    return {
-      aliasId: 'pharmacy',
-      label: 'Pharmacy',
-      Icon: Pill,
-      iconColor: '#FFFFFF',
-      bgLight: '#ECFDF5',
-      imageUrl: 'https://images.unsplash.com/photo-1585435557343-3b092031a831?auto=format&fit=crop&w=400&q=80',
-    };
-  }
-  if (lower.includes('bakery') || lower.includes('bread') || lower.includes('pastr')) {
-    return {
-      aliasId: 'bakery',
-      label: 'Bakery',
-      Icon: ShoppingBag,
-      iconColor: '#FFFFFF',
-      bgLight: '#FEF3C7',
-      imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
-    };
-  }
-  if (lower.includes('food') || lower.includes('restaurant') || lower.includes('cafe')) {
-    return {
-      aliasId: 'restaurant',
-      label: 'Food & Dining',
-      Icon: Utensils,
-      iconColor: '#FFFFFF',
-      bgLight: '#FEE2E2',
-      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80',
-    };
-  }
-  if (lower.includes('retail') || lower.includes('merchandise') || lower.includes('goods')) {
-    return {
-      aliasId: 'retail',
-      label: 'Retail & Goods',
-      Icon: ShoppingBasket,
-      iconColor: '#FFFFFF',
-      bgLight: '#F5F3FF',
-      imageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
-    };
-  }
+function MerchantCategoryRow({
+  category,
+  imageUri,
+  colors,
+  isDark,
+  onPress,
+}: {
+  category: BackendMerchantCategory;
+  imageUri?: string;
+  colors: any;
+  isDark: boolean;
+  onPress: () => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(imageUri && !imageFailed);
+  const Icon = getCategoryIcon(category.name);
+  const testIdSuffix = getCategoryTestId(category.name);
+  const description = category.description ? String(category.description).trim() : '';
 
-  const displayLabel = catName.length > 12 ? catName.split(' ')[0] : catName;
-  return {
-    aliasId: catName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-    label: displayLabel || 'Store',
-    Icon: Store,
-    iconColor: '#FFFFFF',
-    bgLight: '#FFEEF3',
-    imageUrl: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80',
-  };
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      style={styles.categoryRow}
+      onPress={onPress}
+      testID={`category-btn-${testIdSuffix}`}
+      accessibilityRole="button"
+      accessibilityLabel={description ? `${category.name}. ${description}` : category.name}
+    >
+      <View
+        style={[
+          styles.categoryImageContainer,
+          { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' },
+        ]}
+      >
+        {showImage ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.categoryImage}
+            resizeMode="cover"
+            onError={() => setImageFailed(true)}
+            accessibilityIgnoresInvertColors
+            testID={`category-image-${testIdSuffix}`}
+          />
+        ) : (
+          <View style={styles.categoryImageFallback} testID={`category-icon-${testIdSuffix}`}>
+            <Icon size={32} color={colors.primary} strokeWidth={2} />
+          </View>
+        )}
+
+        {(category.isRecommended || category.orderedBefore) ? (
+          <View style={styles.categoryBadgeRow} pointerEvents="none">
+            {category.isRecommended ? (
+              <View
+                style={[
+                  styles.categoryBadge,
+                  { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.92)' : '#DC2626' },
+                ]}
+                testID={`category-badge-recommended-${testIdSuffix}`}
+              >
+                <Sparkles size={10} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.categoryBadgeText}>RECOMMENDED</Text>
+              </View>
+            ) : null}
+            {category.orderedBefore ? (
+              <View
+                style={[
+                  styles.categoryBadge,
+                  { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.92)' : '#059669' },
+                ]}
+                testID={`category-badge-ordered-${testIdSuffix}`}
+              >
+                <Clock size={10} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.categoryBadgeText}>ORDERED BEFORE</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.categoryMetaBlock}>
+        <Text
+          style={[styles.categoryTitle, { color: colors.textDark }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+        >
+          {category.name}
+        </Text>
+        {description ? (
+          <Text
+            style={[styles.categorySubtitle, { color: colors.textGray }]}
+            numberOfLines={2}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+            testID={`category-desc-${testIdSuffix}`}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 export default function HomeTab({
@@ -183,21 +242,28 @@ export default function HomeTab({
   onRefresh,
   onViewTrack,
   onNavigateErrands,
+  onScroll,
+  onScrollBeginDrag,
+  onScrollEndDrag,
+  headerSpace = 0,
+  headerOffset,
 }: HomeTabProps) {
+  // The search bar follows the header as it slides (2026-10-13). Moved by a
+  // transform, like the header, so the page's frame never changes mid-drag;
+  // the old docking resized it and shook a slow scroll.
+  const searchSlotStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: headerOffset ? headerOffset.value : 0 }],
+  }));
+  const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
-  const { baseFee } = useRateConfig();
-  const { width: windowWidth, isTablet, isCompact } = useResponsive();
+  const maintenanceNotice = useMaintenanceNotice('customer');
+  const { width: windowWidth } = useResponsive();
   const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
-  const pairSlotWidth = Math.floor((contentWidth - Spacing.sm) / 2);
-  const [selectedErrand, setSelectedErrand] = useState<any | null>(null);
-
-  // Active slide index for multi-errand carousel
-  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
 
   // Active backend merchant categories. The hook keeps this in step with the
   // server over the socket, so a category deactivated in the owner portal
-  // disappears from the grid without the customer refreshing anything.
-  const { categories: backendCategories, reload: reloadMerchantCategories, isLoading: isCategoriesLoading } =
+  // disappears from the list without the customer refreshing anything.
+  const { categories: backendCategories, isLoading: isCategoriesLoading } =
     useMerchantCategories();
 
   // Owner-set category photos (`store_cat_image`), keyed by category id. Only
@@ -205,15 +271,24 @@ export default function HomeTab({
   // on device by its `updatedAt`.
   const categoryImages = useCategoryImages(backendCategories);
 
-  // All Merchant Categories Collection Modal state (triggered by See More)
-  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+  // Dynamic category search and exploration affinity
+  const [searchAffinities, setSearchAffinities] = useState<Record<string, number>>({});
 
-  // Pull-to-refresh still forces a re-fetch. It is a fallback now rather than
-  // the only way the grid ever updates.
-  const handleRefresh = useCallback(() => {
-    void reloadMerchantCategories();
-    if (onRefresh) onRefresh();
-  }, [reloadMerchantCategories, onRefresh]);
+  useEffect(() => {
+    let mounted = true;
+    getCategorySearchAffinities()
+      .then((affinities) => {
+        if (mounted && affinities) setSearchAffinities(affinities);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Newly updated app announcement modal state
+  const [showUpdateWelcome, setShowUpdateWelcome] = useState(false);
+  const [updatedVersionString, setUpdatedVersionString] = useState('');
 
   const ACTIVE_STATUSES = ['AVAILABLE', 'PENDING', 'ASSIGNED', 'IN_TRANSIT'];
 
@@ -226,540 +301,147 @@ export default function HomeTab({
 
   const hasActiveOrders = activeList.length > 0;
 
-  const getStatusStep = (status: string) => {
-    switch (String(status).toUpperCase()) {
-      case 'AVAILABLE':
-      case 'PENDING':
-        return { step: 1, label: 'Finding available rider in Tacurong...' };
-      case 'ASSIGNED':
-        return { step: 2, label: 'Rider assigned • Heading to the store' };
-      case 'IN_TRANSIT':
-        return { step: 3, label: 'Items purchased • On the way to you' };
-      case 'DELIVERED':
-      case 'COMPLETED':
-        return { step: 4, label: 'Successfully delivered' };
-      case 'CANCELLED':
-        return { step: 0, label: 'Order cancelled' };
-      default:
-        return { step: 1, label: 'Order update' };
+  /**
+   * Tapping a merchant category navigates to `MerchantCategoryStores` for that
+   * category (or falls back to `StoreSearch` when no numeric category id is present).
+   */
+  const handleSelectCategory = (cat: BackendMerchantCategory) => {
+    if (cat.name) {
+      void recordCategorySearchAffinity(cat.name);
+      setSearchAffinities((prev) => ({
+        ...prev,
+        [cat.name]: (prev[cat.name] || 0) + 1,
+      }));
+    }
+    if (typeof cat.id === 'number') {
+      navigation.navigate('MerchantCategoryStores', {
+        user,
+        category: {
+          id: cat.id,
+          name: cat.name,
+          description: cat.description ?? null,
+        },
+      });
+    } else {
+      navigation.navigate('StoreSearch', { user });
     }
   };
 
   /**
-   * Direct 1-Tap Category Navigation to "Items to Buy" (ErrandItemsScreen)
+   * Step 1 of a Pabili errand: the store search (StoreSearchScreen), as the
+   * bottom bar's "+" opens it. The Errand Details form's step 1 until 2026-10-10.
    */
-  const handleSelectCategory = (catName: string) => {
-    navigation.navigate('ErrandItems', {
-      user,
-      selectedCats: [catName],
-    });
+  const openStoreSearch = () => {
+    navigation.navigate('StoreSearch', { user });
   };
 
-  /**
-   * Navigate to Multi-Category Pabili Errand Form (ErrandFormScreen)
-   */
-  const handleNavigateToCategoriesForm = () => {
-    navigation.navigate('ErrandForm', {
-      user,
-      selectedServices: ['Pabili'],
-    });
-  };
+  const activeCategories = useMemo(() => {
+    const raw = backendCategories.filter((c) => Boolean(c?.name && (c.status === 'Active' || !c.status)));
+    return prioritizeCategoriesWithAffinity(raw, searchAffinities);
+  }, [backendCategories, searchAffinities]);
 
-  interface CategoryButtonItem {
-    id: string;
-    label: string;
-    categoryParam: string;
-    Icon: any;
-    iconColor: string;
-    bgLight: string;
-    imageUrl?: string;
-    /** Pinned location stores in this category — real social proof, from
-     *  `_count.places` on the catalogue response. Undefined when unknown; never
-     *  invented, per the ethical guardrail on fabricated counts. */
-    storeCount?: number;
-    isPabiliService?: boolean;
-    isSeeMore?: boolean;
-  }
-
-  /**
-   * How many categories the grid shows before deferring to the "See More" sheet.
-   *
-   * Hick's Law: decision time grows with the number of options, and this grid is
-   * the first thing a customer sees. Five plus an explicit overflow tile reads as
-   * a curated set; eleven reads as a directory to be waded through.
-   */
-  const MAX_GRID_CATEGORIES = 5;
-
-  const pabiliTile: CategoryButtonItem = useMemo(
-    () => ({
-      id: 'pabili',
-      label: 'Pabili (Any Store)',
-      categoryParam: 'Pabili',
-      Icon: ShoppingBag,
-      iconColor: '#FFFFFF',
-      bgLight: '#FFEEF3',
-      imageUrl:
-        'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
-      isPabiliService: true,
-    }),
-    []
-  );
-
-  const seeMoreTile: CategoryButtonItem = useMemo(
-    () => ({
-      id: 'see_more',
-      label: 'See More',
-      categoryParam: '',
-      Icon: Plus,
-      iconColor: '#8B5CF6',
-      bgLight: '#F5F3FF',
-      isSeeMore: true,
-    }),
-    []
-  );
-
-  /** Active backend categories, shaped for the mosaic. */
-  const categoryTiles: CategoryButtonItem[] = useMemo(() => {
-    return backendCategories
-      .filter((c) => Boolean(c?.name && (c.status === 'Active' || !c.status)))
-      .map((c) => {
-        const meta = getMerchantCategoryButtonMeta(c.name, colors.primary);
-
-        // The owner's photo from the portal takes precedence over the stock
-        // image. A real storefront the customer recognises from Tacurong reads
-        // as a real service — the visceral layer of the tile is doing the work
-        // the label cannot.
-        const ownerImage = typeof c.id === 'number' ? categoryImages[c.id] : undefined;
-
-        return {
-          id: meta.aliasId || `cat-${c.id ?? c.name}`,
-          label: meta.label,
-          categoryParam: c.name,
-          Icon: meta.Icon,
-          iconColor: meta.iconColor,
-          bgLight: meta.bgLight,
-          imageUrl: ownerImage || meta.imageUrl,
-          storeCount: typeof c._count?.places === 'number' ? c._count.places : undefined,
-        };
-      })
-      .slice(0, MAX_GRID_CATEGORIES);
-  }, [backendCategories, categoryImages, colors.primary]);
-
-  const handleTilePress = useCallback(
-    (tile: CategoryButtonItem) => {
-      if (tile.isPabiliService) {
-        handleNavigateToCategoriesForm();
-      } else if (tile.isSeeMore) {
-        setIsCategoriesModalOpen(true);
-      } else {
-        handleSelectCategory(tile.categoryParam);
-      }
-    },
-    [handleNavigateToCategoriesForm, handleSelectCategory]
-  );
-
-  /**
-   * One category tile.
-   *
-   * `variant` controls only geometry — every tile is otherwise identical, so a
-   * category looks like itself wherever the mosaic places it.
-   *
-   *   tall — full height of row 1, beside the stacked pair
-   *   half — one of the two stacked tiles in row 1
-   *   wide — a standard tile in the pair rows below
-   */
-  const renderCategoryTile = useCallback(
-    (tile: CategoryButtonItem, variant: 'tall' | 'half' | 'wide') => {
-      const { id, label, Icon, imageUrl, storeCount } = tile;
-      const isTall = variant === 'tall';
-
-      return (
-        <TouchableOpacity
-          key={id}
-          activeOpacity={0.85}
-          style={[
-            styles.tile,
-            variant === 'tall' && styles.tileTall,
-            variant === 'half' && styles.tileHalf,
-            variant === 'wide' && styles.tileWide,
-            { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#EEF2F6' },
-            !isDark && Shadows.soft,
-          ]}
-          onPress={() => handleTilePress(tile)}
-          testID={`category-btn-${id}`}
-          accessibilityRole="button"
-          accessibilityLabel={
-            typeof storeCount === 'number'
-              ? `${label}, ${storeCount} ${storeCount === 1 ? 'store' : 'stores'}`
-              : label
-          }
-        >
-          <ImageBackground
-            source={{ uri: imageUrl }}
-            style={styles.tileImage}
-            imageStyle={styles.bentoImageStyle}
-          >
-            {/* A three-stop scrim rather than a flat wash. Owner-uploaded
-                photos vary wildly in brightness, and a single translucent
-                black either muddied dark photos or left white text unreadable
-                on bright ones. Weighting the darkness to the bottom protects
-                the label without dulling the image the tile is selling. */}
-            <LinearGradient
-              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.80)']}
-              locations={[0, 0.45, 1]}
-              style={styles.bentoOverlay}
-              pointerEvents="none"
-            />
-
-            <View style={[styles.tileIconBadge, isTall && styles.tileIconBadgeTall]}>
-              <Icon size={isTall ? 17 : 15} color="#FFFFFF" strokeWidth={2.6} />
-            </View>
-
-            <View style={styles.tileFooter}>
-              <Text
-                style={[styles.tileLabel, isTall && styles.tileLabelTall]}
-                numberOfLines={isTall ? 2 : 1}
-              >
-                {label}
-              </Text>
-
-              {/* Social proof, and only when it is real. `storeCount` comes
-                  from the catalogue's own `_count.places`; when the server
-                  does not send it, nothing is shown rather than a guess. */}
-              {typeof storeCount === 'number' && storeCount > 0 && (
-                <View style={styles.tileCountRow}>
-                  <MapPin size={9} color="rgba(255,255,255,0.85)" strokeWidth={2.6} />
-                  <Text style={styles.tileCountText}>
-                    {storeCount} {storeCount === 1 ? 'store' : 'stores'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </ImageBackground>
-        </TouchableOpacity>
-      );
-    },
-    [isDark, handleTilePress]
-  );
+  const activeCategoriesCount = activeCategories.length;
 
   // Up to 5 recent transaction history items
   const recentHistory = recentErrands.slice(0, 5);
 
+  // Check if app has been newly updated from an earlier version
+  useEffect(() => {
+    let isMounted = true;
+    checkNewlyUpdatedApp()
+      .then(({ isNewlyUpdated, currentVersion }) => {
+        if (isMounted && isNewlyUpdated) {
+          setUpdatedVersionString(currentVersion);
+          setShowUpdateWelcome(true);
+        }
+      })
+      .catch((err) => {
+        console.warn('[HomeTab] Failed to check post-update status:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Home's content, as the active errands button's glass blurs it on Android.
+  const homeContentRef = useRef<View>(null);
+  // The floating search bar's slot, measured: the page starts below it.
+  const [searchSlotHeight, setSearchSlotHeight] = useState(62);
+  const openActiveErrands = () => navigation.navigate('ActiveErrands', { user, errands: activeList });
+
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{
-        paddingHorizontal: Spacing.md,
-        paddingTop: Spacing.sm + 2,
-        paddingBottom: 110,
-        alignItems: 'center',
-      }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        ) : undefined
-      }
-    >
-      <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH }]}>
-      {loading && !hasActiveOrders && recentErrands.length === 0 ? (
-        <HomeSkeleton />
-      ) : (
-        <>
-          {/* 0. WELCOME GREETING & DELIVERY LOCATION SECTION */}
-          <View style={styles.greetingHeaderSection}>
-            <Text style={[styles.welcomeGreetingText, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
-              Hi, {user.firstName || user.username || 'Customer'}! 👋
-            </Text>
-
-            <TouchableOpacity
-              style={[
-                styles.deliveryLocationCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-                Shadows.soft,
-              ]}
-              onPress={() => navigation.navigate('CustomerLocation', { user })}
-              activeOpacity={0.75}
-              testID="home-location-pill"
-            >
-              <View style={[styles.locationIconBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' }]}>
-                <MapPin size={16} color={colors.primary} />
-              </View>
-              <View style={styles.locationInfoCol}>
-                <Text style={[styles.deliveringToLabel, { color: colors.primary }]} maxFontSizeMultiplier={1.2}>DELIVERING TO</Text>
-                <Text
-                  style={[
-                    styles.locationAddressText,
-                    { color: defaultAddressText ? colors.textDark : colors.textGray },
-                  ]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  maxFontSizeMultiplier={1.25}
-                >
-                  {defaultAddressText
-                    ? (defaultLocationLabel ? `${defaultLocationLabel} • ${defaultAddressText}` : defaultAddressText)
-                    : '+ Tap to set your delivery address'}
-                </Text>
-              </View>
-              <ChevronRight size={16} color={colors.textLight} />
-            </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: colors.bgApp }}>
+      <BlurTargetView ref={homeContentRef} style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.bgApp }}
+        contentContainerStyle={{
+          // The page starts under the floating search bar.
+          paddingTop: headerSpace + searchSlotHeight + Spacing.sm,
+          paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md,
+          alignItems: 'center',
+        }}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScrollEndDrag={onScrollEndDrag}
+        scrollEventThrottle={16}
+      >
+        {loading && !hasActiveOrders && recentErrands.length === 0 ? (
+          <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-skeleton">
+            <HomeSkeleton />
           </View>
+        ) : (
+          <>
+            {/* ── CHILD 0: Top Header & Active Orders ── */}
+            <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-top">
+              {/* Real-time SysAdmin Maintenance Notice Banner */}
+              <MaintenanceNoticeBanner notice={maintenanceNotice} />
 
-          {/* 1. ACTIVE ERRAND SECTION (MULTI-DISPLAY CAROUSEL IF MULTIPLE ACTIVE ORDERS) */}
-          {hasActiveOrders && (
-            <View style={styles.activeSectionWrapper}>
-              {activeList.length === 1 ? (
-                // Single Active Errand Card
-                <View
-                  style={[
-                    styles.activeCard,
-                    { backgroundColor: colors.card, borderColor: colors.primary },
-                    Shadows.liftedUp,
-                  ]}
-                >
-                  <View style={styles.activeHeader}>
-                    <View style={styles.activeHeaderLeft}>
-                      <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
-                      <Text style={[styles.activeHeaderTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
-                        Active Errand #{formatErrandId(activeList[0].orderId)}
-                      </Text>
-                    </View>
-                    <StatusBadge status={activeList[0].status} />
-                  </View>
+          {/* The "Delivering to" card moved into the header, in place of the
+              Help "?" (HeaderLocationButton, 2026-10-11); the search bar took
+              its place, floating above the page. */}
 
-                  <Text style={[styles.activeStatusDesc, { color: colors.textMedium }]} maxFontSizeMultiplier={1.25}>
-                    {getStatusStep(activeList[0].status).label}
-                  </Text>
+          {/* What the account is missing: a mobile number, its verification
+              (manual sign-ups) or a birthdate (Google sign-ups). */}
+          <AccountReminder user={user} navigation={navigation} />
 
-                  {/* Framed Summary Item Box */}
-                  <View
-                    style={[
-                      styles.summaryItemBox,
-                      {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.summaryLabel, { color: colors.primary }]} maxFontSizeMultiplier={1.2}>Summary Item:</Text>
-                    <Text style={[styles.summaryText, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>
-                      {formatItemSummary(activeList[0])}
-                    </Text>
-                  </View>
+          {/* The active errands moved to a liquid glass button floating over
+              Home (ActiveErrandsFab, 2026-10-10); this card is gone. */}
+        </View>
 
-                  <View style={styles.activeFooterRow}>
-                    {activeList[0].status === 'ASSIGNED' || activeList[0].status === 'IN_TRANSIT' ? (
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        style={[styles.trackBtn, { backgroundColor: colors.primary }]}
-                        onPress={onViewTrack}
-                      >
-                        <Bike size={14} color="#FFFFFF" strokeWidth={2.4} />
-                        <Text style={styles.trackBtnText} maxFontSizeMultiplier={1.2}>Track Live</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={styles.feePreviewBox}>
-                        <Text style={[styles.feePreviewText, { color: colors.textGray }]} maxFontSizeMultiplier={1.25}>
-                          Estimated: <Text style={{ fontFamily: FontFamily.bold, color: colors.primary }}>
-                            ₱{Number(activeList[0].grandTotal ?? activeList[0].totalCost ?? baseFee).toFixed(2)}
-                          </Text>
-                        </Text>
-                      </View>
-                    )}
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.seeMoreLink}
-                      onPress={() => setSelectedErrand(activeList[0])}
-                    >
-                      <Text style={[styles.seeMoreLinkText, { color: colors.primary }]} maxFontSizeMultiplier={1.2}>See more...</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                // Multi-Display Carousel for 2+ Active Orders
-                <View>
-                  <FlatList
-                    data={activeList}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    snapToInterval={contentWidth}
-                    decelerationRate="fast"
-                    onMomentumScrollEnd={(e) => {
-                      const newIndex = Math.round(
-                        e.nativeEvent.contentOffset.x / contentWidth
-                      );
-                      setActiveSlideIndex(newIndex);
-                    }}
-                    renderItem={({ item }) => (
-                      <View
-                        style={[
-                          styles.activeCard,
-                          {
-                            width: contentWidth,
-                            backgroundColor: colors.card,
-                            borderColor: colors.primary,
-                          },
-                          Shadows.liftedUp,
-                        ]}
-                      >
-                        <View style={styles.activeHeader}>
-                          <View style={styles.activeHeaderLeft}>
-                            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
-                            <Text style={[styles.activeHeaderTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
-                              Active Errand #{formatErrandId(item.orderId)}
-                            </Text>
-                          </View>
-                          <StatusBadge status={item.status} />
-                        </View>
-
-                        <Text style={[styles.activeStatusDesc, { color: colors.textMedium }]} maxFontSizeMultiplier={1.25}>
-                          {getStatusStep(item.status).label}
-                        </Text>
-
-                        {/* Framed Summary Item Box */}
-                        <View
-                          style={[
-                            styles.summaryItemBox,
-                            {
-                              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB',
-                              borderColor: colors.border,
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.summaryLabel, { color: colors.primary }]}>Summary Item:</Text>
-                          <Text style={[styles.summaryText, { color: colors.textDark }]} numberOfLines={2}>
-                            {formatItemSummary(item)}
-                          </Text>
-                        </View>
-
-                        <View style={styles.activeFooterRow}>
-                          {item.status === 'ASSIGNED' || item.status === 'IN_TRANSIT' ? (
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              style={[styles.trackBtn, { backgroundColor: colors.primary }]}
-                              onPress={onViewTrack}
-                            >
-                              <Bike size={14} color="#FFFFFF" strokeWidth={2.4} />
-                              <Text style={styles.trackBtnText}>Track Live</Text>
-                            </TouchableOpacity>
-                          ) : (
-                            <View style={styles.feePreviewBox}>
-                              <Text style={[styles.feePreviewText, { color: colors.textGray }]}>
-                                Estimated: <Text style={{ fontFamily: FontFamily.bold, color: colors.primary }}>
-                                  ₱{Number(item.grandTotal ?? item.totalCost ?? baseFee).toFixed(2)}
-                                </Text>
-                              </Text>
-                            </View>
-                          )}
-
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            style={styles.seeMoreLink}
-                            onPress={() => setSelectedErrand(item)}
-                          >
-                            <Text style={[styles.seeMoreLinkText, { color: colors.primary }]}>See more...</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                    keyExtractor={(item) => String(item.id || item.orderId)}
-                  />
-
-                  {/* Carousel Pagination Dots */}
-                  <View style={styles.paginationDotsRow}>
-                    {activeList.map((_, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.dot,
-                          {
-                            backgroundColor: idx === activeSlideIndex ? colors.primary : colors.border,
-                            width: idx === activeSlideIndex ? 16 : 6,
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────── */}
-          {/* 2. STORE CATEGORIES — BENTO MOSAIC                           */}
-          {/*                                                              */}
-          {/* Rebuilt from a uniform 48%-wide grid whose single "large"    */}
-          {/* slot was decided by matching the category NAME against a     */}
-          {/* hardcoded list. That made the layout a lottery: activate two */}
-          {/* matching categories and you got two stacked full-width       */}
-          {/* slabs; activate none and every tile was identical, so        */}
-          {/* nothing drew the eye and the grid read as a wall.            */}
-          {/*                                                              */}
-          {/* Size is now driven by POSITION, not by name, so the mosaic   */}
-          {/* holds its shape whatever the owner activates. Pabili is      */}
-          {/* lifted out as the single dominant CTA — the contrast effect  */}
-          {/* only works if one option is unmistakably the primary one.    */}
-          {/* ─────────────────────────────────────────────────────────── */}
+        {/* ── CHILD 2: Stores, Categories & Transactions Stream ── */}
+        <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-content">
           <View style={styles.categoriesSectionWrapper}>
-            <View style={styles.categoriesHeaderRow}>
-              <Sparkles size={16} color={colors.primary} />
-              <Text style={[styles.categoriesSectionTitle, { color: colors.textDark }]}>
-                What would you like to buy?
+
+            {/* POPULAR STORES first (2026-10-10, the user's order): the best
+                rated shops nearby on Google, a sideways row of photo cards the
+                way foodpanda lists shops, each with its stars on the photo. */}
+            <PopularStoresRow
+              user={user}
+              navigation={navigation}
+              categoryImages={categoryImages}
+              contentWidth={contentWidth}
+            />
+
+            {/* STORES NEAR YOU: in the same cards. The server ranks them
+                (distance first, then the customer's habits). Real stores come
+                before the Merchant Categories, the kinds of store. */}
+            <NearbyStoresRow
+              user={user}
+              navigation={navigation}
+              categoryImages={categoryImages}
+              contentWidth={contentWidth}
+            />
+
+            <View style={styles.subsectionHeaderRow}>
+              <Text style={[styles.subsectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                Explore merchants categories
               </Text>
             </View>
 
-            {/* PRIMARY CTA — Pabili. Full width, tallest element, brand
-                accent. Everything below is deliberately quieter so this stays
-                the obvious first move for a customer who is not sure which
-                category their errand belongs to. */}
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={[styles.featureCard, !isDark && Shadows.soft]}
-              onPress={() => handleTilePress(pabiliTile)}
-              testID="category-btn-pabili"
-              accessibilityRole="button"
-              accessibilityLabel="Pabili - buy from any store in Tacurong"
-            >
-              <ImageBackground
-                source={{ uri: pabiliTile.imageUrl }}
-                style={styles.featureImage}
-                imageStyle={styles.bentoImageStyle}
-              >
-                <LinearGradient
-                  colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.86)']}
-                  locations={[0, 0.42, 1]}
-                  style={styles.bentoOverlay}
-                  pointerEvents="none"
-                />
-                <View style={styles.featureContent}>
-                  <View style={[styles.featureBadge, { backgroundColor: colors.primary }]}>
-                    <ShoppingBag size={12} color="#FFFFFF" strokeWidth={2.6} />
-                    <Text style={styles.featureBadgeText}>MOST FLEXIBLE</Text>
-                  </View>
-                  <Text style={styles.featureTitle}>Pabili — Any Store</Text>
-                  <Text style={styles.featureSubtitle} numberOfLines={1}>
-                    Tell us what to buy and where. We handle the rest.
-                  </Text>
-                </View>
-                <View style={[styles.featureArrow, { backgroundColor: colors.primary }]}>
-                  <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.8} />
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
-
             {isCategoriesLoading && backendCategories.length === 0 ? (
               <CategoriesBentoSkeleton />
-            ) : categoryTiles.length === 0 ? (
+            ) : activeCategoriesCount === 0 ? (
               /* Zero dead ends: an empty catalogue is a real state the owner
                  can create, and it must explain itself and still offer a way
                  forward rather than leaving a blank band under the header. */
@@ -774,79 +456,25 @@ export default function HomeTab({
                 testID="categories-empty-state"
               >
                 <Store size={22} color={colors.textLight} />
-                <Text style={[styles.emptyCategoriesTitle, { color: colors.textDark }]}>
-                  No store categories available yet
+                <Text style={[styles.emptyCategoriesTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                  No merchant categories available yet
                 </Text>
-                <Text style={[styles.emptyCategoriesBody, { color: colors.textGray }]}>
-                  You can still place an errand — use Pabili above and name any store in Tacurong.
+                <Text style={[styles.emptyCategoriesBody, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+                  You can still place an errand: search for any store in Tacurong above.
                 </Text>
               </View>
             ) : (
-              <View style={styles.mosaic}>
-                {/* Row 1: one tall tile beside two stacked half tiles. This is
-                    what makes it a bento rather than a grid — the size
-                    difference is the hierarchy, readable before any label. */}
-                {categoryTiles.length >= 3 ? (
-                  <View style={styles.mosaicRow}>
-                    <View style={styles.mosaicTallSlot}>
-                      {renderCategoryTile(categoryTiles[0], 'tall')}
-                    </View>
-                    <View style={styles.mosaicStackSlot}>
-                      {renderCategoryTile(categoryTiles[1], 'half')}
-                      {renderCategoryTile(categoryTiles[2], 'half')}
-                    </View>
-                  </View>
-                ) : (
-                  /* One or two categories cannot fill a mosaic; a plain row of
-                     equal tiles is honest rather than a lopsided gap. */
-                  <View style={styles.mosaicRow}>
-                    {categoryTiles.map((tile) => (
-                      <View key={tile.id} style={styles.mosaicEqualSlot}>
-                        {renderCategoryTile(tile, 'wide')}
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Remaining categories plus the overflow tile, in pairs. */}
-                <View style={styles.pairRow}>
-                  {(categoryTiles.length >= 3 ? categoryTiles.slice(3) : []).map((tile) => (
-                    <View key={tile.id} style={[styles.pairSlot, { width: pairSlotWidth }]}>
-                      {renderCategoryTile(tile, 'wide')}
-                    </View>
-                  ))}
-
-                  <View style={[styles.pairSlot, { width: pairSlotWidth }]}>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={[
-                        styles.tile,
-                        styles.seeMoreTile,
-                        {
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F5F3FF',
-                          borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#DDD6FE',
-                        },
-                      ]}
-                      onPress={() => handleTilePress(seeMoreTile)}
-                      testID="category-btn-see_more"
-                      accessibilityRole="button"
-                      accessibilityLabel="See all store categories"
-                    >
-                      <View
-                        style={[
-                          styles.seeMoreIcon,
-                          { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : '#EDE9FE' },
-                        ]}
-                      >
-                        <Plus size={17} color="#8B5CF6" strokeWidth={2.8} />
-                      </View>
-                      <Text style={[styles.seeMoreLabel, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>See More</Text>
-                      <Text style={[styles.seeMoreHint, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
-                        All categories
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+              <View style={styles.categoriesVerticalList} testID="explore-merchants-categories-list">
+                {activeCategories.map((cat, idx) => (
+                  <MerchantCategoryRow
+                    key={cat.id ? String(cat.id) : `${cat.name}-${idx}`}
+                    category={cat}
+                    imageUri={typeof cat.id === 'number' ? categoryImages[cat.id] : undefined}
+                    colors={colors}
+                    isDark={isDark}
+                    onPress={() => handleSelectCategory(cat)}
+                  />
+                ))}
               </View>
             )}
           </View>
@@ -857,7 +485,7 @@ export default function HomeTab({
           ) : recentHistory.length > 0 ? (
             <View style={styles.recentSection}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionHeader, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>Recent Activity</Text>
+                <Text style={[styles.sectionHeader, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>Recent Activity</Text>
 
                 <TouchableOpacity
                   style={styles.viewAllBtn}
@@ -868,7 +496,7 @@ export default function HomeTab({
                       navigation.navigate('CustomerPortal', { initialTab: 'errands' });
                     }
                   }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  hitSlop={PortalTouchTargets.compactHitSlop}
                   testID="navigate-my-errands"
                   accessibilityLabel="View All Errand History"
                 >
@@ -883,25 +511,32 @@ export default function HomeTab({
                 return (
                   <TouchableOpacity
                     key={String(item.id || item.orderId)}
-                    activeOpacity={0.75}
+                    activeOpacity={0.7}
                     style={[
                       styles.recentRowItem,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                      Shadows.soft,
+                      {
+                        borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+                      },
                     ]}
-                    onPress={() => setSelectedErrand(item)}
+                    onPress={() =>
+                      navigation.navigate('ErrandDetails', {
+                        user,
+                        errand: item,
+                        errandId: item.orderId || item.id,
+                      })
+                    }
                     testID={`recent-errand-${item.orderId}`}
                   >
                     <View style={styles.recentRowLeft}>
                       <View style={styles.recentTitleRow}>
-                        <Text style={[styles.recentErrandId, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
-                          #{formatErrandId(item.orderId)}
+                        <Text style={[styles.recentErrandId, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                          {formatErrandId(item.orderId)}
                         </Text>
-                        <Text style={[styles.recentDateText, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+                        <Text style={[styles.recentDateText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                           {formatRelativeDate(item.createdAt)}
                         </Text>
                       </View>
-                      <Text style={[styles.recentCategory, { color: colors.textMedium }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                      <Text style={[styles.recentCategory, { color: colors.textMedium }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                         {formatItemSummary(item)}
                       </Text>
                     </View>
@@ -915,29 +550,97 @@ export default function HomeTab({
               })}
             </View>
           ) : null}
-        </>
-      )}
+        </View>
+      </>
+    )}
+      </ScrollView>
+      </BlurTargetView>
 
-      {/* TRANSACTION DETAILS MODAL */}
-      <ErrandDetailsModal
-        visible={!!selectedErrand}
-        errand={selectedErrand}
-        user={user}
-        navigation={navigation}
-        onClose={() => setSelectedErrand(null)}
-      />
+      {/* SEARCH, floating (2026-10-11): fixed above the page, so it stays in
+          view however far Home scrolls; the page passes under it, behind a
+          strip that continues the header. It used to be a sticky header that
+          never stuck (Home's sections sit in one fragment, so the ScrollView
+          had no child 1 to pin), and it scrolled up under the header. The
+          strip lets touches through to the page (box-none). */}
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.floatingSearchSlot,
+          { backgroundColor: colors.bgAppTranslucent },
+          searchSlotStyle,
+        ]}
+        onLayout={(e) => setSearchSlotHeight(e.nativeEvent.layout.height)}
+        testID="home-sticky-search"
+      >
+        <TouchableOpacity
+          activeOpacity={0.88}
+          style={[
+            styles.liquidGlassSearchBar,
+            {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+            },
+          ]}
+          onPress={openStoreSearch}
+          testID="home-store-search"
+          accessibilityRole="button"
+          accessibilityLabel="Search stores"
+          accessibilityHint="Find the stores to buy from in Tacurong"
+        >
+          <View style={styles.searchIconBadge}>
+            <Search size={18} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.4} />
+          </View>
+          <Text
+            style={[
+              styles.storeSearchPlaceholder,
+              { color: isDark ? '#94A3B8' : '#64748B' },
+            ]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+          >
+            Search stores, groceries, medicine...
+          </Text>
+          <View
+            style={[
+              styles.liquidGlassSearchAction,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.10)' : '#F1F5F9',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : '#E2E8F0',
+              },
+            ]}
+            testID="home-store-search-action"
+          >
+            <Text
+              style={[
+                styles.storeSearchActionText,
+                { color: isDark ? '#F1F5F9' : '#1E293B' },
+              ]}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+            >
+              Search
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
 
-      {/* ALL STORE & MERCHANT CATEGORIES MODAL (TRIGGERED BY "SEE MORE") */}
-      <MerchantCategoriesModal
-        visible={isCategoriesModalOpen}
-        onClose={() => setIsCategoriesModalOpen(false)}
-        onSelectCategory={(catName) => {
-          setIsCategoriesModalOpen(false);
-          handleSelectCategory(catName);
-        }}
+      {/* ACTIVE ERRANDS: a liquid glass button over the bottom bar's right end,
+          only while an errand is under way. It opens Active Errands. */}
+      <ActiveErrandsFab count={activeList.length} onPress={openActiveErrands} blurTarget={homeContentRef} />
+
+      <ConfirmModal
+        visible={showUpdateWelcome}
+        title="Update Installed"
+        message={`Sugo Express has been updated to v${updatedVersionString || getInstalledAppVersion()}. Enjoy the latest features and improvements!`}
+        confirmLabel="Got it"
+        singleButton
+        variant="success"
+        icon="success"
+        destructive={false}
+        onConfirm={() => setShowUpdateWelcome(false)}
+        testID="update-welcome-modal"
       />
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -947,9 +650,6 @@ const styles = StyleSheet.create({
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: 'center',
   },
-  greetingHeaderSection: {
-    marginBottom: Spacing.lg,
-  },
   welcomeGreetingText: {
     fontFamily: FontFamily.bold,
     fontSize: scaledFontSize(FontSizes.lg, 0.2),
@@ -957,306 +657,134 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(22, 0.2),
     marginBottom: Spacing.xs,
   },
-  deliveryLocationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: moderateScale(10, 0.2),
-    paddingHorizontal: moderateScale(12, 0.2),
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-  },
-  locationIconBadge: {
-    width: moderateScale(30, 0.2),
-    height: moderateScale(30, 0.2),
-    borderRadius: moderateScale(15, 0.2),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm + 2,
-  },
-  locationInfoCol: {
-    flex: 1,
-    marginRight: Spacing.xs,
-  },
-  deliveringToLabel: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9, 0.2),
-    letterSpacing: 0.7,
-    marginBottom: 2,
-  },
-  locationAddressText: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-  },
-  activeSectionWrapper: {
-    marginBottom: Spacing.lg,
-  },
-  activeCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1.5,
-  },
-  activeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  activeHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  pulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  activeHeaderTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-  },
-  activeStatusDesc: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    marginBottom: 6,
-  },
-  summaryItemBox: {
-    borderRadius: BorderRadius.md,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9.5, 0.2),
-    letterSpacing: 0.4,
-    marginBottom: 2,
-  },
-  summaryText: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(15, 0.2),
-  },
-  activeFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  trackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.md,
-  },
-  trackBtnText: {
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-  },
-  feePreviewBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  feePreviewText: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-  },
-  seeMoreLink: {
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  seeMoreLinkText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-  },
-  paginationDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  dot: {
-    height: 6,
-    borderRadius: 3,
-  },
   categoriesSectionWrapper: {
+    // Room under the search bar (2026-10-11): its slot's 6 px, the page's 8 px
+    // top padding and these 10 make 24 px, three times the 8 px between the
+    // heading and its cards, so "Popular Stores" reads as a section, not as the
+    // bar's caption.
+    paddingTop: Spacing.sm + 2,
     marginBottom: Spacing.xl,
   },
-  categoriesHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: Spacing.sm,
-  },
-  categoriesSectionTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
-  },
-  featureCard: {
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    height: moderateScale(120, 0.2),
-    marginBottom: Spacing.md,
-  },
-  featureImage: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  featureContent: {
-    padding: Spacing.md,
-    paddingRight: 56, // clear of the arrow affordance
-  },
-  featureBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginBottom: 5,
-  },
-  featureBadgeText: {
-    color: '#FFFFFF',
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(8.5, 0.2),
-    letterSpacing: 0.6,
-  },
-  featureTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  featureSubtitle: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    color: 'rgba(255,255,255,0.88)',
-  },
-  featureArrow: {
+  // Sticky Liquid Glass Search Bar (Child 1)
+  floatingSearchSlot: {
     position: 'absolute',
-    right: Spacing.sm + 2,
-    bottom: Spacing.sm + 2,
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    zIndex: 50,
+  },
+  liquidGlassSearchBar: {
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    minHeight: 50,
+    borderWidth: 1.2,
+    borderRadius: 25,
+    paddingLeft: 14,
+    paddingRight: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  searchIconBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mosaic: {
-    gap: Spacing.md,
+  storeSearchPlaceholder: {
+    flex: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
-  mosaicRow: {
+  liquidGlassSearchAction: {
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  storeSearchActionText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  subsectionHeaderRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  mosaicTallSlot: {
-    flex: 1,
-    height: moderateScale(190, 0.2),
+  subsectionTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
-  mosaicStackSlot: {
-    flex: 1,
-    height: moderateScale(190, 0.2),
-    gap: Spacing.md,
+  categoriesVerticalList: {
+    gap: Spacing.lg,
   },
-  mosaicEqualSlot: {
-    flex: 1,
-    height: moderateScale(95, 0.2),
+  categoryRow: {
+    width: '100%',
   },
-  pairRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-  },
-  pairSlot: {
-    height: moderateScale(90, 0.2),
-  },
-  tile: {
+  categoryImageContainer: {
+    width: '100%',
+    height: moderateScale(176, 0.25),
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
   },
-  tileTall: {
-    flex: 1,
-  },
-  tileHalf: {
-    flex: 1,
-  },
-  tileWide: {
-    flex: 1,
-  },
-  tileImage: {
+  categoryImage: {
     width: '100%',
     height: '100%',
-    justifyContent: 'flex-end',
   },
-  tileIconBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  categoryImageFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.30)',
   },
-  tileIconBadgeTall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  categoryBadgeRow: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    zIndex: 2,
   },
-  tileFooter: {
-    padding: 7,
-  },
-  tileLabel: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    color: '#FFFFFF',
-  },
-  tileLabelTall: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-  },
-  tileCountRow: {
+  categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginTop: 2,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 4,
   },
-  tileCountText: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(9, 0.2),
-    color: 'rgba(255,255,255,0.88)',
-  },
-  seeMoreTile: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    height: '100%',
-  },
-  seeMoreIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  seeMoreLabel: {
+  categoryBadgeText: {
+    color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: 9,
+    letterSpacing: 0.4,
   },
-  seeMoreHint: {
+  categoryMetaBlock: {
+    marginTop: Spacing.xs + 2,
+    gap: 2,
+  },
+  categoryTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
+  },
+  categorySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(9, 0.2),
-    marginTop: 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
   },
   emptyCategories: {
     alignItems: 'center',
@@ -1269,24 +797,15 @@ const styles = StyleSheet.create({
   },
   emptyCategoriesTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     marginTop: 2,
   },
   emptyCategoriesBody: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     textAlign: 'center',
-    lineHeight: 14,
-  },
-  bentoImageStyle: {
-    resizeMode: 'cover',
-  },
-  bentoOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   recentSection: {
     marginTop: 2,
@@ -1299,12 +818,13 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   viewAllBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1312,11 +832,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: moderateScale(8, 0.2),
-    paddingHorizontal: moderateScale(10, 0.2),
-    borderRadius: BorderRadius.md,
-    marginBottom: 6,
-    borderWidth: 1,
+    minHeight: 56,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.xs,
+    borderBottomWidth: 1,
   },
   recentRowLeft: {
     flex: 1,
@@ -1330,15 +849,16 @@ const styles = StyleSheet.create({
   },
   recentErrandId: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   recentDateText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   recentCategory: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'body'),
   },
   recentRowRight: {
     flexDirection: 'row',

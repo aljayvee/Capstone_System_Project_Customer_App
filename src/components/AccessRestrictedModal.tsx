@@ -13,8 +13,8 @@ interface AccessRestrictedModalProps {
 
 export const AccessRestrictedModal: React.FC<AccessRestrictedModalProps> = ({
   visible,
-  title = 'Access Restricted',
-  message = 'You do not have permission to view or perform this action.',
+  title = "You can't open this",
+  message = 'This part of Sugo is not available on your account.',
   onDismiss,
 }) => {
   const { colors } = useTheme();

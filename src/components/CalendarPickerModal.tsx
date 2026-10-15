@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
 } from 'react-native';
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react-native';
+import TrueNativeModal from './transitions/TrueNativeModal';
 import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 
@@ -99,9 +99,8 @@ export default function CalendarPickerModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.liftedUp]}>
+    <TrueNativeModal visible={visible} onClose={onClose} containerStyle={{ padding: Spacing.lg }}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.liftedUp]}>
           {/* HEADER */}
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
@@ -239,8 +238,7 @@ export default function CalendarPickerModal({
             </View>
           </View>
         </View>
-      </View>
-    </Modal>
+    </TrueNativeModal>
   );
 }
 

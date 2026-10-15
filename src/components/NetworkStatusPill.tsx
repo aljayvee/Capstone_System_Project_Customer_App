@@ -1,35 +1,61 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { WifiOff, CheckCircle2 } from 'lucide-react-native';
+import { WifiOff, CheckCircle2, Signal } from 'lucide-react-native';
+import { useThemeColor } from '../hooks/useThemeColor';
 import { FontSizes, FontFamily, Spacing } from '../config/theme';
 
 interface NetworkStatusPillProps {
-  isOffline: boolean;
+  isOffline?: boolean;
+  isSlow?: boolean;
   justReconnected?: boolean;
-  queuedCount?: number;
 }
 
+/**
+ * The thin strip under the status bar. Never blocks; it only reports.
+ *
+ * Three states, in priority order, because they are mutually exclusive facts
+ * about one connection and stacking them would say two things at once.
+ *
+ * It used to offer a "Working Offline (N queued)" variant. Nothing in this app
+ * queues anything, so that line promised the customer their tap had been saved
+ * when it had not - exactly the mock telemetry AGENTS.md forbids. Removed.
+ */
 export const NetworkStatusPill: React.FC<NetworkStatusPillProps> = ({
-  isOffline,
+  isOffline = false,
+  isSlow = false,
   justReconnected = false,
-  queuedCount = 0,
 }) => {
-  if (!isOffline && !justReconnected) return null;
+  const { colors } = useThemeColor();
 
-  if (justReconnected) {
+  if (!isOffline && !isSlow && !justReconnected) return null;
+
+  if (isOffline) {
     return (
-      <View style={[styles.container, styles.reconnected]}>
-        <CheckCircle2 size={13} color="#FFFFFF" />
-        <Text style={styles.text}>Connected • Changes Synced</Text>
+      <View style={[styles.container, { backgroundColor: colors.dangerBg }]}>
+        <WifiOff size={13} color={colors.danger} strokeWidth={2.2} />
+        <Text style={[styles.text, { color: colors.danger }]} maxFontSizeMultiplier={1.15}>
+          No internet connection
+        </Text>
+      </View>
+    );
+  }
+
+  if (isSlow) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.warningBg }]}>
+        <Signal size={13} color={colors.warning} strokeWidth={2.2} />
+        <Text style={[styles.text, { color: colors.warning }]} maxFontSizeMultiplier={1.15}>
+          Slow connection. Still working...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, styles.offline]}>
-      <WifiOff size={13} color="#FBBF24" />
-      <Text style={styles.text}>
-        Working Offline {queuedCount > 0 ? `(${queuedCount} queued)` : ''}
+    <View style={[styles.container, { backgroundColor: colors.successBg }]}>
+      <CheckCircle2 size={13} color={colors.success} strokeWidth={2.2} />
+      <Text style={[styles.text, { color: colors.success }]} maxFontSizeMultiplier={1.15}>
+        Back online
       </Text>
     </View>
   );
@@ -45,16 +71,7 @@ const styles = StyleSheet.create({
     gap: 6,
     zIndex: 999,
   },
-  offline: {
-    backgroundColor: '#1E293B',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
-  },
-  reconnected: {
-    backgroundColor: '#065F46',
-  },
   text: {
-    color: '#FFFFFF',
     fontSize: FontSizes.xs,
     fontFamily: FontFamily.semibold,
   },

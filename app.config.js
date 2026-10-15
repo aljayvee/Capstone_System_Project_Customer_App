@@ -7,9 +7,15 @@ module.exports = ({ config }) => {
       ...(config.plugins || []),
       "expo-secure-store",
       "expo-status-bar",
-      "expo-navigation-bar",
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false
+        }
+      ],
       "expo-notifications",
-      "expo-font"
+      "expo-font",
+      "@react-native-google-signin/google-signin"
     ],
     ios: {
       ...config.ios,

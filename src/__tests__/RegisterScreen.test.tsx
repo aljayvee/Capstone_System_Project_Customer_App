@@ -12,26 +12,6 @@ jest.mock('../context/AuthContext', () => ({
   useAuth: () => ({ login: mockLogin }),
 }));
 
-// The real picker is a month grid; the wizard only cares that a date comes back.
-jest.mock('../components/CalendarPickerModal', () => {
-  const ReactLib = require('react');
-  const { Text } = require('react-native');
-  return ({ visible, onSelectDate, onClose }: any) =>
-    visible
-      ? ReactLib.createElement(
-          Text,
-          {
-            testID: 'pick-birthdate',
-            onPress: () => {
-              onSelectDate('2000-01-15');
-              onClose();
-            },
-          },
-          'pick a date'
-        )
-      : null;
-});
-
 import RegisterScreen from '../screens/RegisterScreen';
 
 const navigation = { replace: jest.fn(), navigate: jest.fn(), goBack: jest.fn() };
@@ -51,10 +31,6 @@ async function advanceToOtpStep(res: any) {
   await fireEvent.changeText(res.getByPlaceholderText('Enter last name'), 'Dela Cruz');
   await fireEvent.press(res.getByText('Continue'));
 
-  await fireEvent.press(res.getByText('Tap to choose birthdate from calendar'));
-  await fireEvent.press(res.getByTestId('pick-birthdate'));
-  await fireEvent.press(res.getByText('Continue'));
-
   await fireEvent.changeText(res.getByPlaceholderText('name@example.com'), 'juan@gmail.com');
   await fireEvent.changeText(res.getByPlaceholderText('09123456789'), '09123456789');
   await fireEvent.press(res.getByText('Send Code via Email'));
@@ -65,7 +41,7 @@ describe('RegisterScreen', () => {
   it('opens on step 1 with the question in the hero and no social sign-up', async () => {
     const res: any = await render(<RegisterScreen navigation={navigation} />);
 
-    expect(res.getByText('STEP 1 OF 5')).toBeTruthy();
+    expect(res.getByText('STEP 1 OF 4')).toBeTruthy();
     expect(res.getByText("What's your name?")).toBeTruthy();
     expect(res.getByPlaceholderText('Enter first name')).toBeTruthy();
 
@@ -81,8 +57,8 @@ describe('RegisterScreen', () => {
     await fireEvent.changeText(res.getByPlaceholderText('Enter last name'), 'Dela Cruz');
     await fireEvent.press(res.getByText('Continue'));
 
-    expect(res.getByText('STEP 2 OF 5')).toBeTruthy();
-    expect(res.getByText('When were you born?')).toBeTruthy();
+    expect(res.getByText('STEP 2 OF 4')).toBeTruthy();
+    expect(res.getByText('Account Verification')).toBeTruthy();
   });
 
   // Regression: stepping back from the code screen and pressing Send again used
@@ -126,9 +102,9 @@ describe('RegisterScreen', () => {
 
     await fireEvent.press(res.getByText('Continue'));
 
-    expect(res.getByText('First name required!')).toBeTruthy();
-    expect(res.getByText('Last name required!')).toBeTruthy();
-    expect(res.getByText('STEP 1 OF 5')).toBeTruthy();
+    // Both the first-name and last-name chips, same short vocabulary.
+    expect(res.getAllByText('Required')).toHaveLength(2);
+    expect(res.getByText('STEP 1 OF 4')).toBeTruthy();
   });
 
   it('leaves the screen from step 1 via the hero back button', async () => {

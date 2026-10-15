@@ -1,4 +1,5 @@
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { showAppAlert } from '../services/alertModal';
 
 export interface ImagePickerResultAsset {
   uri: string;
@@ -12,6 +13,14 @@ export interface PickImageOptions {
   mode: 'camera' | 'gallery';
   aspect?: [number, number];
   quality?: number;
+  /**
+   * Square-crops and lets the user reframe. Right for an avatar, WRONG for a
+   * document: cropping a payment confirmation to 1:1 is how the reference
+   * number ends up outside the image the OCR then fails to find it in.
+   */
+  allowsEditing?: boolean;
+  /** Named in the permission prompt, so it says what it is actually for. */
+  purpose?: string;
 }
 
 /**
@@ -23,6 +32,8 @@ export async function safePickImage({
   mode,
   aspect = [1, 1],
   quality = 0.8,
+  allowsEditing = true,
+  purpose = 'a profile photo',
 }: PickImageOptions): Promise<ImagePickerResultAsset | null> {
   try {
     const ImagePicker = await import('expo-image-picker');
@@ -34,21 +45,30 @@ export async function safePickImage({
     if (mode === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Camera permission is required to take a profile photo.');
+        showAppAlert({
+          title: 'Permission Denied',
+          message: `Camera permission is required to take ${purpose}.`,
+          variant: 'warning',
+        });
         return null;
       }
     } else {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Photo library permission is required to choose a profile photo.');
+        showAppAlert({
+          title: 'Permission Denied',
+          message: `Photo library permission is required to choose ${purpose}.`,
+          variant: 'warning',
+        });
         return null;
       }
     }
 
     const options: any = {
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect,
+      allowsEditing,
+      // Only meaningful alongside allowsEditing; passing it otherwise is inert.
+      ...(allowsEditing ? { aspect } : {}),
       quality,
       base64: true,
     };
@@ -73,12 +93,20 @@ export async function safePickImage({
   } catch (err: any) {
     console.warn('[safeImagePicker] Native image picker error:', err);
     if (String(err?.message || '').includes('ExponentImagePicker') || String(err?.message || '').includes('native module')) {
-      Alert.alert(
-        'Native Module Update Required',
-        'The photo upload feature requires rebuilding the native Android app to link the new camera module. Please run "npx expo run:android" or "expo start" in your terminal.'
-      );
+      // Developer-facing, and only reachable on a dev build with an unlinked
+      // module. The detail belongs in the log, not on a customer's screen.
+      console.warn('[safeImagePicker] Native module not linked. Run: npx expo run:android');
+      showAppAlert({
+        title: 'Photos unavailable',
+        message: 'This build cannot open your photos yet. Try again after the next app update.',
+        variant: 'error',
+      });
     } else {
-      Alert.alert('Image Picker Error', err?.message || 'Failed to open image picker.');
+      showAppAlert({
+        title: 'Photos unavailable',
+        message: "We couldn't open your photos. Check that Sugo has photo access, then try again.",
+        variant: 'error',
+      });
     }
     return null;
   }

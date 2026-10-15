@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   Pressable,
   Image,
 } from 'react-native';
+import TrueBottomSheet from './transitions/TrueBottomSheet';
 import {
   X,
   Search,
@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
+import { RETRY_LABEL } from '../services/errorMessages';
 import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
 import { BackendMerchantCategory } from '../services/merchantCategories';
 import { useCategoryImages } from '../hooks/useCategoryImages';
@@ -59,7 +60,7 @@ function getCategoryVisuals(catName?: string, primaryColor: string = '#F62459'):
     return { Icon: ShoppingBag, iconColor: '#F59E0B', bgLight: '#FEF3C7' };
   }
   if (normalized.includes('retail') || normalized.includes('merchandise') || normalized.includes('goods')) {
-    return { Icon: ShoppingBasket, iconColor: '#8B5CF6', bgLight: '#F5F3FF' };
+    return { Icon: ShoppingBasket, iconColor: primaryColor, bgLight: '#FFEEF3' };
   }
 
   return { Icon: Store, iconColor: primaryColor, bgLight: '#FFEEF3' };
@@ -83,7 +84,7 @@ export default function MerchantCategoriesModal({
   // with the photos already there rather than popping them in a beat later.
   const categoryImages = useCategoryImages(categories);
 
-  // Backs the "Reload from Server" button in the empty state. The hook keeps
+  // Backs the retry button in the empty state. The hook keeps
   // itself current over the socket, so this is a manual escape hatch rather
   // than the mechanism.
   const loadBackendCategories = () => {
@@ -104,27 +105,21 @@ export default function MerchantCategoriesModal({
   }, [categories, search]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={styles.dismissOverlay} onPress={onClose} />
-
-        <View
-          style={[
-            styles.sheetContainer,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-            Shadows.liftedUp,
-          ]}
-        >
-          {/* DRAG HANDLE INDICATOR */}
-          <View style={styles.dragHandleContainer}>
-            <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
-          </View>
-
-          {/* HEADER ROW */}
-          <View style={styles.headerRow}>
+    <TrueBottomSheet
+      visible={visible}
+      onClose={onClose}
+      showDragHandle={true}
+      contentStyle={[
+        styles.sheetContainer,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+        Shadows.liftedUp,
+      ]}
+    >
+      {/* HEADER ROW */}
+      <View style={styles.headerRow}>
             <View style={styles.headerTextCol}>
               <View style={styles.headerTitleRow}>
                 <Sparkles size={18} color={colors.primary} />
@@ -257,22 +252,20 @@ export default function MerchantCategoriesModal({
                     No categories found
                   </Text>
                   <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
-                    Try searching with another keyword or tap reload.
+                    Try another keyword, or load the list again.
                   </Text>
                   <TouchableOpacity
                     style={[styles.retryBtn, { backgroundColor: colors.primary }]}
                     onPress={loadBackendCategories}
                   >
                     <RefreshCw size={14} color="#FFFFFF" />
-                    <Text style={styles.retryBtnText}>Reload from Server</Text>
+                    <Text style={styles.retryBtnText} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </ScrollView>
           )}
-        </View>
-      </View>
-    </Modal>
+    </TrueBottomSheet>
   );
 }
 

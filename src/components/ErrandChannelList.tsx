@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { RotateCw, WifiOff, MessageSquare, Sparkles } from 'lucide-react-native';
+import { RotateCw, WifiOff } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontSizes, FontFamily, Spacing, BorderRadius, Shadows } from '../config/theme';
+import { RETRY_LABEL } from '../services/errorMessages';
+import {
+  FontSizes,
+  FontFamily,
+  Spacing,
+  BorderRadius,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
 import ErrandChannelRow from './ErrandChannelRow';
 import { ChannelListSkeleton } from './ChatSkeleton';
 import type { ErrandSummary } from '../hooks/useActiveErrands';
@@ -50,25 +61,27 @@ export default function ErrandChannelList({
       <View
         style={[
           styles.errorContainer,
-          { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2', borderColor: colors.danger },
-          Shadows.soft,
+          { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' },
         ]}
         testID="connection-error-banner"
       >
         <WifiOff size={28} color={colors.danger} strokeWidth={2} />
-        <Text style={[styles.errorTitle, { color: colors.danger }]}>Connection to Server Dropped</Text>
-        <Text style={[styles.errorSubtitle, { color: colors.textGray }]}>
-          Unable to connect to live dispatch services. Check your internet connection and try again.
+        <Text style={[styles.errorTitle, { color: colors.danger }]} maxFontSizeMultiplier={1.2}>
+          We could not load your chats
+        </Text>
+        <Text style={[styles.errorSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
+          Check your Wi-Fi or mobile data, then try again.
         </Text>
         {onRefresh && (
           <TouchableOpacity
             activeOpacity={0.8}
             style={[styles.refreshBtn, { backgroundColor: colors.danger }]}
             onPress={onRefresh}
+            hitSlop={PortalTouchTargets.compactHitSlop}
             testID="tap-to-refresh-connection-btn"
           >
             <RotateCw size={14} color="#FFFFFF" strokeWidth={2.2} />
-            <Text style={styles.refreshBtnTextWhite}>Tap to Refresh</Text>
+            <Text style={styles.refreshBtnTextWhite} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>{RETRY_LABEL}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -81,17 +94,20 @@ export default function ErrandChannelList({
       return (
         <View style={styles.circularContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.circularText, { color: colors.textGray }]}>
-            Still connecting to live dispatch server...
+          <Text style={[styles.circularText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+            Slow connection. Still loading your chats...
           </Text>
           {onRefresh && (
             <TouchableOpacity
               activeOpacity={0.8}
               style={[styles.refreshBtnOutline, { borderColor: colors.primary, marginTop: Spacing.md }]}
               onPress={onRefresh}
+              hitSlop={PortalTouchTargets.compactHitSlop}
             >
               <RotateCw size={14} color={colors.primary} />
-              <Text style={[styles.refreshBtnTextPrimary, { color: colors.primary }]}>Tap to Refresh</Text>
+              <Text style={[styles.refreshBtnTextPrimary, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+                {RETRY_LABEL}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -107,64 +123,18 @@ export default function ErrandChannelList({
         style={[
           styles.emptyCard,
           {
-            backgroundColor: colors.card,
-            borderColor: isDark ? colors.border : '#EDEFF2',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC',
           },
-          Shadows.soft,
         ]}
       >
-        <View
-          style={[
-            styles.emptyIconHalo,
-            {
-              backgroundColor: isDark
-                ? 'rgba(246, 36, 89, 0.12)'
-                : '#FFF0F5',
-            },
-          ]}
-        >
-          <MessageSquare size={34} color={colors.primary} strokeWidth={2} />
-        </View>
         <Text style={[styles.emptyTitle, { color: colors.textDark }]}>
           No Active Errand Chats
         </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
-          {emptyText ||
-            'Chats are automatically opened when you place an errand to review item pricing and coordinate live with your dispatcher.'}
-        </Text>
-
-        {/* 3-Step Fulfillment Flow Recap */}
-        <View style={[styles.miniFlowContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray }]}>
-          <Text style={[styles.miniFlowTitle, { color: colors.textMedium }]}>How It Works:</Text>
-          <View style={styles.flowStepsRow}>
-            <View style={styles.flowStepItem}>
-              <Text style={[styles.flowStepNum, { color: colors.primary }]}>1</Text>
-              <Text style={[styles.flowStepText, { color: colors.textDark }]}>List Items</Text>
-            </View>
-            <Text style={[styles.flowArrow, { color: colors.textLight }]}>➔</Text>
-            <View style={styles.flowStepItem}>
-              <Text style={[styles.flowStepNum, { color: colors.primary }]}>2</Text>
-              <Text style={[styles.flowStepText, { color: colors.textDark }]}>Upfront Rate</Text>
-            </View>
-            <Text style={[styles.flowArrow, { color: colors.textLight }]}>➔</Text>
-            <View style={styles.flowStepItem}>
-              <Text style={[styles.flowStepNum, { color: colors.primary }]}>3</Text>
-              <Text style={[styles.flowStepText, { color: colors.textDark }]}>COD Delivery</Text>
-            </View>
-          </View>
-        </View>
-
-        {onNewErrandPress && (
-          <TouchableOpacity
-            activeOpacity={0.88}
-            style={[styles.emptyBtn, { backgroundColor: colors.primary }, Shadows.soft]}
-            onPress={onNewErrandPress}
-            testID="empty-request-errand-btn"
-          >
-            <Sparkles size={16} color="#FFFFFF" strokeWidth={2.4} />
-            <Text style={styles.emptyBtnText}>Request a New Errand</Text>
-          </TouchableOpacity>
-        )}
+        {emptyText ? (
+          <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
+            {emptyText}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -176,9 +146,19 @@ export default function ErrandChannelList({
         <ErrandChannelRow key={errand.id} errand={errand} onSelect={onSelect} />
       ))}
       {onRefresh && (
-        <TouchableOpacity activeOpacity={0.7} style={styles.bottomRefreshLink} onPress={onRefresh}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.bottomRefreshLink}
+          onPress={onRefresh}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+        >
           <RotateCw size={13} color={colors.textGray} />
-          <Text style={[styles.bottomRefreshText, { color: colors.textGray }]}>Refresh Channel Status</Text>
+          <Text
+            style={[styles.bottomRefreshText, { color: colors.textGray }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+          >
+            Refresh Channel Status
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -186,34 +166,43 @@ export default function ErrandChannelList({
 }
 
 const styles = StyleSheet.create({
-  listContainer: { gap: Spacing.xs },
+  listContainer: { gap: 0 },
   circularContainer: { padding: Spacing.xl, alignItems: 'center', justifyContent: 'center' },
-  circularText: { fontFamily: FontFamily.medium, fontSize: FontSizes.xs, marginTop: Spacing.sm, textAlign: 'center' },
+  circularText: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.3),
+    marginTop: Spacing.sm,
+    textAlign: 'center',
+  },
   errorContainer: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: Spacing.xs,
   },
-  errorTitle: { fontFamily: FontFamily.bold, fontSize: FontSizes.md, marginTop: Spacing.xs },
+  errorTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 1.25),
+    marginTop: Spacing.xs,
+  },
   errorSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 0.5,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
     textAlign: 'center',
     marginTop: 4,
     marginBottom: Spacing.md,
-    lineHeight: 18,
   },
   emptyCard: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xl + 8,
+    paddingVertical: Spacing.xxl + 8,
     borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    marginTop: Spacing.xs,
+    marginTop: Spacing.md,
   },
   emptyIconHalo: {
     width: 72,
@@ -225,16 +214,17 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 1.25),
     marginBottom: 4,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 0.5,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
     textAlign: 'center',
     marginBottom: Spacing.md,
-    lineHeight: 18,
     maxWidth: 280,
   },
   miniFlowContainer: {
@@ -245,7 +235,8 @@ const styles = StyleSheet.create({
   },
   miniFlowTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
@@ -262,61 +253,83 @@ const styles = StyleSheet.create({
   },
   flowStepNum: {
     fontFamily: FontFamily.bold,
-    fontSize: 11,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 22,
     backgroundColor: 'rgba(246, 36, 89, 0.1)',
   },
   flowStepText: {
     fontFamily: FontFamily.medium,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
   },
   flowArrow: {
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     opacity: 0.6,
   },
   emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 11,
+    minHeight: PortalTouchTargets.buttonHeight,
+    paddingVertical: 12,
     paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.full,
   },
   emptyBtnText: {
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 1.2),
   },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
+    minHeight: PortalTouchTargets.compact,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: BorderRadius.full,
   },
-  refreshBtnTextWhite: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs, color: '#FFFFFF' },
+  refreshBtnTextWhite: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
+    color: '#FFFFFF',
+  },
   refreshBtnOutline: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
+    minHeight: PortalTouchTargets.compact,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
-  refreshBtnTextPrimary: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs },
+  refreshBtnTextPrimary: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
+  },
   bottomRefreshLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
     marginTop: Spacing.xs,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    minHeight: 44,
   },
-  bottomRefreshText: { fontFamily: FontFamily.regular, fontSize: FontSizes.xs },
+  bottomRefreshText: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
+  },
 });

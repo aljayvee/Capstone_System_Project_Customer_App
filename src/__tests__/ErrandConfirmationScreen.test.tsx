@@ -23,7 +23,7 @@ describe('ErrandConfirmationScreen', () => {
           commission: 50,
           subtotal: 0,
           grandTotal: 130,
-          paymentMethod: 'GCash',
+          paymentMethod: 'GCASH',
           status: 'Errand Placed',
           createdAt: Date.now(),
         },

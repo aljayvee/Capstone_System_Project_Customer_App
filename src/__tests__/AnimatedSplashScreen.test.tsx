@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, cleanup, act } from '@testing-library/react-native';
+import { render, cleanup, act, fireEvent } from '@testing-library/react-native';
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import { ThemeProvider } from '../context/ThemeContext';
 
@@ -50,7 +50,7 @@ describe('AnimatedSplashScreen component', () => {
     expect(onComplete).toHaveBeenCalled();
   });
 
-  it('triggers circuit breaker safety fallback after 3500ms even if isAppReady is false', async () => {
+  it('does not prematurely dismiss splash screen when isAppReady is false to prevent screen flash', async () => {
     jest.useFakeTimers();
     const onComplete = jest.fn();
     await render(
@@ -59,7 +59,7 @@ describe('AnimatedSplashScreen component', () => {
       </ThemeProvider>
     );
 
-    // Advance past 3500ms safety timeout + exit animation
+    // Advance past 3500ms timeout
     await act(async () => {
       jest.advanceTimersByTime(3600);
     });
@@ -68,6 +68,28 @@ describe('AnimatedSplashScreen component', () => {
       jest.advanceTimersByTime(400);
     });
 
-    expect(onComplete).toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('calls onFirstFrame when rendered to release blank system splash', async () => {
+    const onFirstFrame = jest.fn();
+    const res: any = await render(
+      <ThemeProvider>
+        <AnimatedSplashScreen
+          isAppReady={false}
+          onAnimationComplete={jest.fn()}
+          onFirstFrame={onFirstFrame}
+        />
+      </ThemeProvider>
+    );
+
+    expect(onFirstFrame).not.toHaveBeenCalled();
+
+    const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } };
+    await act(async () => {
+      fireEvent(res.getByTestId('animated-splash'), 'layout', layout);
+      fireEvent(res.getByTestId('animated-splash'), 'layout', layout);
+    });
+    expect(onFirstFrame).toHaveBeenCalledTimes(1);
   });
 });

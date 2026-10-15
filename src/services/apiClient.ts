@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from '../config/api';
 import { getDeviceHeaders } from '../utils/deviceInfo';
+import { isTokenExpired } from '../utils/jwt';
+import { ApiError, toApiError } from './ApiError';
 
 export const SECURE_TOKEN_KEY = 'sugo_customer_jwt_token';
 export const STORAGE_KEY_TOKEN_FALLBACK = '@sugo_customer_jwt_token';
@@ -48,11 +50,12 @@ export const setCustomerRefreshToken = async (token: string | null): Promise<voi
 
   try {
     await SecureStore.setItemAsync(SECURE_REFRESH_KEY, token);
-    // Never leave a stale copy in the weaker store shadowing the good one.
-    await AsyncStorage.removeItem(STORAGE_KEY_REFRESH_FALLBACK).catch(() => {});
   } catch {
-    await AsyncStorage.setItem(STORAGE_KEY_REFRESH_FALLBACK, token).catch(() => {});
+    // SecureStore may fail or be unsupported on certain Android device states
   }
+  // Resilient persistence: Always ensure the fallback copy is maintained in AsyncStorage,
+  // preventing accidental session revocation if SecureStore transiently fails on mobile wake-up.
+  await AsyncStorage.setItem(STORAGE_KEY_REFRESH_FALLBACK, token).catch(() => {});
 };
 
 /** In-memory first, then disk. Hydrates the in-memory copy as a side effect. */
@@ -84,6 +87,46 @@ let onSessionExpired: (() => void) | null = null;
 export const setOnSessionExpired = (cb: (() => void) | null) => {
   onSessionExpired = cb;
 };
+
+/**
+ * Slow-connection detection.
+ *
+ * Deliberately not a radio-quality reading: a full-bars Wi-Fi with a dead
+ * uplink looks perfect to NetInfo, and a healthy 3G looks alarming. What the
+ * customer actually experiences is how long a request takes, so that is what
+ * gets measured. 3s is the threshold ErrandChannelList already uses before it
+ * swaps a skeleton for a spinner, reused here so the app has one idea of "slow"
+ * rather than two.
+ */
+export const SLOW_REQUEST_MS = 3000;
+
+let nextRequestId = 1;
+const pendingRequests = new Map<number, number>();
+
+function trackRequestStart(config: any): void {
+  // A request replayed after a silent refresh arrives with the same config
+  // object. Drop its previous entry first, or the original id is orphaned in
+  // the map forever and the app reads as permanently slow.
+  trackRequestEnd(config);
+  const id = nextRequestId++;
+  config.__sugoReqId = id;
+  pendingRequests.set(id, Date.now());
+}
+
+function trackRequestEnd(config: any): void {
+  const id = config?.__sugoReqId;
+  if (typeof id === 'number') pendingRequests.delete(id);
+}
+
+/** True while any in-flight request has been waiting longer than SLOW_REQUEST_MS. */
+export function hasSlowRequestInFlight(now: number = Date.now()): boolean {
+  return Array.from(pendingRequests.values()).some((startedAt) => now - startedAt >= SLOW_REQUEST_MS);
+}
+
+/** Test seam. Nothing in the app calls this. */
+export function __resetRequestTracking(): void {
+  pendingRequests.clear();
+}
 
 export const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -123,6 +166,10 @@ apiClient.interceptors.request.use(
     } catch {
       // Non-fatal if device headers cannot be read
     }
+
+    // Started here rather than before the awaits above, so the storage reads
+    // this interceptor performs are not counted against the network.
+    trackRequestStart(config);
 
     return config;
   },
@@ -186,8 +233,9 @@ async function performRefresh(): Promise<string> {
   try {
     await SecureStore.setItemAsync(SECURE_TOKEN_KEY, newAccessToken);
   } catch {
-    await AsyncStorage.setItem(STORAGE_KEY_TOKEN_FALLBACK, newAccessToken).catch(() => {});
+    // Keystore error or unsupported
   }
+  await AsyncStorage.setItem(STORAGE_KEY_TOKEN_FALLBACK, newAccessToken).catch(() => {});
 
   // Absent when the server's grace window absorbed a concurrent refresh — the
   // token already on disk is still the live one, so leave it alone.
@@ -216,40 +264,95 @@ export function refreshCustomerSession(): Promise<string> {
   return refreshPromise;
 }
 
+/**
+ * Endpoints where the caller is presenting credentials rather than spending an
+ * access token. A 401 from any of these is an answer ("that password is wrong",
+ * "that code has expired"), not a signal that the session needs refreshing.
+ *
+ * Every CustomerApp auth call lives under /customers/, not /auth/ - see
+ * LoginScreen, RegisterScreen, ForgotPasswordScreen and SessionExpiredSheet.
+ * /auth/ is kept in the pattern because refreshCustomerSession posts to
+ * /auth/refresh, and a refresh must never trigger a refresh.
+ */
+const CREDENTIAL_ENDPOINTS = new RegExp(
+  '/(auth/|customers/(login|register|forgot-password|reset-password|verify-reset-code|verify-email|resend-verification-email|(send|verify)-registration-(otp|phone-otp)))'
+);
+
 // Response Interceptor: silent refresh on 401, then clean error messages
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    trackRequestEnd(response.config);
+    return response;
+  },
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
+    trackRequestEnd(original);
 
-    // `_retried` stops an endlessly re-401ing endpoint from looping. /auth/* is
-    // excluded because a failed login must surface as a failed login, and the
-    // refresh call itself must never trigger a refresh.
-    const isAuthCall = typeof original?.url === 'string' && original.url.includes('/auth/');
+    // `_retried` stops an endlessly re-401ing endpoint from looping.
+    // Credential-presenting calls are excluded because a 401 from one of them
+    // means the credentials were wrong, not that an access token aged out.
+    // This used to test for '/auth/', which no CustomerApp endpoint contains -
+    // every one of them lives under /customers/ - so the exclusion never fired
+    // and a wrong password was reported to the customer as an expired session.
+    const isCredentialCall =
+      typeof original?.url === 'string' && CREDENTIAL_ENDPOINTS.test(original.url);
 
-    if (status === 401 && original && !original._retried && !isAuthCall) {
+    // Second line of defence: a customer who is not signed in has no session to
+    // recover, so a 401 on an anonymous call must not clear state or fire
+    // onSessionExpired. Reads memory first, then the keystore.
+    const hasRecoverableSession =
+      status === 401 && !isCredentialCall ? Boolean(await getCustomerRefreshToken()) : false;
+
+    if (status === 401 && original && !original._retried && !isCredentialCall && hasRecoverableSession) {
       original._retried = true;
+
+      // Sibling request check: If another concurrent request already refreshed the access
+      // token while this request was in flight, reuse the fresh token directly without
+      // rotating the refresh token again (which would advance the rotation chain and trip replay detection).
+      const requestAuthHeader = original.headers?.Authorization || original.headers?.authorization;
+      const requestToken =
+        typeof requestAuthHeader === 'string'
+          ? requestAuthHeader.replace(/^Bearer\s+/i, '').trim()
+          : null;
+      const currentToken = getCustomerToken();
+
+      if (currentToken && requestToken && currentToken !== requestToken && !isTokenExpired(currentToken)) {
+        original.headers = { ...(original.headers || {}), Authorization: `Bearer ${currentToken}` };
+        return apiClient(original);
+      }
+
       try {
         const newToken = await refreshCustomerSession();
         original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newToken}` };
         return apiClient(original);
-      } catch {
-        // Unrecoverable: no stored token, it expired, or the server revoked the
-        // session. Clear the dead credential and let the app return to Login
-        // once, rather than every screen discovering it separately.
-        await setCustomerRefreshToken(null);
-        setCustomerToken(null);
-        onSessionExpired?.();
-        return Promise.reject(new Error('Your session has expired. Please sign in again.'));
+      } catch (refreshErr: any) {
+        // Only trigger session revocation if the server explicitly rejected the refresh
+        // token as unauthorized/forbidden (401/403) or if the refresh token is missing.
+        // Transient network drops, timeouts, 429 rate limits, and 5xx errors must NOT
+        // destroy the user's stored session!
+        const refreshStatus = refreshErr?.response?.status ?? refreshErr?.status;
+        const isAuthRejection =
+          refreshStatus === 401 ||
+          refreshStatus === 403 ||
+          refreshErr?.message === 'NO_REFRESH_TOKEN';
+
+        if (isAuthRejection) {
+          await setCustomerRefreshToken(null);
+          setCustomerToken(null);
+          onSessionExpired?.();
+          return Promise.reject(new ApiError('Session expired', { status: 401, endpoint: original?.url }));
+        }
+
+        // Network error, timeout, or server 5xx: preserve credentials and forward the failure.
+        return Promise.reject(toApiError(refreshErr));
       }
     }
 
-    const message =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      error.message ||
-      'Network request failed';
-    return Promise.reject(new Error(message));
+    // Classified, not flattened. Screens must not render `message` - it still
+    // carries the server's own text, and the app talks to a deployed backend
+    // whose wording (or a CDN's, in front of it) is not ours to show. Run it
+    // through toUserMessage() in errorMessages.ts instead.
+    return Promise.reject(toApiError(error));
   }
 );

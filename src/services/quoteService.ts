@@ -1,5 +1,32 @@
 import { apiClient } from './apiClient';
 
+/**
+ * Where an errand's money stands, straight from the server.
+ *
+ * Attached to every errand payload beside `feeBreakdown` (see the server's
+ * attachErrandNames). Null on a COD errand — which is almost all of them — so a
+ * surface that ignores it behaves exactly as it did before the plan existed.
+ *
+ * Kept OUT of FeeQuote deliberately: a quote is what an errand costs, this is
+ * what has been paid against it. Folding the two would put a customer's payment
+ * history inside a price.
+ */
+export interface PaymentPlan {
+  /** False on COD, where there is no ledger at all. */
+  hasLedger: boolean;
+  /**
+   * Always 0 since 2026-10-08, when the 50% plan was retired: nothing is paid
+   * before the rider arrives. Still sent by the server, so still typed.
+   */
+  dueUpFront: number;
+  /** Non-zero before delivery only on an errand that paid the old half. */
+  amountPaid: number;
+  /** What is still owed, collected by the rider at the door. */
+  balanceDue: number;
+  /** CANCELLED (since 2026-10-09): cancelled before any money came in. */
+  state: 'AWAITING_BALANCE' | 'SETTLED' | 'REFUNDED' | 'CANCELLED';
+}
+
 export interface FeeQuote {
   fees: {
     baseFee: number;

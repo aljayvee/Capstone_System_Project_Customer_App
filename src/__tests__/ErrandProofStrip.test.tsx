@@ -97,9 +97,58 @@ describe("the photos a customer can see", () => {
     mockGet.mockResolvedValueOnce({ data: { mimeType: 'image/jpeg', imageData: 'AAAA' } });
     await fireEvent.press(res.getByTestId('proof-1'));
 
+    // The second argument is the per-request timeout override. The shared
+    // client's 10s is for JSON; this call carries a half-megabyte of base64.
     await waitFor(() =>
-      expect(mockGet).toHaveBeenLastCalledWith('/errands/ERR-1/proof-images/1')
+      expect(mockGet).toHaveBeenLastCalledWith(
+        '/errands/ERR-1/proof-images/1',
+        expect.objectContaining({ timeout: 60000 })
+      )
     );
+  });
+
+  it('says so, and offers a retry, when the photo does not arrive', async () => {
+    // The real failure this replaced: axios aborted the transfer at the 10s
+    // timeout, the catch set the image to null, and the modal closed itself.
+    // A spinner that resolves to nothing is indistinguishable from a bug.
+    const res = await draw([RECEIPT]);
+    await waitFor(() => expect(res.getByTestId('proof-1')).toBeTruthy());
+
+    const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
+      code: 'ECONNABORTED',
+    });
+    mockGet.mockRejectedValueOnce(timeout);
+    await fireEvent.press(res.getByTestId('proof-1'));
+
+    await waitFor(() => expect(res.getByTestId('proof-image-error')).toBeTruthy());
+    expect(res.getByText(/taking too long/i)).toBeTruthy();
+    expect(res.getByTestId('proof-image-retry')).toBeTruthy();
+  });
+
+  it('recovers the photo when the retry succeeds', async () => {
+    const res = await draw([RECEIPT]);
+    await waitFor(() => expect(res.getByTestId('proof-1')).toBeTruthy());
+
+    mockGet.mockRejectedValueOnce(new Error('network'));
+    await fireEvent.press(res.getByTestId('proof-1'));
+    await waitFor(() => expect(res.getByTestId('proof-image-error')).toBeTruthy());
+
+    mockGet.mockResolvedValueOnce({ data: { mimeType: 'image/jpeg', imageData: 'AAAA' } });
+    await fireEvent.press(res.getByTestId('proof-image-retry'));
+
+    await waitFor(() => expect(res.queryByTestId('proof-image-error')).toBeNull());
+  });
+
+  it('treats a truncated response as a failure rather than showing a blank', async () => {
+    // A cut-off transfer still parses; `imageData` just comes back short or
+    // missing. Handing that to <Image> renders nothing and explains nothing.
+    const res = await draw([RECEIPT]);
+    await waitFor(() => expect(res.getByTestId('proof-1')).toBeTruthy());
+
+    mockGet.mockResolvedValueOnce({ data: { mimeType: 'image/jpeg' } });
+    await fireEvent.press(res.getByTestId('proof-1'));
+
+    await waitFor(() => expect(res.getByTestId('proof-image-error')).toBeTruthy());
   });
 
   it('renders nothing at all when the errand has no photos', async () => {

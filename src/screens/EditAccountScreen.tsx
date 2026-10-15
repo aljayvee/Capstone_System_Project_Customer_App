@@ -4,18 +4,21 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Animated,
   Image,
   Modal,
-  Alert,
   BackHandler,
+  Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { showAppAlert } from '../services/alertModal';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+// Not React Native's: under Expo's edge-to-edge Android build the window never
+// resizes for the keyboard, so RN's version has nothing to react to. This one
+// reads the IME frame from KeyboardProvider (mounted in AppNavigator).
+import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import {
   ChevronLeft,
   User,
@@ -26,7 +29,6 @@ import {
   CheckCircle2,
   AlertCircle,
   ShieldCheck,
-  Edit3,
   Camera,
   Image as ImageIcon,
   Trash2,
@@ -36,9 +38,25 @@ import {
 import { safePickImage } from '../utils/safeImagePicker';
 import { RootStackScreenProps } from '../navigation/types';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
+import { verifyPhoneBySms } from '../services/phoneVerification';
 import { useAuth } from '../context/AuthContext';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows } from '../config/theme';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
 import CalendarPickerModal from '../components/CalendarPickerModal';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -46,9 +64,11 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
 export default function EditAccountScreen({ route, navigation }: RootStackScreenProps<'EditAccount'>) {
-  const { user } = route.params;
+  const { user, focusField } = route.params;
   const { updateUser } = useAuth();
   const { colors, isDark } = useThemeColor();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useResponsive();
 
   // Initial values
   const initialFirstName = user.firstName || '';
@@ -59,14 +79,39 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
   const initialPhone = user.phone || '';
   const initialAvatar = user.avatar || null;
 
+  // Phone normalization: extract strictly 10 digits (9XXXXXXXXX)
+  const normalizeTo10Digits = (val: string) => {
+    const digits = (val || '').replace(/\D/g, '');
+    if (digits.startsWith('63') && digits.length >= 12) return digits.slice(2, 12);
+    if (digits.startsWith('0') && digits.length >= 11) return digits.slice(1, 11);
+    return digits.slice(0, 10);
+  };
+  const initialPhone10 = useMemo(() => normalizeTo10Digits(initialPhone), [initialPhone]);
+
   // Form State
   const [firstName, setFirstName] = useState(initialFirstName);
   const [middleName, setMiddleName] = useState(initialMiddleName);
   const [lastName, setLastName] = useState(initialLastName);
   const [birthdate, setBirthdate] = useState(initialBirthdate);
   const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState(initialPhone);
+  const [phone, setPhone] = useState(initialPhone10);
   const [avatar, setAvatar] = useState<string | null>(initialAvatar);
+
+  // Phone Verification State
+  const initialPhoneVerified = Boolean((user as any).phoneVerified);
+  const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
+
+  const isPhoneChanged = useMemo(() => {
+    const cleanCurrent = phone.trim().replace(/\D/g, '');
+    return cleanCurrent !== initialPhone10;
+  }, [phone, initialPhone10]);
+
+  const isPhoneVerifiedCurrent = useMemo(() => {
+    if (firebaseIdToken) return true;
+    if (!isPhoneChanged) return initialPhoneVerified;
+    return false;
+  }, [firebaseIdToken, isPhoneChanged, initialPhoneVerified]);
 
   // UI / Async State
   const [saving, setSaving] = useState(false);
@@ -79,6 +124,25 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
   // Errors & Shake Animation
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  // Home's reminders open this screen pointed at one field (2026-10-09):
+  // "Provide your mobile number" focuses the number, so the keyboard opens and
+  // the scroll view brings it into view; "provide your birthdate" opens the
+  // date picker and marks the field until a date is chosen.
+  const phoneInputRef = useRef<TextInput>(null);
+  const pointBirthdate = focusField === 'birthdate';
+  // The Save dock's height, so a focused field is kept clear of it as well as
+  // of the keyboard.
+  const [dockHeight, setDockHeight] = useState(88);
+  useEffect(() => {
+    if (!focusField) return undefined;
+    // After the push animation, so focus lands on a laid-out screen.
+    const timer = setTimeout(() => {
+      if (focusField === 'phone') phoneInputRef.current?.focus();
+      if (focusField === 'birthdate') setShowCalendarModal(true);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [focusField]);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
@@ -109,9 +173,24 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
     if (lastName.trim() !== initialLastName.trim()) count++;
     if (birthdate.trim() !== initialBirthdate.trim()) count++;
     if (email.trim() !== initialEmail.trim()) count++;
-    if (phone.trim() !== initialPhone.trim()) count++;
+    if (phone.trim() !== initialPhone10.trim()) count++;
     return count;
-  }, [firstName, middleName, lastName, birthdate, email, phone]);
+  }, [firstName, middleName, lastName, birthdate, email, phone, initialPhone10]);
+
+  // Clamped phone input handler: enforces 10 digits starting with 9
+  const handlePhoneChange = (t: string) => {
+    let digits = t.replace(/\D/g, '');
+    if (digits.startsWith('63') && digits.length > 10) {
+      digits = digits.slice(2);
+    } else if (digits.startsWith('0') && digits.length > 10) {
+      digits = digits.slice(1);
+    }
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
+    }
+    setPhone(digits);
+    clearError('phone');
+  };
 
   // Loss Aversion Guard: Intercept back button when unsaved changes exist
   const handleBack = () => {
@@ -138,8 +217,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
   // Real-time inline field validation indicators
   const isFirstNameValid = firstName.trim().length > 0 && !errors.firstName;
   const isLastNameValid = lastName.trim().length > 0 && !errors.lastName;
-  const isEmailValid = email.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && !errors.email;
-  const isPhoneValid = phone.trim().length >= 10;
+  const isEmailValid =
+    email.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && !errors.email;
+  const isPhoneValid = phone.trim().length === 10 && phone.trim().startsWith('9');
 
   // Handle Photo Picker (Camera or Gallery) with strict MIME & 5MB validation
   const handleSelectImage = async (mode: 'camera' | 'gallery') => {
@@ -149,46 +229,49 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
         mode,
         aspect: [1, 1],
         quality: 0.8,
+        purpose: 'profile photo',
       });
 
-      if (!asset) {
-        return;
-      }
+      if (!asset) return;
 
-      // 1. Validate File Extension / MIME Type (Strictly .jpeg/.jpg/.png only)
       const fileName = asset.fileName || asset.uri.split('/').pop() || 'profile.jpg';
       const fileExt = fileName.split('.').pop()?.toLowerCase();
       let mimeType = asset.mimeType || (fileExt === 'png' ? 'image/png' : 'image/jpeg');
 
       if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
 
-      const isValidMime = ALLOWED_MIME_TYPES.includes(mimeType) || ['jpg', 'jpeg', 'png'].includes(fileExt || '');
+      const isValidMime =
+        ALLOWED_MIME_TYPES.includes(mimeType) || ['jpg', 'jpeg', 'png'].includes(fileExt || '');
       if (!isValidMime) {
-        Alert.alert(
-          'Invalid Format',
-          'Only .jpeg, .jpg, and .png image files are allowed. Please select a valid photo.'
-        );
+        showAppAlert({
+          title: 'Invalid Format',
+          message: 'Only .jpeg, .jpg, and .png image files are allowed. Please select a valid photo.',
+          variant: 'error',
+        });
         return;
       }
 
-      // 2. Validate File Size (Strictly 5MB limit)
       const fileSize = asset.fileSize || (asset.base64 ? Math.round((asset.base64.length * 3) / 4) : 0);
       if (fileSize > MAX_IMAGE_SIZE_BYTES) {
-        Alert.alert(
-          'Photo Too Large',
-          `The selected photo is ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Maximum allowed photo size is 5MB.`
-        );
+        showAppAlert({
+          title: 'Photo Too Large',
+          message: `The selected photo is ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Maximum allowed photo size is 5MB.`,
+          variant: 'warning',
+        });
         return;
       }
 
       if (!asset.base64) {
-        Alert.alert('Upload Error', 'Could not read photo data. Please try again.');
+        showAppAlert({
+          title: 'Upload Error',
+          message: 'Could not read photo data. Please try again.',
+          variant: 'error',
+        });
         return;
       }
 
       const photoData = `data:${mimeType};base64,${asset.base64}`;
 
-      // 3. Upload immediately to API
       setUploadingPhoto(true);
       const uploadRes = await apiClient.put(`/customers/${user.id}/photo`, {
         photoData,
@@ -200,10 +283,13 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
       const updatedAvatar = uploadRes.data?.user?.avatar || photoData;
       setAvatar(updatedAvatar);
       await updateUser({ avatar: updatedAvatar });
-      Alert.alert('Success', 'Profile photo updated successfully!');
+      showAppAlert({
+        title: 'Success',
+        message: 'Profile photo updated successfully!',
+        variant: 'success',
+      });
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Failed to upload profile photo.';
-      Alert.alert('Upload Failed', msg);
+      showAppAlert('Photo not saved', toUserMessage(err, 'profile'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -217,16 +303,44 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
       await apiClient.delete(`/customers/${user.id}/photo`);
       setAvatar(null);
       await updateUser({ avatar: null });
-      Alert.alert('Success', 'Profile photo removed.');
+      showAppAlert({
+        title: 'Success',
+        message: 'Profile photo removed.',
+        variant: 'success',
+      });
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Failed to remove profile photo.';
-      Alert.alert('Error', msg);
+      showAppAlert('Photo not removed', toUserMessage(err, 'profile'));
     } finally {
       setUploadingPhoto(false);
     }
   };
 
-  // Handle Direct Secure Save with JWT & Device Telemetry
+  const handleVerifyPhone = async () => {
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 10 || !cleanPhone.startsWith('9')) {
+      setErrors((prev) => ({ ...prev, phone: 'Enter 10-digit number starting with 9' }));
+      triggerShake();
+      return;
+    }
+    setVerifyingPhone(true);
+    setGlobalError(null);
+    // The same SMS flow as the Home tab's reminder (services/phoneVerification.ts).
+    const result = await verifyPhoneBySms(cleanPhone);
+    if (result.status === 'verified') {
+      // Kept even when the server's confirmation failed: the save sends it again.
+      setFirebaseIdToken(result.idToken);
+      setErrors((prev) => ({ ...prev, phone: null }));
+      setGlobalError(null);
+    } else if (result.status === 'cancelled') {
+      setGlobalError('Phone verification was cancelled.');
+    } else {
+      setGlobalError(toUserMessage(result.error, 'profile'));
+      triggerShake();
+    }
+    setVerifyingPhone(false);
+  };
+
+  // Handle Direct Secure Save
   const handleSave = async () => {
     if (saving) return;
 
@@ -234,17 +348,23 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
     let hasError = false;
 
     if (!firstName.trim()) {
-      newErrors.firstName = 'First name required!';
+      newErrors.firstName = 'Required';
       hasError = true;
     }
     if (!lastName.trim()) {
-      newErrors.lastName = 'Last name required!';
+      newErrors.lastName = 'Required';
       hasError = true;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email.trim() && !emailRegex.test(email.trim())) {
-      newErrors.email = 'Enter a valid email address!';
+      newErrors.email = 'Check this address';
+      hasError = true;
+    }
+
+    if (!isPhoneVerifiedCurrent) {
+      newErrors.phone = 'Verification required';
+      setGlobalError('Please verify your mobile number via SMS before saving.');
       hasError = true;
     }
 
@@ -259,13 +379,15 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
     setSaving(true);
 
     try {
+      const fullPhone = `+63${phone.trim()}`;
       const response = await apiClient.put(`/customers/${user.id}`, {
         firstName: firstName.trim(),
         middleName: middleName.trim() || null,
         lastName: lastName.trim(),
         birthdate: birthdate.trim() || null,
         email: email.trim().toLowerCase(),
-        phone: phone.trim(),
+        phone: fullPhone,
+        firebaseIdToken: firebaseIdToken || undefined,
       });
 
       const updatedUser = response.data?.user || {
@@ -275,7 +397,8 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
         lastName: lastName.trim(),
         birthdate: birthdate.trim() || null,
         email: email.trim().toLowerCase(),
-        phone: phone.trim(),
+        phone: fullPhone,
+        phoneVerified: true,
         avatar,
       };
 
@@ -286,10 +409,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
         navigation.navigate('Account', {
           user: updatedUser,
         });
-      }, 900);
+      }, 700);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Failed to update account information.';
-      setGlobalError(msg);
+      setGlobalError(toUserMessage(err, 'profile'));
       triggerShake();
     } finally {
       setSaving(false);
@@ -297,61 +419,121 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
   };
 
   const displayName = `${firstName.trim()} ${lastName.trim()}`.trim() || user.username || 'Customer';
-  const userInitials = `${(firstName[0] || user.username?.[0] || 'C').toUpperCase()}${(lastName[0] || '').toUpperCase()}`;
+  const userInitials = `${(firstName[0] || user.username?.[0] || 'C').toUpperCase()}${(
+    lastName[0] || ''
+  ).toUpperCase()}`;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        {/* iOS-STYLE TOP NAV HEADER */}
-        <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.bgApp }]}
+      edges={['top', 'left', 'right']}
+    >
+      {/* Keyboard-safe (2026-10-09). The padding KeyboardAvoidingView here
+          shrank the screen but never scrolled, so a field low on the form (the
+          mobile number) stayed hidden under the keyboard and the Save dock.
+          KeyboardAwareScrollView scrolls the focused field into view, kept
+          clear of the dock by bottomOffset; KeyboardStickyView lifts the dock
+          onto the keyboard. Both read the IME frame from KeyboardProvider. */}
+      <View style={{ flex: 1 }}>
+        {/* 1. TOP NAV HEADER */}
+        <View
+          style={[
+            styles.navHeaderRow,
+            {
+              borderBottomColor: colors.border,
+              backgroundColor: colors.bgApp,
+            },
+          ]}
+        >
           <TouchableOpacity
             onPress={handleBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            style={styles.backBtn}
             testID="back-button"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <ChevronLeft size={22} color={colors.textDark} />
           </TouchableOpacity>
-          <Text style={[styles.navTitle, { color: colors.textDark }]}>Edit Account Information</Text>
+          <Text style={[styles.navTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+            Edit Account Information
+          </Text>
           <View style={styles.navHeaderRightPlaceholder} />
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
+        <KeyboardAwareScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          // The dock rides on the keyboard with its own bottom inset hidden
+          // behind it, so only the rest of it covers the form.
+          bottomOffset={Math.max(0, dockHeight - insets.bottom) + Spacing.md}
+          testID="edit-account-scroll"
         >
           <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
             {/* SUCCESS BANNER */}
             {successBanner ? (
-              <View style={[styles.successBanner, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5', borderColor: '#10B981' }]}>
+              <View
+                style={[
+                  styles.successBanner,
+                  {
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5',
+                    borderColor: '#10B981',
+                  },
+                ]}
+              >
                 <CheckCircle2 size={18} color="#10B981" />
-                <Text style={styles.successBannerText}>Profile updated successfully!</Text>
+                <Text style={styles.successBannerText} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Profile updated successfully!</Text>
               </View>
             ) : null}
 
             {/* GLOBAL ERROR BANNER */}
             {globalError ? (
-              <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}>
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2',
+                    borderColor: colors.danger,
+                  },
+                ]}
+              >
                 <AlertCircle size={16} color={colors.danger} />
-                <Text style={[styles.errorBannerText, { color: colors.danger }]}>{globalError}</Text>
+                <Text style={[styles.errorBannerText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                  {globalError}
+                </Text>
               </View>
             ) : null}
 
-            {/* HERO PROFILE AVATAR CARD WITH INTERACTIVE PHOTO PICKER */}
-            <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+            {/* 2. AVATAR HERO CARD WITH SMART PHOTO PICKER */}
+            <View
+              style={[
+                styles.heroCard,
+                {
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                  borderColor: colors.border,
+                },
+                Shadows.soft,
+              ]}
+            >
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.avatarPickerWrapper}
                 onPress={() => setShowPhotoModal(true)}
                 disabled={uploadingPhoto}
                 testID="edit-avatar-picker-btn"
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
               >
-                <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
+                <View
+                  style={[
+                    styles.avatarRing,
+                    { borderColor: isDark ? 'rgba(246, 36, 89, 0.35)' : colors.primary },
+                  ]}
+                >
                   {avatar ? (
                     <Image source={{ uri: avatar }} style={styles.avatarImage} />
                   ) : (
@@ -365,23 +547,39 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                     </View>
                   )}
                 </View>
-                <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
-                  <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <View
+                  style={[
+                    styles.cameraBadge,
+                    {
+                      backgroundColor: colors.primary,
+                      borderColor: isDark ? colors.card : '#FFFFFF',
+                    },
+                  ]}
+                >
+                  <Camera size={12} color="#FFFFFF" strokeWidth={2.4} />
                 </View>
               </TouchableOpacity>
 
               <View style={styles.heroInfoCol}>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.heroDisplayName, { color: colors.textDark }]} numberOfLines={1}>
+                  <Text style={[styles.heroDisplayName, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                     {displayName}
                   </Text>
-                  <View style={[styles.verifiedBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5' }]}>
-                    <ShieldCheck size={12} color="#10B981" />
-                    <Text style={styles.verifiedText}>Verified</Text>
+                  <View
+                    style={[
+                      styles.verifiedBadge,
+                      {
+                        backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
+                        borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0',
+                      },
+                    ]}
+                  >
+                    <ShieldCheck size={11} color="#10B981" />
+                    <Text style={styles.verifiedText} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Verified</Text>
                   </View>
                 </View>
 
-                <Text style={[styles.heroHandle, { color: colors.textGray }]}>
+                <Text style={[styles.heroHandle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                   @{user.username || 'customer'}
                 </Text>
 
@@ -390,29 +588,52 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   style={styles.changePhotoLink}
                   disabled={uploadingPhoto}
                 >
-                  <Text style={[styles.changePhotoText, { color: colors.primary }]}>
+                  <Text style={[styles.changePhotoText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                     {avatar ? 'Change Profile Photo' : 'Upload Profile Photo (.jpg, .png)'}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* ========================================================================= */}
-            {/* SECTION 1: PERSONAL IDENTITY */}
-            {/* ========================================================================= */}
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+            {/* 3. BENTO CARD 1: PERSONAL IDENTITY */}
+            <View
+              style={[
+                styles.sectionCard,
+                {
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                  borderColor: colors.border,
+                },
+                Shadows.soft,
+              ]}
+            >
               <View style={styles.sectionHeaderRow}>
-                <User size={18} color={colors.primary} />
-                <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Personal Identity</Text>
+                <View
+                  style={[
+                    styles.sectionIconPill,
+                    { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
+                  ]}
+                >
+                  <User size={15} color={colors.primary} strokeWidth={2.2} />
+                </View>
+                <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  Personal Identity
+                </Text>
               </View>
 
               {/* FIRST NAME */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>FIRST NAME *</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>FIRST NAME *</Text>
                 {errors.firstName ? (
-                  <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
-                    <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                    <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.firstName}</Text>
+                  <View
+                    style={[
+                      styles.shoutBadgeTop,
+                      { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' },
+                    ]}
+                  >
+                    <AlertCircle size={11} color={colors.danger} strokeWidth={2.2} />
+                    <Text style={[styles.shoutText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                      {errors.firstName}
+                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -420,22 +641,40 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: errors.firstName ? colors.danger : colors.border,
-                    borderWidth: errors.firstName ? 1.5 : 1,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    borderTopColor: errors.firstName
+                      ? colors.danger
+                      : focusedField === 'firstName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.28)'
+                      : '#FFFFFF',
+                    borderColor: errors.firstName
+                      ? colors.danger
+                      : focusedField === 'firstName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                    borderWidth: errors.firstName || focusedField === 'firstName' ? 1.5 : 1.2,
+                    shadowOpacity: isDark ? 0.22 : 0.06,
                   },
                 ]}
+                testID="edit-first-name-wrapper"
               >
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="Enter first name"
-                  placeholderTextColor={colors.textLight}
+                  placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                   value={firstName}
+                  onFocus={() => setFocusedField('firstName')}
+                  onBlur={() => setFocusedField(null)}
                   onChangeText={(t) => {
                     setFirstName(t);
                     clearError('firstName');
                   }}
                   autoCapitalize="words"
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
                 />
                 {isFirstNameValid && (
                   <View style={styles.inputCheckIcon}>
@@ -446,34 +685,57 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
               {/* MIDDLE NAME */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>MIDDLE NAME (OPTIONAL)</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                  MIDDLE NAME (OPTIONAL)
+                </Text>
               </View>
               <View
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: colors.border,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    borderTopColor: focusedField === 'middleName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.28)'
+                      : '#FFFFFF',
+                    borderColor: focusedField === 'middleName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                    borderWidth: focusedField === 'middleName' ? 1.5 : 1.2,
+                    shadowOpacity: isDark ? 0.22 : 0.06,
                   },
                 ]}
               >
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="Enter middle name"
-                  placeholderTextColor={colors.textLight}
+                  placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                   value={middleName}
+                  onFocus={() => setFocusedField('middleName')}
+                  onBlur={() => setFocusedField(null)}
                   onChangeText={setMiddleName}
                   autoCapitalize="words"
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
                 />
               </View>
 
               {/* LAST NAME */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>LAST NAME *</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>LAST NAME *</Text>
                 {errors.lastName ? (
-                  <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
-                    <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                    <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.lastName}</Text>
+                  <View
+                    style={[
+                      styles.shoutBadgeTop,
+                      { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' },
+                    ]}
+                  >
+                    <AlertCircle size={11} color={colors.danger} strokeWidth={2.2} />
+                    <Text style={[styles.shoutText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                      {errors.lastName}
+                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -481,22 +743,39 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: errors.lastName ? colors.danger : colors.border,
-                    borderWidth: errors.lastName ? 1.5 : 1,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    borderTopColor: errors.lastName
+                      ? colors.danger
+                      : focusedField === 'lastName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.28)'
+                      : '#FFFFFF',
+                    borderColor: errors.lastName
+                      ? colors.danger
+                      : focusedField === 'lastName'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                    borderWidth: errors.lastName || focusedField === 'lastName' ? 1.5 : 1.2,
+                    shadowOpacity: isDark ? 0.22 : 0.06,
                   },
                 ]}
               >
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="Enter last name"
-                  placeholderTextColor={colors.textLight}
+                  placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                   value={lastName}
+                  onFocus={() => setFocusedField('lastName')}
+                  onBlur={() => setFocusedField(null)}
                   onChangeText={(t) => {
                     setLastName(t);
                     clearError('lastName');
                   }}
                   autoCapitalize="words"
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
                 />
                 {isLastNameValid && (
                   <View style={styles.inputCheckIcon}>
@@ -507,7 +786,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
               {/* BIRTHDATE */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>BIRTHDATE</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>BIRTHDATE</Text>
               </View>
               <TouchableOpacity
                 activeOpacity={0.7}
@@ -515,35 +794,76 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   styles.inputWrapper,
                   styles.calendarInputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: colors.border,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    borderTopColor: pointBirthdate && !birthdate
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.28)'
+                      : '#FFFFFF',
+                    borderColor: pointBirthdate && !birthdate
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                    borderWidth: pointBirthdate && !birthdate ? 1.5 : 1.2,
+                    shadowOpacity: isDark ? 0.22 : 0.06,
                   },
                 ]}
                 onPress={() => setShowCalendarModal(true)}
+                testID="edit-birthdate-field"
+                accessibilityRole="button"
+                accessibilityLabel="Select birthdate"
               >
-                <Text style={[styles.calendarText, { color: birthdate ? colors.textDark : colors.textLight }]}>
+                <Text
+                  style={[
+                    styles.calendarText,
+                    { color: birthdate ? colors.textDark : colors.textLight },
+                  ]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+                >
                   {birthdate || 'Select your date of birth'}
                 </Text>
-                <CalendarIcon size={18} color={colors.textGray} />
+                <CalendarIcon size={17} color={colors.textGray} />
               </TouchableOpacity>
             </View>
 
-            {/* ========================================================================= */}
-            {/* SECTION 2: CONTACT INFORMATION */}
-            {/* ========================================================================= */}
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]}>
+            {/* 4. BENTO CARD 2: CONTACT DETAILS */}
+            <View
+              style={[
+                styles.sectionCard,
+                {
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                  borderColor: colors.border,
+                },
+                Shadows.soft,
+              ]}
+            >
               <View style={styles.sectionHeaderRow}>
-                <Mail size={18} color={colors.primary} />
-                <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Contact Details</Text>
+                <View
+                  style={[
+                    styles.sectionIconPill,
+                    { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
+                  ]}
+                >
+                  <Mail size={15} color={colors.primary} strokeWidth={2.2} />
+                </View>
+                <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  Contact Details
+                </Text>
               </View>
 
               {/* EMAIL */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>EMAIL ADDRESS</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>EMAIL ADDRESS</Text>
                 {errors.email ? (
-                  <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
-                    <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                    <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.email}</Text>
+                  <View
+                    style={[
+                      styles.shoutBadgeTop,
+                      { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' },
+                    ]}
+                  >
+                    <AlertCircle size={11} color={colors.danger} strokeWidth={2.2} />
+                    <Text style={[styles.shoutText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{errors.email}</Text>
                   </View>
                 ) : null}
               </View>
@@ -551,23 +871,40 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: errors.email ? colors.danger : colors.border,
-                    borderWidth: errors.email ? 1.5 : 1,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                    borderTopColor: errors.email
+                      ? colors.danger
+                      : focusedField === 'email'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.28)'
+                      : '#FFFFFF',
+                    borderColor: errors.email
+                      ? colors.danger
+                      : focusedField === 'email'
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                    borderWidth: errors.email || focusedField === 'email' ? 1.5 : 1.2,
+                    shadowOpacity: isDark ? 0.22 : 0.06,
                   },
                 ]}
               >
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="name@example.com"
-                  placeholderTextColor={colors.textLight}
+                  placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                   value={email}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
                   onChangeText={(t) => {
                     setEmail(t);
                     clearError('email');
                   }}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
                 />
                 {isEmailValid && (
                   <View style={styles.inputCheckIcon}>
@@ -578,65 +915,172 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
               {/* PHONE */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]}>MOBILE PHONE</Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: colors.textDark }]}
-                  placeholder="09123456789"
-                  placeholderTextColor={colors.textLight}
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                />
-                {isPhoneValid && (
-                  <View style={styles.inputCheckIcon}>
-                    <Check size={14} color="#10B981" strokeWidth={2.6} />
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>MOBILE PHONE</Text>
+                {isPhoneVerifiedCurrent ? (
+                  <View style={[styles.phoneBadge, styles.phoneBadgeVerified]}>
+                    <ShieldCheck size={11} color="#10B981" />
+                    <Text style={styles.phoneBadgeVerifiedText} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>VERIFIED</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.phoneBadge, styles.phoneBadgeUnverified]}>
+                    <Text style={styles.phoneBadgeUnverifiedText} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>UNVERIFIED</Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.fieldHelperText, { color: colors.textLight }]}>
-                Used strictly by riders for live arrival calls and delivery coordination in Tacurong.
+              <View style={styles.phoneInputRow}>
+                {/* FIXED +63 PREFIX CONTAINER */}
+                <View
+                  style={[
+                    styles.phonePrefixBox,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                      borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+                      shadowOpacity: isDark ? 0.22 : 0.06,
+                    },
+                  ]}
+                  testID="phone-prefix-box"
+                >
+                  <Text style={[styles.phonePrefixText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+                    +63
+                  </Text>
+                </View>
+
+                {/* 10-DIGIT NUMBER INPUT */}
+                <View
+                  style={[
+                    styles.phoneFieldWrapper,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                      borderTopColor: errors.phone
+                        ? colors.danger
+                        : focusedField === 'phone'
+                        ? colors.primary
+                        : isDark
+                        ? 'rgba(255, 255, 255, 0.28)'
+                        : '#FFFFFF',
+                      borderColor: errors.phone
+                        ? colors.danger
+                        : focusedField === 'phone'
+                        ? colors.primary
+                        : isDark
+                        ? 'rgba(255, 255, 255, 0.12)'
+                        : '#E2E8F0',
+                      borderWidth: errors.phone || focusedField === 'phone' ? 1.5 : 1.2,
+                      shadowOpacity: isDark ? 0.22 : 0.06,
+                    },
+                  ]}
+                  testID="phone-field-wrapper"
+                >
+                  <TextInput
+                    ref={phoneInputRef}
+                    testID="edit-phone-input"
+                    style={[styles.input, { color: colors.textDark }]}
+                    placeholder="9123456789"
+                    placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+                    value={phone}
+                    onFocus={() => setFocusedField('phone')}
+                    onBlur={() => setFocusedField(null)}
+                    onChangeText={handlePhoneChange}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+                  />
+                  {isPhoneValid && isPhoneVerifiedCurrent && (
+                    <View style={styles.inputCheckIcon}>
+                      <Check size={14} color="#10B981" strokeWidth={2.6} />
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {errors.phone ? (
+                <Text style={styles.inlineFieldError} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                  {errors.phone}
+                </Text>
+              ) : null}
+
+              {!isPhoneVerifiedCurrent ? (
+                <TouchableOpacity
+                  style={[
+                    styles.verifyPhoneBtn,
+                    { backgroundColor: isPhoneValid ? colors.primary : (isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0') },
+                  ]}
+                  onPress={handleVerifyPhone}
+                  disabled={verifyingPhone || !isPhoneValid}
+                  activeOpacity={0.8}
+                >
+                  {verifyingPhone ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <ShieldCheck size={14} color={isPhoneValid ? '#FFFFFF' : colors.textLight} />
+                      <Text
+                        style={[
+                          styles.verifyPhoneBtnText,
+                          { color: isPhoneValid ? '#FFFFFF' : colors.textLight },
+                        ]}
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+                      >
+                        {isPhoneChanged ? 'Verify New Mobile Number' : 'Verify Mobile Number'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+
+              <Text style={[styles.fieldHelperText, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                Used strictly by riders for live arrival coordination and dispatch in Tacurong.
               </Text>
             </View>
-
-            {/* SAVE BUTTON (SMART DIRTY-STATE CTA) */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[
-                styles.saveButton,
-                { backgroundColor: colors.primary },
-                saving && { opacity: 0.7 },
-                Shadows.liftedUp,
-              ]}
-              onPress={handleSave}
-              disabled={saving}
-              testID="save-profile-button"
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Save size={18} color="#FFFFFF" strokeWidth={2.2} />
-                  <Text style={styles.saveButtonText}>
-                    {modifiedCount > 0
-                      ? `Save ${modifiedCount} ${modifiedCount === 1 ? 'Change' : 'Changes'}`
-                      : 'Save Profile Changes'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
           </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+
+        {/* 5. STICKY BOTTOM THUMB-ZONE ACTION DOCK. The keyboard's height already
+            includes the navigation bar the dock pads for, so it rides up by
+            that much less (the opened offset). */}
+        <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
+        <View
+          onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}
+          style={[
+            styles.stickyBottomDock,
+            {
+              backgroundColor: colors.bgAppTranslucent,
+              borderTopColor: colors.border,
+              paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.md,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[
+              styles.stickySaveButton,
+              { backgroundColor: colors.primary },
+              saving && { opacity: 0.7 },
+              Shadows.liftedUp,
+            ]}
+            onPress={handleSave}
+            disabled={saving}
+            testID="save-profile-button"
+            accessibilityRole="button"
+            accessibilityLabel="Save profile changes"
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Save size={17} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.stickySaveButtonText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+                  {modifiedCount > 0
+                    ? `Save ${modifiedCount} ${modifiedCount === 1 ? 'Change' : 'Changes'}`
+                    : 'Save Profile Changes'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        </KeyboardStickyView>
+      </View>
 
       {/* PHOTO SELECTION MODAL */}
       <Modal
@@ -645,60 +1089,130 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
         animationType="fade"
         onRequestClose={() => setShowPhotoModal(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.photoActionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowPhotoModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.photoActionCard,
+              { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
+              Shadows.liftedUp,
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.photoModalHeader}>
-              <Text style={[styles.photoModalTitle, { color: colors.textDark }]}>Customer Profile Photo</Text>
-              <TouchableOpacity onPress={() => setShowPhotoModal(false)} style={styles.closeModalBtn}>
+              <Text style={[styles.photoModalTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+                Profile Photo
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPhotoModal(false)}
+                style={styles.closeModalBtn}
+                hitSlop={PortalTouchTargets.compactHitSlop}
+              >
                 <X size={18} color={colors.textDark} />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.photoModalSubtitle, { color: colors.textGray }]}>
-              Accepts .jpeg, .jpg, and .png images up to 5MB.
+            <Text style={[styles.photoModalSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+              {avatar
+                ? 'Update or remove your current profile photo.'
+                : 'Choose a photo from your gallery or capture a new one.'}
             </Text>
 
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.photoOptionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}
-              onPress={() => handleSelectImage('camera')}
-              testID="take-photo-option"
+              style={[
+                styles.photoOptionRow,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC',
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => handleSelectImage('gallery')}
+              testID="choose-gallery-option"
+              accessibilityRole="button"
+              accessibilityLabel="Choose from Gallery"
             >
-              <Camera size={20} color={colors.primary} />
+              <View
+                style={[
+                  styles.photoOptionIconBadge,
+                  { backgroundColor: isDark ? 'rgba(246,36,89,0.15)' : '#FFEEF3' },
+                ]}
+              >
+                <ImageIcon size={18} color={colors.primary} />
+              </View>
               <View style={styles.photoOptionTextCol}>
-                <Text style={[styles.photoOptionLabel, { color: colors.textDark }]}>Take Photo with Camera</Text>
-                <Text style={[styles.photoOptionSub, { color: colors.textGray }]}>Capture a new profile photo</Text>
+                <Text style={[styles.photoOptionLabel, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  Choose from Gallery
+                </Text>
+                <Text style={[styles.photoOptionSub, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                  Select an image from device photos
+                </Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.photoOptionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}
-              onPress={() => handleSelectImage('gallery')}
-              testID="choose-gallery-option"
+              style={[
+                styles.photoOptionRow,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC',
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => handleSelectImage('camera')}
+              testID="take-photo-option"
+              accessibilityRole="button"
+              accessibilityLabel="Take a Photo"
             >
-              <ImageIcon size={20} color={colors.primary} />
+              <View
+                style={[
+                  styles.photoOptionIconBadge,
+                  { backgroundColor: isDark ? 'rgba(246,36,89,0.15)' : '#FFEEF3' },
+                ]}
+              >
+                <Camera size={18} color={colors.primary} />
+              </View>
               <View style={styles.photoOptionTextCol}>
-                <Text style={[styles.photoOptionLabel, { color: colors.textDark }]}>Choose from Gallery</Text>
-                <Text style={[styles.photoOptionSub, { color: colors.textGray }]}>Select image from device storage</Text>
+                <Text style={[styles.photoOptionLabel, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  Take Photo with Camera
+                </Text>
+                <Text style={[styles.photoOptionSub, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                  Capture a new profile photo
+                </Text>
               </View>
             </TouchableOpacity>
 
             {avatar && (
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={[styles.photoOptionRow, { backgroundColor: isDark ? 'rgba(239,68,68,0.1)' : '#FEE2E2' }]}
+                style={[
+                  styles.photoOptionRow,
+                  {
+                    backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#FEF2F2',
+                    borderColor: 'rgba(239,68,68,0.2)',
+                  },
+                ]}
                 onPress={handleRemovePhoto}
                 testID="remove-photo-option"
+                accessibilityRole="button"
+                accessibilityLabel="Remove current photo"
               >
-                <Trash2 size={20} color={colors.danger} />
+                <View style={[styles.photoOptionIconBadge, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
+                  <Trash2 size={18} color={colors.danger} />
+                </View>
                 <View style={styles.photoOptionTextCol}>
-                  <Text style={[styles.photoOptionLabel, { color: colors.danger }]}>Remove Current Photo</Text>
-                  <Text style={[styles.photoOptionSub, { color: colors.danger }]}>Revert to default initials avatar</Text>
+                  <Text style={[styles.photoOptionLabel, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                    Remove Current Photo
+                  </Text>
+                  <Text style={[styles.photoOptionSub, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                    Revert to clean initials badge
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* CALENDAR PICKER MODAL */}
@@ -737,27 +1251,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 0,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: PortalFontSizes.subheading,
   },
   navHeaderRightPlaceholder: {
-    width: 36,
+    width: PortalTouchTargets.compact,
   },
   scrollContent: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xl * 2,
+    paddingBottom: 110,
   },
   successBanner: {
     flexDirection: 'row',
@@ -770,7 +1284,7 @@ const styles = StyleSheet.create({
   },
   successBannerText: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: PortalFontSizes.caption,
     color: '#10B981',
   },
   errorBanner: {
@@ -784,13 +1298,15 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSizes.xs + 1,
+    fontSize: PortalFontSizes.caption,
   },
+
+  // Avatar Hero Card
   heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: Spacing.md,
   },
@@ -799,9 +1315,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   avatarRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -810,18 +1326,19 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 32,
+    borderRadius: 36,
   },
   avatarBadge: {
     width: '100%',
     height: '100%',
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: FontSizes.lg,
+    fontSize: PortalFontSizes.title,
   },
   avatarLoadingOverlay: {
     position: 'absolute',
@@ -829,7 +1346,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -837,10 +1354,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -853,24 +1370,25 @@ const styles = StyleSheet.create({
   },
   heroDisplayName: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: PortalFontSizes.subheading,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: BorderRadius.full,
+    borderWidth: 1,
   },
   verifiedText: {
     fontFamily: FontFamily.semibold,
-    fontSize: 10,
+    fontSize: PortalFontSizes.micro,
     color: '#10B981',
   },
   heroHandle: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: PortalFontSizes.caption,
     marginBottom: 4,
   },
   changePhotoLink: {
@@ -878,28 +1396,13 @@ const styles = StyleSheet.create({
   },
   changePhotoText: {
     fontFamily: FontFamily.semibold,
-    fontSize: 11,
+    fontSize: PortalFontSizes.caption,
   },
-  dirtyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-    alignSelf: 'flex-start',
-  },
-  dirtyBadgeText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: 10,
-  },
-  cleanText: {
-    fontFamily: FontFamily.regular,
-    fontSize: 10,
-  },
+
+  // Bento Section Cards
   sectionCard: {
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: Spacing.md,
   },
@@ -909,20 +1412,27 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: Spacing.md,
   },
+  sectionIconPill: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm + 1,
+    fontSize: PortalFontSizes.subheading,
   },
   labelHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   inputLabel: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
-    letterSpacing: 0.5,
+    fontSize: PortalFontSizes.caption,
+    letterSpacing: 0.3,
   },
   shoutBadgeTop: {
     flexDirection: 'row',
@@ -934,21 +1444,28 @@ const styles = StyleSheet.create({
   },
   shoutText: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: PortalFontSizes.micro,
   },
   inputWrapper: {
-    borderRadius: BorderRadius.md,
+    borderRadius: 14,
+    minHeight: 52,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
     marginBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   input: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 2,
+    fontSize: PortalFontSizes.body,
     padding: 0,
   },
   inputCheckIcon: {
@@ -956,10 +1473,10 @@ const styles = StyleSheet.create({
   },
   fieldHelperText: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: PortalFontSizes.micro,
     marginTop: -Spacing.xs,
     marginBottom: Spacing.xs,
-    lineHeight: 15,
+    lineHeight: 17,
   },
   calendarInputWrapper: {
     flexDirection: 'row',
@@ -968,33 +1485,42 @@ const styles = StyleSheet.create({
   },
   calendarText: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 2,
+    fontSize: PortalFontSizes.body,
   },
-  saveButton: {
+
+  // Sticky Bottom Action Dock
+  stickyBottomDock: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+  },
+  stickySaveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minHeight: PortalTouchTargets.buttonHeight,
     paddingVertical: 14,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.lg,
+    borderRadius: 12,
   },
-  saveButtonText: {
+  stickySaveButtonText: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: PortalFontSizes.subheading,
     color: '#FFFFFF',
   },
+
+  // Photo Modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
   },
   photoActionCard: {
     width: '100%',
-    borderRadius: BorderRadius.xl,
+    maxWidth: 360,
+    borderRadius: 16,
     borderWidth: 1,
     padding: Spacing.lg,
   },
@@ -1006,14 +1532,18 @@ const styles = StyleSheet.create({
   },
   photoModalTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: PortalFontSizes.title,
   },
   closeModalBtn: {
-    padding: 4,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoModalSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs,
+    fontSize: PortalFontSizes.caption,
     marginBottom: Spacing.md,
   },
   photoOptionRow: {
@@ -1021,19 +1551,118 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+    minHeight: PortalTouchTargets.min,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: Spacing.sm,
+  },
+  photoOptionIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoOptionTextCol: {
     flex: 1,
   },
   photoOptionLabel: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: PortalFontSizes.body,
     marginBottom: 2,
   },
   photoOptionSub: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: PortalFontSizes.micro,
+  },
+  phoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  phoneBadgeVerified: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  phoneBadgeVerifiedText: {
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.micro,
+    color: '#10B981',
+    letterSpacing: 0.4,
+  },
+  phoneBadgeUnverified: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  phoneBadgeUnverifiedText: {
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.micro,
+    color: '#F59E0B',
+    letterSpacing: 0.4,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: Spacing.xs,
+  },
+  phonePrefixBox: {
+    height: 52,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  phonePrefixText: {
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.body,
+    letterSpacing: 0.5,
+  },
+  phoneFieldWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
+    paddingHorizontal: Spacing.sm,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  verifyPhoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 12,
+    marginBottom: Spacing.sm,
+    marginTop: -Spacing.xs,
+  },
+  verifyPhoneBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.caption,
+    color: '#FFFFFF',
+  },
+  inlineFieldError: {
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.micro,
+    color: '#EF4444',
+    marginTop: -Spacing.xs,
+    marginBottom: Spacing.xs,
   },
 });

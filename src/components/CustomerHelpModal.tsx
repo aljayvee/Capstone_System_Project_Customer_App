@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import TrueBottomSheet from './transitions/TrueBottomSheet';
 import {
   HelpCircle,
   X,
@@ -31,15 +31,13 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
   const { baseFee, rateConfig } = useRateConfig();
 
   return (
-    <Modal
+    <TrueBottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      showDragHandle={true}
+      contentStyle={[styles.modalSheet, { backgroundColor: colors.card }]}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
-          {/* Header */}
+      {/* Header */}
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.headerTitleRow}>
               <View style={[styles.headerIconCircle, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : colors.bgGray }]}>
@@ -156,10 +154,10 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
             </View>
 
             {/* 4. DISPATCHER ASSISTANCE */}
-            <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.08)' : '#FFEEF3', borderColor: colors.primary }]}>
+            <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.sectionHeaderRow}>
                 <PhoneCall size={16} color={colors.primary} />
-                <Text style={[styles.sectionHeading, { color: colors.primary }]}>Need Order Assistance?</Text>
+                <Text style={[styles.sectionHeading, { color: colors.textDark }]}>Need Order Assistance?</Text>
               </View>
               <Text style={[styles.supportDesc, { color: colors.textDark }]}>
                 If you have questions about your active order or need urgent assistance, select your errand from the Messages & Support tab to chat in real-time with your assigned dispatcher.
@@ -177,9 +175,7 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
               <Text style={styles.gotItButtonText}>Got It, Thanks!</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </TrueBottomSheet>
   );
 }
 

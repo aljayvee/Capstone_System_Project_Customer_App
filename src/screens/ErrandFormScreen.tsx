@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
+import { showAppAlert } from '../services/alertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ShoppingCart,
@@ -21,7 +21,6 @@ import {
   Store,
   ShoppingBag,
   Package,
-  ShieldCheck,
 } from 'lucide-react-native';
 import { RootStackScreenProps } from '../navigation/types';
 import {
@@ -30,7 +29,26 @@ import {
   FALLBACK_BACKEND_CATEGORIES,
 } from '../services/merchantCategories';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import StoreModeToggle, { type StoreMode } from '../components/pabili/StoreModeToggle';
+import EstablishmentPicker from '../components/pabili/EstablishmentPicker';
+import type { Establishment } from '../services/establishments';
+import { toPickedStores } from '../services/pabiliDraft';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
 
 const getCategoryIcon = (categoryName: string) => {
   const lower = String(categoryName || '').toLowerCase();
@@ -43,7 +61,7 @@ const getCategoryIcon = (categoryName: string) => {
 };
 
 export default function ErrandFormScreen({ route, navigation }: RootStackScreenProps<'ErrandForm'>) {
-  const { user, reorderFrom } = route.params || {};
+  const { user, reorderFrom, initialMode } = route.params || {};
   const { colors, isDark } = useThemeColor();
   const { isTablet } = useResponsive();
 
@@ -70,6 +88,12 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
   });
   const [pabiliError, setPabiliError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // Merchant: kinds of store, and the dispatcher picks the shops. Location: the
+  // shops themselves, which reach the dispatcher already pinned. Each keeps its
+  // own picks, so switching back and forth loses nothing.
+  const [mode, setMode] = useState<StoreMode>(initialMode === 'location' ? 'location' : 'merchant');
+  const [pickedStores, setPickedStores] = useState<Establishment[]>([]);
+  const chosenCount = mode === 'location' ? pickedStores.length : selectedCats.length;
 
   useEffect(() => {
     let isMounted = true;
@@ -106,20 +130,56 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
       setSelectedCats(selectedCats.filter((c) => c !== catName));
     } else {
       if (selectedCats.length >= 3) {
-        const msg = 'You can select up to 3 store categories only for a single errand.';
+        const msg = 'You can select up to 3 merchant categories only for a single errand.';
         setPabiliError(msg);
-        Alert.alert('Category Limit (Max 3)', msg);
+        showAppAlert({
+          title: 'Category Limit (Max 3)',
+          message: msg,
+          variant: 'warning',
+        });
         return;
       }
       setSelectedCats([...selectedCats, catName]);
     }
   };
 
+  const toggleStore = (store: Establishment) => {
+    setPabiliError(null);
+    setValidationError(null);
+    if (pickedStores.some((s) => s.key === store.key)) {
+      setPickedStores(pickedStores.filter((s) => s.key !== store.key));
+      return;
+    }
+    if (pickedStores.length >= 3) {
+      const msg = 'You can pick up to 3 stores for a single errand.';
+      setPabiliError(msg);
+      showAppAlert({ title: 'Store Limit (Max 3)', message: msg, variant: 'warning' });
+      return;
+    }
+    setPickedStores([...pickedStores, store]);
+  };
+
+  const changeMode = (next: StoreMode) => {
+    setMode(next);
+    setPabiliError(null);
+    setValidationError(null);
+  };
+
   const handleContinue = () => {
     setValidationError(null);
 
+    if (mode === 'location') {
+      if (pickedStores.length === 0) {
+        setValidationError('Please pick at least 1 store to proceed.');
+        return;
+      }
+      const stores = toPickedStores(pickedStores);
+      navigation.navigate('ErrandItems', { user, selectedCats: stores.map((s) => s.key), stores });
+      return;
+    }
+
     if (selectedCats.length === 0) {
-      setValidationError('Please select at least 1 store category to proceed.');
+      setValidationError('Please select at least 1 merchant category to proceed.');
       return;
     }
 
@@ -131,13 +191,15 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
       <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          style={styles.backBtn}
           testID="back-button"
         >
           <ChevronLeft size={22} color={colors.textDark} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.textDark }]}>Errand Details</Text>
+        <Text style={[styles.navTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+          Errand Details
+        </Text>
         <View style={styles.navHeaderRightPlaceholder} />
       </View>
 
@@ -145,48 +207,34 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
         <View style={styles.stepperContainer}>
           <View style={[styles.stepPillActive, { backgroundColor: colors.primary }]}>
             <View style={styles.stepNumCircleActive}>
-              <Text style={styles.stepNumActive}>1</Text>
+              <Text style={styles.stepNumActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>1</Text>
             </View>
-            <Text style={styles.stepTextActive}>Choose Stores</Text>
+            <Text style={styles.stepTextActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Choose Stores</Text>
           </View>
           <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
           <View style={[styles.stepPillInactive, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-            <Text style={[styles.stepNumInactive, { color: colors.textLight }]}>2</Text>
-            <Text style={[styles.stepTextInactive, { color: colors.textLight }]}>List Items</Text>
+            <Text style={[styles.stepNumInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>2</Text>
+            <Text style={[styles.stepTextInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>List Items</Text>
           </View>
           <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
           <View style={[styles.stepPillInactive, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-            <Text style={[styles.stepNumInactive, { color: colors.textLight }]}>3</Text>
-            <Text style={[styles.stepTextInactive, { color: colors.textLight }]}>Review</Text>
+            <Text style={[styles.stepNumInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>3</Text>
+            <Text style={[styles.stepTextInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Review</Text>
           </View>
         </View>
 
         <View style={styles.titleSection}>
-          <Text style={[styles.headerTitle, { color: colors.textDark }]}>Where should we shop?</Text>
-          <Text style={[styles.subTitle, { color: colors.textGray }]}>
-            Pick up to 3 store categories and your rider will visit them in one trip.
+          <Text style={[styles.headerTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+            Where should we shop?
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.fleetBanner,
-            {
-              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
-              borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : '#A7F3D0',
-            },
-          ]}
-        >
-          <View style={styles.fleetDot} />
-          <Text style={[styles.fleetText, { color: isDark ? '#34D399' : '#065F46' }]}>
-            Dispatchers active in Tacurong · Upfront rate calculation before purchase
-          </Text>
-        </View>
+        <StoreModeToggle mode={mode} onChange={changeMode} />
 
         {validationError ? (
-          <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]} testID="validation-error-banner">
+          <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]} testID="validation-error-banner">
             <AlertCircle size={16} color={colors.danger} />
-            <Text style={[styles.errorText, { color: colors.danger }]} testID="validation-error-text">
+            <Text style={[styles.errorText, { color: colors.danger }]} testID="validation-error-text" maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
               {validationError}
             </Text>
           </View>
@@ -195,42 +243,49 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
         <View style={styles.sectionHeaderRow} testID="pabili-section">
           <View style={styles.sectionHeaderLeft}>
             <ShoppingCart size={18} color={colors.primary} strokeWidth={2.2} />
-            <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Store Categories</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+              {mode === 'location' ? 'Stores' : 'Merchant Categories'}
+            </Text>
           </View>
           <View
             style={[
               styles.counterBadge,
               {
-                backgroundColor: selectedCats.length > 0 ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray),
+                backgroundColor: chosenCount > 0 ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray),
               },
             ]}
           >
             <Text
               style={[
                 styles.counterBadgeText,
-                { color: selectedCats.length > 0 ? '#FFFFFF' : colors.textGray },
+                { color: chosenCount > 0 ? '#FFFFFF' : colors.textGray },
               ]}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
             >
-              {selectedCats.length === 0 ? 'Pick up to 3' : `${selectedCats.length} of 3 chosen`}
+              {chosenCount === 0 ? 'Pick up to 3' : `${chosenCount} of 3 chosen`}
             </Text>
           </View>
         </View>
 
         {pabiliError ? (
-          <Text style={[styles.limitErrorText, { color: colors.danger }]} testID="category-limit-error">
+          <Text style={[styles.limitErrorText, { color: colors.danger }]} testID="category-limit-error" maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
             {pabiliError}
           </Text>
         ) : null}
 
-        {categoriesLoading ? (
+        {mode === 'location' ? (
+          <View style={styles.categoryList}>
+            <EstablishmentPicker userId={user?.id} selected={pickedStores} onToggle={toggleStore} />
+          </View>
+        ) : categoriesLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textGray }]}>
-              Loading store categories from server...
+              Loading merchant categories from server...
             </Text>
           </View>
         ) : (
-          <View style={styles.categoryGrid}>
+          <View style={styles.categoryList}>
             {categories.map((cat, index) => {
               const isSelected = selectedCats.includes(cat.name);
               const CatIcon = getCategoryIcon(cat.name);
@@ -239,92 +294,79 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
                 <TouchableOpacity
                   key={`category-${cat.id ?? ''}-${cat.name}-${index}`}
                   testID={`category-card-${cat.name}`}
-                  activeOpacity={0.85}
+                  activeOpacity={0.7}
                   style={[
-                    styles.categoryCard,
+                    styles.categoryRow,
                     {
-                      backgroundColor: colors.card,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                      borderWidth: isSelected ? 2 : 1,
+                      borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+                      backgroundColor: isSelected
+                        ? (isDark ? 'rgba(246, 36, 89, 0.08)' : '#FFF5F7')
+                        : 'transparent',
                     },
-                    isSelected && Shadows.soft,
                   ]}
                   onPress={() => toggleCategory(cat.name)}
                 >
-                  <View style={styles.categoryCardTop}>
-                    <View
-                      style={[
-                        styles.categoryIconCircle,
-                        {
-                          backgroundColor: isSelected
-                            ? colors.primary
-                            : (isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray),
-                        },
-                      ]}
-                    >
-                      <CatIcon
-                        size={20}
-                        color={isSelected ? '#FFFFFF' : colors.primary}
-                        strokeWidth={2.2}
-                      />
-                    </View>
-
-                    <View
-                      style={[
-                        styles.selectIndicator,
-                        {
-                          backgroundColor: isSelected
-                            ? colors.primary
-                            : (isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray),
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                    >
-                      {isSelected ? (
-                        <Check size={12} color="#FFFFFF" strokeWidth={3} />
-                      ) : (
-                        <Plus size={12} color={colors.textLight} strokeWidth={2.5} />
-                      )}
-                    </View>
+                  <View
+                    style={[
+                      styles.categoryIconCircle,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primary
+                          : (isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray),
+                      },
+                    ]}
+                  >
+                    <CatIcon
+                      size={20}
+                      color={isSelected ? '#FFFFFF' : colors.primary}
+                      strokeWidth={2.2}
+                    />
                   </View>
 
-                  <Text style={[styles.categoryCardName, { color: colors.textDark }]} numberOfLines={1}>
-                    {cat.name}
-                  </Text>
-
-                  {cat.description ? (
-                    <Text style={[styles.categoryCardDesc, { color: colors.textGray }]} numberOfLines={2}>
-                      {cat.description}
+                  <View style={styles.categoryInfoCol}>
+                    <Text
+                      style={[
+                        styles.categoryCardName,
+                        { color: isSelected ? colors.primary : colors.textDark },
+                      ]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
+                    >
+                      {cat.name}
                     </Text>
-                  ) : null}
+                    {cat.description ? (
+                      <Text
+                        style={[styles.categoryCardDesc, { color: colors.textGray }]}
+                        numberOfLines={2}
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                      >
+                        {cat.description}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View
+                    style={[
+                      styles.selectIndicator,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primary
+                          : (isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray),
+                        borderColor: isSelected ? colors.primary : 'transparent',
+                      },
+                    ]}
+                  >
+                    {isSelected ? (
+                      <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                    ) : (
+                      <Plus size={13} color={colors.textLight} strokeWidth={2.5} />
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}
           </View>
         )}
-
-        <View
-          style={[
-            styles.trustCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-            Shadows.soft,
-          ]}
-        >
-          <View style={[styles.trustIconHalo, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FFF0F5' }]}>
-            <ShieldCheck size={20} color={colors.primary} strokeWidth={2.2} />
-          </View>
-          <View style={styles.trustTextCol}>
-            <Text style={[styles.trustTitle, { color: colors.textDark }]}>
-              Transparent Pricing Guarantee
-            </Text>
-            <Text style={[styles.trustSub, { color: colors.textGray }]}>
-              Items are bought at exact store receipt prices. Your dispatcher calculates the transparent delivery fare via live chat before rider purchase.
-            </Text>
-          </View>
-        </View>
 
         <TouchableOpacity
           testID="submit-errand-form-button"
@@ -332,24 +374,24 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
           style={[
             styles.submitBtn,
             {
-              backgroundColor: selectedCats.length > 0 ? colors.primary : (isDark ? 'rgba(255,255,255,0.1)' : '#D1D5DB'),
+              backgroundColor: chosenCount > 0 ? colors.primary : (isDark ? 'rgba(255,255,255,0.1)' : '#D1D5DB'),
             },
-            selectedCats.length > 0 && Shadows.liftedUp,
           ]}
           onPress={handleContinue}
-          disabled={selectedCats.length === 0}
+          disabled={chosenCount === 0}
         >
           <Text
             style={[
               styles.submitBtnText,
-              { color: selectedCats.length > 0 ? '#FFFFFF' : colors.textGray },
+              { color: chosenCount > 0 ? '#FFFFFF' : colors.textGray },
             ]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
           >
-            {selectedCats.length > 0
-              ? `Continue with ${selectedCats.length} ${selectedCats.length === 1 ? 'store' : 'stores'}`
+            {chosenCount > 0
+              ? `Continue with ${chosenCount} ${chosenCount === 1 ? 'store' : 'stores'}`
               : 'Choose a store to continue'}
           </Text>
-          {selectedCats.length > 0 && <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />}
+          {chosenCount > 0 && <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -369,21 +411,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md, 0.35),
+    fontSize: scaledPortalFontSize(17),
+    lineHeight: getPortalLineHeight(17, 'heading'),
   },
   navHeaderRightPlaceholder: {
-    width: 36,
+    width: PortalTouchTargets.compact,
   },
   scrollContent: {
     paddingHorizontal: Spacing.md,
@@ -400,26 +443,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 5,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: BorderRadius.full,
   },
   stepNumCircleActive: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNumActive: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(10, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
     color: '#F62459',
   },
   stepTextActive: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.25),
     color: '#FFFFFF',
   },
   stepperLine: {
@@ -431,52 +476,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 5,
+    paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: BorderRadius.full,
   },
   stepNumInactive: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(10, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
   },
   stepTextInactive: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(11, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.25),
   },
   titleSection: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   headerTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
+    lineHeight: getPortalLineHeight(PortalFontSizes.title, 'heading'),
     letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  subTitle: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(16, 0.2),
-  },
-  fleetBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-  },
-  fleetDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-  },
-  fleetText: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(10, 0.2),
-    flex: 1,
+    marginBottom: 4,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -485,11 +507,11 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
-    borderWidth: 1,
   },
   errorText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
     flex: 1,
   },
   sectionHeaderRow: {
@@ -505,20 +527,23 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
   },
   counterBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
   counterBadgeText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
   },
   limitErrorText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.35),
     marginBottom: Spacing.xs,
   },
   loadingContainer: {
@@ -530,75 +555,49 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
   },
-  categoryGrid: {
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
+  categoryList: {
+    marginBottom: Spacing.xl,
   },
-  categoryCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-  },
-  categoryCardTop: {
+  categoryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xs + 2,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+    borderBottomWidth: 1,
+    borderRadius: BorderRadius.md,
   },
   categoryIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  categoryInfoCol: {
+    flex: 1,
+    marginHorizontal: Spacing.sm,
+  },
   selectIndicator: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryCardName: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-    marginBottom: 3,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
+    marginBottom: 2,
   },
   categoryCardDesc: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    lineHeight: 15,
-  },
-  trustCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.xl,
-  },
-  trustIconHalo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trustTextCol: {
-    flex: 1,
-  },
-  trustTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    marginBottom: 1,
-  },
-  trustSub: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    lineHeight: 14,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
   },
   submitBtn: {
     flexDirection: 'row',
@@ -608,10 +607,11 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(11, 0.2),
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
-    minHeight: moderateScale(48, 0.2),
+    minHeight: PortalTouchTargets.buttonHeight,
   },
   submitBtnText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 1.25),
   },
 });

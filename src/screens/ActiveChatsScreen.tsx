@@ -54,7 +54,7 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+            style={styles.backBtn}
             testID="back-button"
           >
             <ChevronLeft size={22} color={colors.textDark} />
@@ -67,6 +67,11 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
           style={[styles.container, { backgroundColor: colors.bgApp }]}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          // The search field scrolls with the list, so a drag that reveals the
+          // rows hidden under the keyboard also puts the keyboard away, and a
+          // tap on a chat works first time instead of only closing it.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           <Text style={[styles.subtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
             Select an active errand to live chat with your assigned dispatcher.
@@ -119,7 +124,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: moderateScale(Spacing.sm + 2, 0.3),
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
   },
   backBtn: {
     width: 36,

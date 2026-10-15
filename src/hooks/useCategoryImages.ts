@@ -19,8 +19,15 @@ import {
  * has a built-in fallback image, and a category whose photo will not load must
  * still render a tile.
  */
+/**
+ * Photos already resolved this session, by category id (2026-10-14). Home
+ * remounts on every tab switch, and its tiles used to start without photos
+ * and pop them in from disk a moment later; a revisit starts with them now.
+ */
+const sessionImages = new Map<number, string>();
+
 export function useCategoryImages(categories: BackendMerchantCategory[]): Record<number, string> {
-  const [imageMap, setImageMap] = useState<Record<number, string>>({});
+  const [imageMap, setImageMap] = useState<Record<number, string>>(() => Object.fromEntries(sessionImages));
 
   // A stable, content-derived key. Re-running on the array identity alone would
   // re-fetch on every parent render; this only changes when a photo is added,
@@ -48,6 +55,7 @@ export function useCategoryImages(categories: BackendMerchantCategory[]): Record
         const next = { ...prev };
         let changed = false;
         withoutImages.forEach((c) => {
+          sessionImages.delete(c.id);
           if (next[c.id] !== undefined) {
             delete next[c.id];
             changed = true;
@@ -71,7 +79,9 @@ export function useCategoryImages(categories: BackendMerchantCategory[]): Record
       const resolved = results.filter((r): r is readonly [number, string] => r !== null);
       if (resolved.length === 0) return;
 
+      resolved.forEach(([id, uri]) => sessionImages.set(id, uri));
       setImageMap((prev) => {
+        if (resolved.every(([id, uri]) => prev[id] === uri)) return prev;
         const next = { ...prev };
         resolved.forEach(([id, uri]) => {
           next[id] = uri;

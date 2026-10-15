@@ -15,8 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ChevronLeft,
-  AtSign,
-  Lock,
   ShieldCheck,
   ArrowRight,
   CheckCircle2,
@@ -27,7 +25,23 @@ import {
 } from 'lucide-react-native';
 import AuthHeroPattern from '../components/AuthHeroPattern';
 import { apiClient } from '../services/apiClient';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { toUserMessage } from '../services/errorMessages';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
+  AuthFontSizeMultipliers,
+  AuthContainerHeights,
+} from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useAuthHeroGradient } from '../hooks/useAuthHeroGradient';
 
@@ -132,7 +146,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const handleRequestCode = async () => {
     clearMessages();
     if (!identifier.trim()) {
-      setFieldError('Required!');
+      setFieldError('Required');
       triggerShake();
       return;
     }
@@ -159,12 +173,12 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       // there is nothing to branch on — advance either way. `maskedEmail` is the
       // only differing field and it is display-only.
       setMaskedEmail(res.data?.maskedEmail ?? null);
-      setNotice(res.data?.message ?? null);
+      setNotice(res.data?.message ?? 'If that account exists, a code is on its way.');
       setCooldown(res.data?.retryAfterSeconds ?? RESEND_COOLDOWN_FALLBACK_SECONDS);
       setCodeSentTo(target);
       setStep(2);
     } catch (error: any) {
-      fail(error.message || 'Could not start the reset. Please try again.');
+      fail(toUserMessage(error, 'password-reset'));
     } finally {
       setLoading(false);
     }
@@ -174,7 +188,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const handleVerifyCode = async () => {
     clearMessages();
     if (code.trim().length !== 6) {
-      setFieldError('Enter the 6 digits!');
+      setFieldError('Enter all 6 digits');
       triggerShake();
       return;
     }
@@ -189,7 +203,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       setNotice(null);
       setStep(3);
     } catch (error: any) {
-      fail(error.message || 'That code did not work. Please try again.');
+      fail(toUserMessage(error, 'otp'));
     } finally {
       setLoading(false);
     }
@@ -208,7 +222,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       setCooldown(res.data?.retryAfterSeconds ?? RESEND_COOLDOWN_FALLBACK_SECONDS);
       setCodeSentTo(identifier.trim());
     } catch (error: any) {
-      fail(error.message || 'Could not resend the code.');
+      fail(toUserMessage(error, 'password-reset'));
     } finally {
       setLoading(false);
     }
@@ -223,17 +237,17 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     const trimmedConfirm = confirmPassword.trim();
 
     if (trimmed.length === 0) {
-      setFieldError('Password required!');
+      setFieldError('Required');
       triggerShake();
       return;
     }
     if (trimmed.length < 6) {
-      setFieldError('Min 6 characters!');
+      setFieldError('Use 6+ characters');
       triggerShake();
       return;
     }
     if (trimmed !== trimmedConfirm) {
-      setFieldError('Passwords do not match!');
+      setFieldError('Passwords must match');
       triggerShake();
       return;
     }
@@ -243,7 +257,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       await apiClient.post('/customers/reset-password', { resetToken, password: trimmed });
       setStep(4);
     } catch (error: any) {
-      fail(error.message || 'Could not update your password. Please start again.');
+      fail(toUserMessage(error, 'password-reset'));
     } finally {
       setLoading(false);
     }
@@ -280,13 +294,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const renderErrorPill = (message: string) => (
     <View style={[styles.errorPill, { backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2' }]}>
       <AlertCircle size={11} color={colors.danger} strokeWidth={2.4} />
-      <Text style={[styles.errorPillText, { color: colors.danger }]}>{message}</Text>
+      <Text style={[styles.errorPillText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{message}</Text>
     </View>
   );
 
   const renderLabel = (label: string) => (
     <View style={styles.labelRow}>
-      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>{label}</Text>
+      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{label}</Text>
       {fieldError ? renderErrorPill(fieldError) : null}
     </View>
   );
@@ -323,8 +337,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.heroTitle}>{heroTitle}</Text>
-            <Text style={styles.heroSubtitleText}>{heroSubtitle}</Text>
+            <Text style={styles.heroTitle} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>{heroTitle}</Text>
+            <Text style={styles.heroSubtitleText} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>{heroSubtitle}</Text>
           </Animated.View>
         </LinearGradient>
 
@@ -350,7 +364,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 ]}
               >
                 <AlertCircle size={16} color={colors.danger} />
-                <Text style={[styles.bannerText, { color: colors.danger }]}>{apiError}</Text>
+                <Text style={[styles.bannerText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{apiError}</Text>
               </View>
             ) : null}
 
@@ -367,7 +381,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     },
                   ]}
                 >
-                  <AtSign size={18} color={fieldError ? colors.danger : colors.textGray} />
                   <TextInput
                     style={[styles.input, { color: colors.textDark }]}
                     placeholder="Enter your username or email"
@@ -383,6 +396,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     autoComplete="username"
                     returnKeyType="go"
                     onSubmitEditing={handleRequestCode}
+                    maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                     testID="forgot-identifier-input"
                   />
                 </View>
@@ -413,7 +427,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText}>
+                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                         {codeSentTo === identifier.trim() && cooldown > 0 ? 'Back to Code' : 'Send Code'}
                       </Text>
                       <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
@@ -429,7 +443,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 {notice ? (
                   <View style={[styles.notice, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.bgGray }]}>
                     <MailCheck size={15} color={colors.textGray} />
-                    <Text style={[styles.noticeText, { color: colors.textGray }]}>{notice}</Text>
+                    <Text style={[styles.noticeText, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>{notice}</Text>
                   </View>
                 ) : null}
 
@@ -452,6 +466,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   }}
                   keyboardType="number-pad"
                   maxLength={6}
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="forgot-code-input"
                 />
 
@@ -466,7 +481,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText}>Verify Code</Text>
+                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify Code</Text>
                       <ShieldCheck size={18} color="#FFFFFF" strokeWidth={2.5} />
                     </>
                   )}
@@ -483,6 +498,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                       styles.resendText,
                       { color: cooldown > 0 ? colors.textLight : colors.primary },
                     ]}
+                    maxFontSizeMultiplier={AuthFontSizeMultipliers.button}
                   >
                     {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
                   </Text>
@@ -503,7 +519,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     },
                   ]}
                 >
-                  <Lock size={18} color={fieldError ? colors.danger : colors.textGray} />
                   <TextInput
                     style={[styles.input, { color: colors.textDark }]}
                     placeholder="At least 6 characters"
@@ -518,6 +533,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     autoCorrect={false}
                     spellCheck={false}
                     autoComplete="new-password"
+                    maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                     testID="forgot-password-input"
                   />
                   <TouchableOpacity
@@ -535,13 +551,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 </View>
 
                 {hasEdgeSpace ? (
-                  <Text style={[styles.spaceHint, { color: colors.textGray }]} testID="password-space-hint">
+                  <Text style={[styles.spaceHint, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body} testID="password-space-hint">
                     Spaces at the start and end are ignored. Spaces inside your password still count.
                   </Text>
                 ) : null}
 
                 <View style={[styles.labelRow, { marginTop: Spacing.lg }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textMedium }]}>CONFIRM PASSWORD</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>CONFIRM PASSWORD</Text>
                 </View>
                 <View
                   style={[
@@ -549,7 +565,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     { backgroundColor: inputFill, borderColor: inputHairline },
                   ]}
                 >
-                  <Lock size={18} color={colors.textGray} />
                   <TextInput
                     style={[styles.input, { color: colors.textDark }]}
                     placeholder="Re-enter your new password"
@@ -563,6 +578,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     autoCapitalize="none"
                     autoCorrect={false}
                     spellCheck={false}
+                    maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                     testID="forgot-confirm-input"
                   />
                 </View>
@@ -578,7 +594,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText}>Update Password</Text>
+                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Update Password</Text>
                       <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
                     </>
                   )}
@@ -597,7 +613,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 >
                   <CheckCircle2 size={32} color={colors.primary} strokeWidth={2.2} />
                 </View>
-                <Text style={[styles.doneText, { color: colors.textGray }]}>
+                <Text style={[styles.doneText, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
                   You can sign in with your new password now.
                 </Text>
 
@@ -607,7 +623,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   activeOpacity={0.85}
                   testID="forgot-back-to-login"
                 >
-                  <Text style={styles.primaryBtnText}>Back to Login</Text>
+                  <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Back to Login</Text>
                   <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
@@ -620,9 +636,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 testID="forgot-login-link"
               >
-                <Text style={[styles.footerText, { color: colors.textGray }]}>
+                <Text style={[styles.footerText, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
                   Remembered it?{' '}
-                  <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }}>Log In</Text>
+                  <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>Log In</Text>
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -662,16 +678,16 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     letterSpacing: -0.3,
     marginBottom: Spacing.xs,
   },
   heroSubtitleText: {
     color: 'rgba(255,255,255,0.88)',
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-    lineHeight: 18,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
   heroSubtitleStrong: {
     color: '#FFFFFF',
@@ -707,7 +723,8 @@ const styles = StyleSheet.create({
   },
   bannerText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     flex: 1,
   },
   notice: {
@@ -721,9 +738,9 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
     flex: 1,
-    lineHeight: 16,
   },
   labelRow: {
     flexDirection: 'row',
@@ -732,7 +749,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   inputLabel: {
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.bold,
     letterSpacing: 0.8,
   },
@@ -746,21 +764,23 @@ const styles = StyleSheet.create({
   },
   errorPillText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.md,
     borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
-    minHeight: moderateScale(48, 0.2),
+    minHeight: AuthContainerHeights.inputMinHeight,
   },
   input: {
     flex: 1,
     paddingVertical: moderateScale(Spacing.sm + 2, 0.2),
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'input'),
     fontFamily: FontFamily.regular,
   },
   eyeBtn: {
@@ -779,16 +799,18 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     borderWidth: 1.5,
-    borderRadius: BorderRadius.xl + 4,
+    borderRadius: BorderRadius.md,
     paddingVertical: moderateScale(Spacing.md, 0.2),
-    fontSize: scaledFontSize(22, 0.2),
+    fontSize: scaledAuthFontSize(22),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(22), 'heading'),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     letterSpacing: 8,
   },
   spaceHint: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'body'),
     marginTop: Spacing.xs,
     marginLeft: Spacing.md,
   },
@@ -800,12 +822,13 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(Spacing.md, 0.2),
     borderRadius: BorderRadius.full,
     marginTop: Spacing.lg,
-    minHeight: moderateScale(50, 0.2),
+    minHeight: AuthContainerHeights.buttonMinHeight,
   },
   primaryBtnText: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'heading'),
   },
   resendBtn: {
     marginTop: Spacing.md,
@@ -813,7 +836,8 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
   doneBlock: {
     alignItems: 'center',
@@ -828,9 +852,9 @@ const styles = StyleSheet.create({
   },
   doneText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     textAlign: 'center',
-    lineHeight: 18,
   },
   footerLink: {
     marginTop: Spacing.lg,
@@ -839,6 +863,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
 });

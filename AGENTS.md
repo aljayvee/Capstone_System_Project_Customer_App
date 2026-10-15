@@ -2,6 +2,14 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+# 🌐 Dual-Agent Handshake & Collaboration Invariant (Claude App ◄► Antigravity 2.0)
+> **ALWAYS ACTIVE IN ALL SESSIONS**: Both Claude App and Antigravity 2.0 operate as a unified engineering team.
+1. **Boot-Time Handshake Check (Step 0)**: In every single session, ALWAYS inspect `AGENT_HANDSHAKE.md` in this directory before modifying mobile code.
+2. **Locked Contract Invariant**: NEVER rename, refactor, or delete functions, types, or components marked `[LOCKED]` in `AGENT_HANDSHAKE.md`.
+3. **Surgical Delta Edits**: Apply changes strictly as minimal deltas using surgical replace tools.
+4. **Session Handoff Logging**: After completing any modification, update `AGENT_HANDSHAKE.md` with modified file paths, compiler verification (`npx tsc --noEmit`), and directives for the next session.
+5. **Gemini Non-Autonomous Execution & Claude Cognitive Alignment**: Gemini models (Gemini 3.x Pro, Gemini 3.8 Flash High) MUST NOT act autonomously or execute sweeping unilateral changes. Gemini must strictly adopt the 6-stage Claude Cognitive Thinking Process (Context Grounding -> Hypothesis & Trade-offs -> User Consultation Gate -> Surgical Delta -> Defensive Rigor -> Empirical Verification).
+
 # Expo & Android Build Rules
 
 ## Package Installation
@@ -109,7 +117,56 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
   - **No Redundant In-Body Guide Banners**: When a screen header already provides a dedicated action button (e.g. `(?)` `HelpCircle` icon button opening `CustomerHelpModal`), NEVER insert an in-body guide banner, promo strip, or reminder card repeating the same help prompt (e.g. `"Live Dispatcher Support & Guide — View Guide"`).
   - **Immediate Surfacing of Functional Controls**: Search bars, category chips, and status filter capsules MUST mount directly beneath the concise header section to maximize visible card rows and minimize vertical scrolling friction.
   - **Chat & Messaging Skeleton Wave Shimmer**: Chat channels and message bubble loading states MUST utilize `ShimmerWave` linear gradient sweeps (`ChannelListSkeleton`, `ChatMessagesSkeleton`) running on the native `RenderThread` rather than static or opacity-pulsing placeholders.
+- **Errand & Pabili Item Ordering Invariants (15 Rules & 3 Conversion Mechanisms)**:
+  - **The 15 Errand Surface Invariants**:
+    1. **Merchant Banner Icon Contrast**: Action/navigation icons (`<` Back, Search, Share, Favorites) overlaying store cover photos or merchant headers MUST have frosted background containers (`bg-slate-900/60 backdrop-blur-md border border-white/10` or `colors.card`) with thin outlines so they remain 100% legible over bright, white, or busy store photos.
+    2. **Consistent Catalog Imagery**: Store cards and item thumbnails in pabili catalog grids MUST use uniform aspect ratios ($1:1$ or $4:3$) and neutral card backings to preserve visual rhythm across diverse merchant listings.
+    3. **Strict Grid Alignment**: All elements across store listings and item sheets MUST snap to a unified layout grid (standard 18–24px horizontal gutters) to maintain visual order and trust.
+    4. **Supportive Palette (No Accent Shouting)**: Store category tags, merchant pills, and item cards MUST use calm, neutral tones. Saturated brand red (`#E53935` / `#F62459`) is strictly reserved for primary progression and errand dispatch CTAs.
+    5. **Single-Family Typography Hierarchy**: Constrain typography to 1 clean font family. Express hierarchy exclusively through size, weight, contrast, and line-height.
+    6. **Concise Non-Redundant Badges**: Merchant badges MUST use concise, high-signal copy (`VERIFIED`, `FAST QUEUE`, `AIR-CON`). Never combine redundant words (`VERIFIED MERCHANT PARTNER`) or decorative clutter in compact tags. Small uppercase tags must feature subtle letter-spacing (`0.5px`).
+    7. **Balanced Item Titles**: Item and store titles must be prominent and scannable without aggressive shouting. Use balanced semi-bold/bold weights (`600–700`), not ultra-black.
+    8. **Readable Paragraph Line-Height**: Item notes and store delivery instructions MUST specify line-height $\ge 1.4\text{–}1.6$ with softened contrast (`text-slate-400` / `colors.textMuted`). Headlines attract attention; paragraphs support understanding.
+    9. **Merchant Rating & Trust Proximity**: Store ratings (`★ 4.9 (120+)`) and verified status MUST be anchored directly adjacent to the store/item title in the hero area, answering *"What store is it and can I trust it?"* at first glance.
+    10. **Monochromatic Benefit Icons**: Errand feature chips (e.g., `Official Receipt`, `Fragile Handling`, `Cold Storage`) MUST share unified visual logic: monochromatic stroke weights, shared container geometry, and balanced spacing.
+    11. **Soft Hairline Dividers (Zero "Divider Hell")**: Replace harsh dark lines with ultra-subtle hairline borders (`rgba(255,255,255,0.06)` or `colors.border`) and macro-whitespace.
+    12. **Gestalt Spacing Balance**: Related item data (Item Name + Estimated Price + Quantity) must use tight micro-spacing ($4\text{–}8\text{px}$); distinct conceptual sections (Store Info vs. Item List) must use macro-spacing ($18\text{–}24\text{px}$).
+    13. **Zero Redundant "Price:" / "Qty:" Labels**: NEVER prefix currency figures with the literal word `Price:` (e.g. `Price: ₱85.00`). Display `₱85.00` directly with bold numerical hierarchy. Let currency symbols and typography speak for themselves.
+    14. **Pure Item Titles & Early Price Visibility**: Strip weight and package sizes from titles (e.g., `"Fresh Mangoes"`, not `"Fresh Mangoes 1kg"`). Place estimated pricing prominently in the upper hero area alongside the title and merchant name.
+    15. **Ergonomic Item Stepper & Dynamic Total in CTA**: Place the quantity selector directly adjacent to the Add to Errand button, display the unit (`kg`, `pcs`, `packs`) inside the stepper, and embed the dynamic total price inside the button (`[ Add to Errand • ₱179.00 ]`).
+  - **The 3 Advanced Errand Conversion Mechanisms**:
+    1. **Scrollable Card Sheet with Sticky Store Header Transition**: The store info, search bar, and item catalog live inside a soft card sheet that slides over the cover image; as the cover scrolls away, the store title and rating smoothly condense into the sticky top navigation header so the customer never loses store context.
+    2. **Persistent Sticky Bottom Errand Action Dock (Thumb Zone)**: In item selection and errand building screens, the quantity stepper, running item count, and primary conversion CTA remain persistently pinned in the bottom thumb reach zone (`bottom: 0`, `paddingBottom: safeAreaInsets.bottom`).
+    3. **Predefined 1-Tap Quantity Presets**: Above or beside the custom stepper, provide quick-select pill chips (`[ 1x ]`, `[ 2x ]`, `[ 3x ]`, `[ 5x ]` or common weights `[ 500g ]`, `[ 1kg ]`, `[ 2kg ]`) to eliminate repetitive `+` clicking while retaining the custom stepper for exact numbers.
 
 
+# Impeccable UI/UX Design Standards & Strict Anti-AI-Slop Invariants
 
+> **ENFORCEMENT LEVEL: ABSOLUTE & UNIVERSAL**
+> Applies whenever designing, creating, editing, refactoring, or suggesting UI/UX layouts.
+> Generic "AI Slop" visual design patterns are STRICTLY BANNED in production engineering.
 
+## 1. The Anti-AI-Slop Bans (The 15 Absolute Refusals)
+1. **NO Identical Card Grid Scaffolds**: NEVER structure screens out of repetitive, same-size card boxes containing `[Icon + Heading + Paragraph]`. Replace boxes with generous whitespace, typographic rhythm, and clear sectional flow. Nested cards are strictly banned.
+2. **NO Hero-Metric Templates**: Refuse repetitive dashboard clichés (giant number, tiny label, supporting percentage badge, colored accent bar). Structure metrics according to real domain utility.
+3. **NO Decorative Kickers or Eyebrows (Absolute Ban)**: NEVER place tiny uppercase kickers or category tags above headings as visual crutches. A heading carries its own weight.
+4. **NO Generic Purple / Indigo Gradients**: Stick strictly to authentic brand colors: Deep Navy (`#0F2035`, `#0B132B`), bone (`#F2EEE4`), SUGO Red (`#DC2626`, `#F62459`), and tinted neutrals.
+5. **NO Pill-Shaped Action Buttons**: Standard action buttons, CTAs, and inputs must use restrained ergonomic radii (8 to 12px). Full pills are strictly reserved for compact status indicator chips and action domes.
+6. **NO Glowing Colored Halo Shadows**: Zero-offset colored drop shadows or glowing halo rings are banned. Shadows must carry intentional vertical offset and soft blur.
+7. **NO Unicode Glyphs or Emojis as Structural UI Icons**: NEVER use emojis (🚀, ✨, 🔥, 🛵, 📦) in headers, buttons, status pills, or navigation bars. Use clean drawn vector SVGs (Lucide) in consistent stroke and weight.
+8. **NO Fake Reviews, Fake Counters, or Fabricated Urgency**: Never render simulated stats, animated count-ups, fake testimonials, or fabricated scarcity countdowns.
+9. **NO Gradient Text**: Emphasis comes from weight, size, and contrast, never rainbow/gradient text fills.
+10. **NO Glassmorphism or Blur as Lazy Decoration**: Use crisp, solid flat surfaces with intentional contrast.
+11. **NO Colored Border-Left / Border-Right Callouts**: Avoid 3px or 4px colored side borders on cards or alerts.
+12. **NO Monospace as Costume**: Monospace is for code, data, money, timers, and measurements only.
+13. **NO Low-Contrast Microcopy (WCAG 2.2 AA Violation)**: Body and placeholder text must clear >= 4.5:1, large text >= 3:1.
+14. **NO Em Dashes in UI Copy**: Use standard hyphens, colons, commas, or concise sentence breaks instead.
+15. **NO Vague Marketing Filler**: Write clear, concrete, human domain copy.
+
+## 2. Impeccable Mobile Craft Floor
+- **Platform Ergonomics**: MD3 / HIG compliant, touch bounding areas >= 48x48 dp, safe area clearance, hardware-accelerated transforms (`useNativeDriver: true`).
+- **Thumb Reach Zone**: Primary progression and checkout CTAs persistently placed in bottom third reach zone.
+- **Asymmetric Vertical Rhythm**: Headings must always have significantly more spacing above them than below them (margin-top >= 1.5-2.5x margin-bottom).
+- **Tinted Neutrals (Zero Dead Gray)**: Never use dead black (`#000000`) or dead gray (`#808080`). Tint dark surfaces and text with ambient brand hue.
+- **Primary Action Law**: Red has exactly ONE legal meaning: **you must act**. Exactly one primary CTA per viewport.
+- **Preserve User Drafts**: Never allow back-button presses, network drops, or validation errors to wipe out unsubmitted user inputs.

@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import ShimmerWave from './ShimmerWave';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, Spacing, Shadows, MAX_CONTENT_WIDTH, useResponsive } from '../config/theme';
+import { BorderRadius, Spacing, Shadows, MAX_CONTENT_WIDTH, moderateScale, useResponsive } from '../config/theme';
 
 /**
  * 0. WELCOME GREETING & DELIVERY LOCATION SKELETON
@@ -12,26 +12,14 @@ export function LocationCardSkeleton() {
 
   return (
     <View style={styles.greetingHeaderSection} testID="location-card-skeleton">
-      {/* Greeting line placeholder: Hi, Customer! 👋 */}
-      <ShimmerWave width={140} height={20} borderRadius={6} style={{ marginBottom: Spacing.sm }} />
-
-      {/* Delivery location card container */}
-      <View
-        style={[
-          styles.deliveryLocationCardSkeleton,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-          },
-          Shadows.soft,
-        ]}
-      >
-        {/* MapPin icon square placeholder */}
+      {/* Delivery location header container */}
+      <View style={styles.deliveryLocationCardSkeleton}>
+        {/* MapPin icon placeholder */}
         <ShimmerWave
-          width={32}
-          height={32}
-          borderRadius={16}
-          style={{ marginRight: Spacing.sm }}
+          width={22}
+          height={22}
+          borderRadius={11}
+          style={{ marginRight: Spacing.sm + 2 }}
         />
 
         {/* Column with 2 text lines */}
@@ -40,8 +28,8 @@ export function LocationCardSkeleton() {
           <ShimmerWave width="80%" height={14} borderRadius={4} />
         </View>
 
-        {/* Chevron placeholder */}
-        <ShimmerWave width={14} height={14} borderRadius={7} />
+        {/* Action text button placeholder */}
+        <ShimmerWave width={38} height={14} borderRadius={4} />
       </View>
     </View>
   );
@@ -60,18 +48,17 @@ export function ActiveErrandSkeleton() {
           styles.activeCardSkeleton,
           {
             backgroundColor: colors.card,
-            borderColor: isDark ? 'rgba(246, 36, 89, 0.25)' : '#FFE4EC',
+            borderColor: isDark ? colors.border : '#EDEFF2',
           },
-          Shadows.liftedUp,
+          Shadows.soft,
         ]}
       >
-        {/* Header Row: Pulse Dot + Title + Status Badge Pill */}
+        {/* Header Row: Title + Status Badge */}
         <View style={styles.activeHeaderRow}>
           <View style={styles.activeHeaderLeft}>
-            <ShimmerWave width={9} height={9} borderRadius={5} style={{ marginRight: 8 }} />
             <ShimmerWave width={150} height={16} borderRadius={5} />
           </View>
-          <ShimmerWave width={72} height={22} borderRadius={BorderRadius.full} />
+          <ShimmerWave width={72} height={22} borderRadius={BorderRadius.sm} />
         </View>
 
         {/* Status Description Line */}
@@ -93,7 +80,7 @@ export function ActiveErrandSkeleton() {
 
         {/* Footer Row: Button + See More */}
         <View style={styles.activeFooterRow}>
-          <ShimmerWave width={105} height={32} borderRadius={16} />
+          <ShimmerWave width={105} height={32} borderRadius={BorderRadius.lg} />
           <ShimmerWave width={70} height={14} borderRadius={4} />
         </View>
       </View>
@@ -102,68 +89,20 @@ export function ActiveErrandSkeleton() {
 }
 
 /**
- * 2. CATEGORIES BENTO GRID SKELETON
+ * 2. EXPLORE MERCHANTS CATEGORIES SKELETON (Unboxed Vertical List)
  */
 export function CategoriesBentoSkeleton() {
-  const { isDark } = useThemeColor();
-  const { width: windowWidth } = useResponsive();
-  const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
-  const pairSlotWidth = Math.floor((contentWidth - Spacing.sm) / 2);
-
   return (
     <View style={styles.categoriesSectionWrapper} testID="categories-bento-skeleton">
-      {/* Header Row: Sparkles Icon + Title */}
-      <View style={styles.categoriesHeaderRow}>
-        <ShimmerWave width={18} height={18} borderRadius={9} style={{ marginRight: 6 }} />
-        <ShimmerWave width={175} height={16} borderRadius={5} />
-      </View>
-
-      {/* PABILI HERO TILE SKELETON */}
-      <View
-        style={[
-          styles.featureCardSkeleton,
-          {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E5E7EB',
-          },
-          Shadows.soft,
-        ]}
-      >
-        <ShimmerWave width="100%" height={140} borderRadius={BorderRadius.md}>
-          <View style={styles.featureContentSkeleton}>
-            <ShimmerWave
-              width={100}
-              height={18}
-              borderRadius={BorderRadius.full}
-              style={{ marginBottom: 8 }}
-            />
-            <ShimmerWave width={160} height={20} borderRadius={5} style={{ marginBottom: 6 }} />
-            <ShimmerWave width="75%" height={12} borderRadius={4} />
+      {/* UNBOXED VERTICAL CATEGORY LIST SKELETON */}
+      <View style={styles.verticalCategoryListSkeleton}>
+        {[1, 2, 3].map((item) => (
+          <View key={item} style={styles.verticalCategoryItemSkeleton}>
+            <ShimmerWave width="100%" height={moderateScale(176, 0.25)} borderRadius={BorderRadius.lg} />
+            <ShimmerWave width="55%" height={16} borderRadius={4} style={{ marginTop: 8 }} />
+            <ShimmerWave width="80%" height={12} borderRadius={4} style={{ marginTop: 5 }} />
           </View>
-        </ShimmerWave>
-      </View>
-
-      {/* BENTO MOSAIC GRID SKELETON */}
-      <View style={styles.mosaic}>
-        {/* Row 1: Tall Slot (left) beside Two Stacked Half Slots (right) */}
-        <View style={styles.mosaicRow}>
-          <View style={styles.mosaicTallSlot}>
-            <ShimmerWave width="100%" height={176} borderRadius={BorderRadius.md} />
-          </View>
-          <View style={styles.mosaicStackSlot}>
-            <ShimmerWave width="100%" height={82} borderRadius={BorderRadius.md} />
-            <ShimmerWave width="100%" height={82} borderRadius={BorderRadius.md} />
-          </View>
-        </View>
-
-        {/* Row 2: Pair Slots */}
-        <View style={styles.pairRow}>
-          <View style={[styles.pairSlot, { width: pairSlotWidth }]}>
-            <ShimmerWave width="100%" height={78} borderRadius={BorderRadius.md} />
-          </View>
-          <View style={[styles.pairSlot, { width: pairSlotWidth }]}>
-            <ShimmerWave width="100%" height={78} borderRadius={BorderRadius.md} />
-          </View>
-        </View>
+        ))}
       </View>
     </View>
   );
@@ -173,7 +112,7 @@ export function CategoriesBentoSkeleton() {
  * 3. RECENT ACTIVITY SKELETON
  */
 export function RecentActivitySkeleton() {
-  const { colors } = useThemeColor();
+  const { colors, isDark } = useThemeColor();
 
   return (
     <View style={styles.recentSectionWrapper} testID="recent-activity-skeleton">
@@ -190,10 +129,8 @@ export function RecentActivitySkeleton() {
           style={[
             styles.recentRowItemSkeleton,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
             },
-            Shadows.soft,
           ]}
         >
           <View style={styles.recentRowLeft}>
@@ -205,7 +142,7 @@ export function RecentActivitySkeleton() {
           </View>
 
           <View style={styles.recentRowRight}>
-            <ShimmerWave width={65} height={20} borderRadius={BorderRadius.full} />
+            <ShimmerWave width={65} height={20} borderRadius={BorderRadius.sm} />
             <ShimmerWave width={12} height={12} borderRadius={6} />
           </View>
         </View>
@@ -235,15 +172,13 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl * 2,
   },
   greetingHeaderSection: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md + 2,
   },
   deliveryLocationCardSkeleton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
   },
   locationInfoCol: {
     flex: 1,
@@ -255,7 +190,7 @@ const styles = StyleSheet.create({
   activeCardSkeleton: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   activeHeaderRow: {
     flexDirection: 'row',
@@ -288,39 +223,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  featureCardSkeleton: {
-    borderRadius: BorderRadius.md,
-    height: 140,
-    marginBottom: Spacing.sm + 2,
-    overflow: 'hidden',
+  verticalCategoryListSkeleton: {
+    gap: Spacing.lg,
   },
-  featureContentSkeleton: {
-    position: 'absolute',
-    bottom: Spacing.md,
-    left: Spacing.md,
-    right: Spacing.md,
-  },
-  mosaic: {
-    gap: Spacing.sm,
-  },
-  mosaicRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  mosaicTallSlot: {
-    flex: 1,
-  },
-  mosaicStackSlot: {
-    flex: 1,
-    gap: Spacing.sm,
-  },
-  pairRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  pairSlot: {
-    marginBottom: Spacing.xs,
+  verticalCategoryItemSkeleton: {
+    width: '100%',
   },
   recentSectionWrapper: {
     marginBottom: Spacing.xl + Spacing.sm,
@@ -335,11 +242,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 14,
+    minHeight: 56,
+    borderBottomWidth: 1,
   },
   recentRowLeft: {
     flex: 1,

@@ -33,8 +33,12 @@ export const LightColors = {
   textLight: "#646B76",
   textWhite: "#FFFFFF",
 
-  // Backgrounds
-  bgApp: "#F8F8F8",
+  // Backgrounds. The page is a soft grey and the cards white on it, as
+  // foodpanda and Grab do (2026-10-11; the page was #FFFFFF, so cards had no
+  // ground to stand on).
+  bgApp: "#F6F7F8",
+  // The page behind a see-through strip (Home's search bar, the Proceed bar).
+  bgAppTranslucent: "rgba(246, 247, 248, 0.95)",
   bgWhite: "#FFFFFF",
   bgGray: "#F9FAFB",
   bgDark: "#1F2937",
@@ -80,16 +84,18 @@ export const DarkColors = {
   textLight: "#A9B0BD",
   textWhite: "#FFFFFF",
 
-  // Backgrounds
-  bgApp: "#111827",
-  bgWhite: "#1F2937",
-  bgGray: "#374151",
-  bgDark: "#111827",
-  card: "#1F2937",
+  // Backgrounds. A soft charcoal, not pure black, with cards a step lighter,
+  // as foodpanda and Grab do (2026-10-11; the page was #000000).
+  bgApp: "#121212",
+  bgAppTranslucent: "rgba(18, 18, 18, 0.95)",
+  bgWhite: "#1E1E1E",
+  bgGray: "#2A2A2A",
+  bgDark: "#121212",
+  card: "#1E1E1E",
 
   // Borders
-  border: "#374151",
-  borderLight: "#1F2937",
+  border: "#333333",
+  borderLight: "#262626",
 
   // Status
   success: "#34D399",
@@ -191,4 +197,23 @@ export {
   getAspectRatioCategory,
   clamp,
 } from '../utils/responsive';
+
+// Dedicated Auth Typography Ramp for high-legibility authentication surfaces
+export {
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
+  AuthFontSizeMultipliers,
+  AuthContainerHeights,
+} from './authTypography';
+
+// Dedicated Customer Portal Typography & Layout Ramp
+export {
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+  type PortalTypographyRole,
+} from './portalTypography';
 

@@ -57,14 +57,13 @@ export function ErrandsUtilityBarSkeleton() {
  * 4. ERRAND CARD SKELETON
  */
 export function ErrandsCardSkeleton() {
-  const { colors } = useThemeColor();
+  const { colors, isDark } = useThemeColor();
 
   return (
     <View
       style={[
         styles.cardSkeleton,
-        { backgroundColor: colors.card, borderColor: colors.border },
-        Shadows.soft,
+        { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' },
       ]}
       testID="errands-card-skeleton"
     >
@@ -167,10 +166,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   cardSkeleton: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1,
+    marginBottom: 0,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -196,9 +195,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.04)',
+    paddingTop: 4,
+    marginTop: 2,
     marginBottom: Spacing.xs + 2,
   },
   footerLeft: {

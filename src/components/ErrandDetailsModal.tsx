@@ -18,13 +18,17 @@ import {
   ShoppingBag,
   Clock,
   ChevronRight,
+  Bike,
+  Headphones,
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { FontSizes, Spacing, BorderRadius, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
 import { formatErrandId } from '../utils/formatErrandId';
+import { formatPaymentMethod } from '../utils/format';
 import StatusBadge from './StatusBadge';
 import FeeBreakdownCard from './FeeBreakdownCard';
 import ErrandProofStrip from './ErrandProofStrip';
+import { paymentMethodOf, personnelLines } from '../utils/errandPersonnel';
 
 export interface ErrandDetailsModalProps {
   visible: boolean;
@@ -50,7 +54,11 @@ export default function ErrandDetailsModal({
   const grandTotal = Number(errand.grandTotal ?? errand.totalCost ?? 0).toFixed(2);
   const deliveryFee = Number(errand.deliveryFee ?? 0).toFixed(2);
   const estimatedCost = Number(errand.estimatedCost ?? 0).toFixed(2);
-  const riderName = errand.riderName ? String(errand.riderName).trim() : null;
+  // The chat hands this GET /errands/:id, which carries the rider and the
+  // payment as relations, never the flat riderName/paymentMethod this used to
+  // read: every errand showed "Dispatcher Assigning..." and "Pending Selection".
+  const personnel = personnelLines(errand);
+  const paymentMethod = paymentMethodOf(errand);
   const isErrandActive = errand.status !== 'COMPLETED' && errand.status !== 'CANCELLED';
 
   const formattedDate = errand.createdAt
@@ -66,11 +74,7 @@ export default function ErrandDetailsModal({
 
   const handleOpenChat = () => {
     onClose();
-    if (errand.status === 'PENDING') {
-      navigation.navigate('WaitingForDispatcher', { user, errandId: rawId });
-    } else {
-      navigation.navigate('CustomerChat', { user, errandId: rawId, initialStatus: errand.status });
-    }
+    navigation.navigate('CustomerChat', { user, errandId: rawId, initialStatus: errand.status });
   };
 
   return (
@@ -81,14 +85,13 @@ export default function ErrandDetailsModal({
             <View
               style={[
                 styles.modalCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-                Shadows.liftedUp,
+                { backgroundColor: colors.card },
               ]}
             >
               {/* HEADER */}
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
-                  <Text style={[styles.headerTitle, { color: colors.textDark }]}>Errand #{errandId}</Text>
+                  <Text style={[styles.headerTitle, { color: colors.textDark }]}>Errand {errandId}</Text>
                   <Text style={[styles.headerSub, { color: colors.textGray }]}>Transaction Summary</Text>
                 </View>
                 <TouchableOpacity
@@ -107,8 +110,7 @@ export default function ErrandDetailsModal({
                   style={[
                     styles.statusHero,
                     {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB',
-                      borderColor: colors.border,
+                      borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
                     },
                   ]}
                 >
@@ -124,17 +126,12 @@ export default function ErrandDetailsModal({
                 </View>
 
                 {/* ITEMS REQUESTED */}
-                <View style={styles.detailSection}>
+                <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <ShoppingBag size={15} color={colors.primary} />
                     <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Items Requested</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.infoBox,
-                      { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', borderColor: colors.border },
-                    ]}
-                  >
+                  <View style={styles.infoBox}>
                     <Text style={[styles.infoText, { color: colors.textDark }]}>
                       {errand.categories || 'Pabili Shopping Request'}
                     </Text>
@@ -142,17 +139,12 @@ export default function ErrandDetailsModal({
                 </View>
 
                 {/* DELIVERY LOCATION */}
-                <View style={styles.detailSection}>
+                <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <MapPin size={15} color={colors.primary} />
                     <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Delivery Destination</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.infoBox,
-                      { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', borderColor: colors.border },
-                    ]}
-                  >
+                  <View style={styles.infoBox}>
                     <Text style={[styles.infoText, { color: colors.textMedium }]}>
                       {errand.deliveryAddress || 'Tacurong City, Sultan Kudarat'}
                     </Text>
@@ -160,20 +152,23 @@ export default function ErrandDetailsModal({
                 </View>
 
                 {/* ASSIGNED PERSONNEL */}
-                <View style={styles.detailSection}>
+                <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <User size={15} color={colors.primary} />
                     <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Assigned Personnel</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.infoBox,
-                      { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', borderColor: colors.border },
-                    ]}
-                  >
-                    <Text style={[styles.infoText, { color: colors.textDark }]}>
-                      {riderName ? `🏍️ Rider: ${riderName}` : '⏳ Rider: Dispatcher Assigning...'}
-                    </Text>
+                  <View style={[styles.infoBox, styles.personnelList]}>
+                    {([
+                      { key: 'dispatcher', label: 'Dispatcher', Icon: Headphones, line: personnel.dispatcher },
+                      { key: 'rider', label: 'Rider', Icon: Bike, line: personnel.rider },
+                    ] as const).map(({ key, label, Icon, line }) => (
+                      <View key={key} style={styles.personnelRow} testID={`modal-personnel-${key}`}>
+                        <Icon size={13} color={line.name ? colors.primary : colors.textLight} strokeWidth={2.2} />
+                        <Text style={[styles.infoText, { color: line.name ? colors.textDark : colors.textLight }]}>
+                          {label}: {line.name ?? line.waiting}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 </View>
 
@@ -183,21 +178,15 @@ export default function ErrandDetailsModal({
                     <CreditCard size={15} color={colors.primary} />
                     <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Payment & Fees</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.feeCard,
-                      {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
+                  <View style={styles.feeCard}>
                     <View style={styles.feeLine}>
                       <Text style={[styles.feeLabel, { color: colors.textGray }]}>Payment Method</Text>
                       <Text style={[styles.feeValBold, { color: colors.textDark }]}>
                         {errand.status === 'CANCELLED'
                           ? 'Voided (Not Charged)'
-                          : errand.paymentMethod || 'Pending Verification'}
+                          : (errand.status === 'PENDING' || errand.status === 'AVAILABLE' || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING')
+                          ? 'Pending Selection'
+                          : formatPaymentMethod(paymentMethod, 'full')}
                       </Text>
                     </View>
 
@@ -229,6 +218,7 @@ export default function ErrandDetailsModal({
                         {errand.feeBreakdown ? (
                           <FeeBreakdownCard
                             breakdown={errand.feeBreakdown}
+                            paymentPlan={(errand as any).paymentPlan ?? null}
                             testIDPrefix={`history-${errand.id ?? 'errand'}`}
                           />
                         ) : (
@@ -276,9 +266,7 @@ export default function ErrandDetailsModal({
                     onPress={handleOpenChat}
                   >
                     <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.2} />
-                    <Text style={styles.chatActionBtnText}>
-                      {errand.status === 'PENDING' ? 'Waiting Status' : 'Open Live Chat'}
-                    </Text>
+                    <Text style={styles.chatActionBtnText}>Open Live Chat</Text>
                   </TouchableOpacity>
                 )}
 
@@ -319,7 +307,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    borderWidth: 1,
   },
   headerRow: {
     flexDirection: 'row',
@@ -349,9 +336,8 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.xs,
   },
   statusHero: {
-    padding: Spacing.sm + 2,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
     marginBottom: Spacing.md,
   },
   statusRow: {
@@ -374,7 +360,9 @@ const styles = StyleSheet.create({
     fontSize: scaledFontSize(10, 0.2),
   },
   detailSection: {
+    paddingBottom: Spacing.sm,
     marginBottom: Spacing.sm,
+    borderBottomWidth: 1,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -387,9 +375,15 @@ const styles = StyleSheet.create({
     fontSize: scaledFontSize(FontSizes.xs, 0.2),
   },
   infoBox: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    paddingVertical: 2,
+  },
+  personnelList: {
+    gap: 4,
+  },
+  personnelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   infoText: {
     fontFamily: FontFamily.medium,
@@ -397,9 +391,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   feeCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    paddingVertical: 2,
   },
   feeLine: {
     flexDirection: 'row',

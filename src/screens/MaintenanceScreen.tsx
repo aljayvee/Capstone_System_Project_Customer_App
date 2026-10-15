@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { Wrench, RefreshCw, CheckCircle2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { apiClient } from '../services/apiClient';
+import { RETRY_LABEL } from '../services/errorMessages';
 import { FontSizes, FontFamily, Spacing } from '../config/theme';
 
 interface MaintenanceScreenProps {
@@ -60,24 +61,28 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ onRestored
         </View>
 
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>HTTP 503 • Maintenance</Text>
+          <Text style={styles.badgeText} maxFontSizeMultiplier={1.2}>Maintenance</Text>
         </View>
 
-        <Text style={[styles.title, { color: colors.textDark }]}>System Upgrades in Progress</Text>
+        <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
+          Sugo is down for a quick update
+        </Text>
 
         <Text style={[styles.description, { color: colors.textGray }]}>
-          We are currently improving server performance and running scheduled maintenance. Services will resume shortly.
+          We are making Sugo faster. Everything comes back on its own, no need to reinstall.
         </Text>
 
         <View style={[styles.infoBox, { backgroundColor: colors.bgGray, borderColor: colors.border }]}>
-          <Text style={[styles.infoLabel, { color: colors.textLight }]}>Expected Window:</Text>
+          <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={1.2}>
+            Usually back within
+          </Text>
           <Text style={[styles.infoValue, { color: colors.textDark }]}>Under 15 minutes</Text>
         </View>
 
         {isOnline ? (
           <View style={styles.successRow}>
             <CheckCircle2 size={16} color="#065F46" />
-            <Text style={styles.successText}>Systems restored! Resuming app...</Text>
+            <Text style={styles.successText} maxFontSizeMultiplier={1.2}>Back up. Taking you in...</Text>
           </View>
         ) : (
           <TouchableOpacity
@@ -90,7 +95,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ onRestored
             ) : (
               <>
                 <RefreshCw size={15} color="#FFFFFF" />
-                <Text style={styles.buttonText}>Check Status Now</Text>
+                <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
               </>
             )}
           </TouchableOpacity>

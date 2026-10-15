@@ -110,7 +110,7 @@ describe('CheckoutScreen', () => {
     const res: any = await render(<CheckoutScreen navigation={mockNavigation} route={mockRoute} />);
     await waitFor(() => expect(mockedFetchQuote).toHaveBeenCalledWith(expect.objectContaining({ isCod: true })));
 
-    await fireEvent.press(res.getByTestId('payment-option-GCash'));
+    await fireEvent.press(res.getByTestId('payment-option-GCASH'));
     await waitFor(() => expect(mockedFetchQuote).toHaveBeenCalledWith(expect.objectContaining({ isCod: false })));
   });
 
@@ -130,7 +130,7 @@ describe('CheckoutScreen', () => {
       <CheckoutScreen navigation={mockNavigation} route={mockRoute} />
     );
 
-    await fireEvent.press(res.getByTestId('payment-option-GCash'));
+    await fireEvent.press(res.getByTestId('payment-option-GCASH'));
     await fireEvent.press(res.getByTestId('payment-option-COD'));
   });
 

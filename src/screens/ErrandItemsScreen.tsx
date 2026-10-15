@@ -6,13 +6,16 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   BackHandler,
 } from 'react-native';
+import { showAppAlert } from '../services/alertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// Not React Native's: under Expo's edge-to-edge Android build the window never
+// resizes for the keyboard, so RN's version has nothing to react to. This one
+// reads the IME frame from KeyboardProvider (mounted in AppNavigator).
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Plus,
@@ -36,10 +39,28 @@ import {
 } from 'lucide-react-native';
 import { RootStackScreenProps } from '../navigation/types';
 import { saveCustomerLocation } from '../firebase/location';
+import { database } from '../firebase/config';
+import { ref, update } from 'firebase/database';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
 import { postOrderSubmitted } from '../services/chatSystemMessages';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface ItemRow {
@@ -54,6 +75,16 @@ const makeId = () => `row-${Date.now()}-${rowIdCounter++}`;
 interface ItemDraft {
   name: string;
   quantity: number;
+}
+
+/** The saved place this errand is delivered to, as GET /customer-locations returns it. */
+interface DeliveryLocation {
+  address: string;
+  latitude: number;
+  longitude: number;
+  streetName?: string | null;
+  landmark?: string | null;
+  notes?: string | null;
 }
 
 const getCategoryIcon = (category?: string) => {
@@ -104,7 +135,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
   // The customer's real saved delivery location
-  const [defaultLocation, setDefaultLocation] = useState<{ address: string; latitude: number; longitude: number } | null>(null);
+  const [defaultLocation, setDefaultLocation] = useState<DeliveryLocation | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
 
   const fetchDefaultLocation = useCallback(() => {
@@ -113,11 +144,18 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
     apiClient
       .get(`/customer-locations/${user.id}`)
       .then((res) => {
-        const locations: Array<{ address: string; latitude: number; longitude: number; isDefault: boolean }> = res.data || [];
+        const locations: Array<DeliveryLocation & { isDefault: boolean }> = res.data || [];
         const def = locations.find((l) => l.isDefault) ?? locations[0];
         if (isMounted) {
           if (def) {
-            setDefaultLocation({ address: def.address, latitude: def.latitude, longitude: def.longitude });
+            setDefaultLocation({
+              address: def.address,
+              latitude: def.latitude,
+              longitude: def.longitude,
+              streetName: def.streetName ?? null,
+              landmark: def.landmark ?? null,
+              notes: def.notes ?? null,
+            });
           } else {
             setDefaultLocation(null);
           }
@@ -388,6 +426,11 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
         deliveryAddress,
         deliveryLatitude: latitude,
         deliveryLongitude: longitude,
+        // Copied onto the errand so the rider sees them at the door, even if the
+        // customer edits this saved place afterwards.
+        deliveryStreetName: defaultLocation.streetName,
+        deliveryLandmark: defaultLocation.landmark,
+        deliveryNotes: defaultLocation.notes,
         estimatedCost: 0,
         tip: 0,
         storeCount: selectedCats.length,
@@ -419,9 +462,23 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
         deliveryFee: Number(createdErrand?.deliveryFee ?? 0),
       });
 
-      navigation.navigate('WaitingForDispatcher', { user, errandId: newErrandId });
+      // Sync categories to Firebase chat metadata
+      try {
+        await update(ref(database, `chats/${newErrandId}/meta`), {
+          categories: selectedCats,
+          merchantCategories: selectedCats.join(', '),
+          updatedAt: Date.now(),
+        });
+      } catch (_) {}
+
+      // Clear draft states so back navigation cannot pop into a dirty draft
+      setItemsByCategory({});
+      setDraftByCategory({});
+      setShowDiscardModal(false);
+
+      navigation.replace('WaitingForDispatcher', { user, errandId: newErrandId });
     } catch (err: any) {
-      Alert.alert('Errand Error', err.message || 'Failed to submit errand request. Please try again.');
+      showAppAlert("Errand not sent", toUserMessage(err, 'errand'));
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -434,20 +491,23 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        // "height" on Android did lift the content, but by squeezing the layout
+        // rather than padding it, which clipped the bottom of the list. The
+        // IME-driven component needs neither a platform branch nor an offset.
+        behavior="padding"
+        keyboardVerticalOffset={0}
       >
         {/* 1. TOP NAV HEADER */}
         <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }]}>
           <TouchableOpacity
             onPress={handleBackPress}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            style={styles.backBtn}
             testID="back-button"
           >
             <ChevronLeft size={22} color={colors.textDark} />
           </TouchableOpacity>
-          <Text style={[styles.navTitle, { color: colors.textDark }]}>Shopping List</Text>
+          <Text style={[styles.navTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>Shopping List</Text>
           <View style={styles.navHeaderRightPlaceholder} />
         </View>
 
@@ -470,28 +530,28 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
               ]}
             >
               <Check size={11} color="#10B981" strokeWidth={3} />
-              <Text style={[styles.stepTextCompleted, { color: isDark ? '#34D399' : '#065F46' }]}>
+              <Text style={[styles.stepTextCompleted, { color: isDark ? '#34D399' : '#065F46' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                 Stores ({selectedCats.length})
               </Text>
             </View>
             <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
             <View style={[styles.stepPillActive, { backgroundColor: colors.primary }]}>
               <View style={styles.stepNumCircleActive}>
-                <Text style={styles.stepNumActive}>2</Text>
+                <Text style={styles.stepNumActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>2</Text>
               </View>
-              <Text style={styles.stepTextActive}>List Items</Text>
+              <Text style={styles.stepTextActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>List Items</Text>
             </View>
             <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
             <View style={[styles.stepPillInactive, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-              <Text style={[styles.stepNumInactive, { color: colors.textLight }]}>3</Text>
-              <Text style={[styles.stepTextInactive, { color: colors.textLight }]}>Review</Text>
+              <Text style={[styles.stepNumInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>3</Text>
+              <Text style={[styles.stepTextInactive, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Review</Text>
             </View>
           </View>
 
           {/* 3. SCREEN TITLE & SUBTITLE */}
           <View style={styles.heroBanner}>
-            <Text style={[styles.headerTitle, { color: colors.textDark }]}>What should we buy?</Text>
-            <Text style={[styles.subTitle, { color: colors.textGray }]}>
+            <Text style={[styles.headerTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>What should we buy?</Text>
+            <Text style={[styles.subTitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
               Add brands, sizes and quantities so your rider knows exactly what to get.
             </Text>
 
@@ -508,7 +568,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
               ]}
             >
               <Check size={12} color="#059669" strokeWidth={3} />
-              <Text style={styles.carryOverText}>
+              <Text style={styles.carryOverText} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                 {selectedCats.length === 1
                   ? `${selectedCats[0]} chosen`
                   : `${selectedCats.length} stores chosen`}
@@ -528,10 +588,10 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
               <View style={styles.locationCardHeader}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.locationCardTitle, { color: colors.primary }]}>
+                  <Text style={[styles.locationCardTitle, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                     Locating your delivery address...
                   </Text>
-                  <Text style={[styles.locationCardSubtitle, { color: colors.textGray }]}>
+                  <Text style={[styles.locationCardSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                     Retrieving your saved location in Tacurong City for routing and courier dispatch.
                   </Text>
                 </View>
@@ -550,17 +610,23 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                   <MapPin size={16} color={colors.primary} strokeWidth={2.2} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.locationCardLabel, { color: colors.textGray }]}>Delivering To:</Text>
-                  <Text style={[styles.locationAddressText, { color: colors.textDark }]} numberOfLines={2}>
+                  <Text style={[styles.locationCardLabel, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Delivering To:</Text>
+                  <Text style={[styles.locationAddressText, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                     {defaultLocation.address}
                   </Text>
+                  {defaultLocation.streetName || defaultLocation.landmark ? (
+                    <Text style={[styles.locationCardSubtitle, { color: colors.textGray }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                      {[defaultLocation.streetName, defaultLocation.landmark].filter(Boolean).join(' • ')}
+                    </Text>
+                  ) : null}
                 </View>
                 <TouchableOpacity
                   activeOpacity={0.7}
                   style={[styles.changeLocationBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
                   onPress={() => navigation.navigate('CustomerLocation', { user })}
+                  hitSlop={PortalTouchTargets.compactHitSlop}
                 >
-                  <Text style={[styles.changeLocationBtnText, { color: colors.primary }]}>Change</Text>
+                  <Text style={[styles.changeLocationBtnText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Change</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -577,10 +643,10 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                   <AlertCircle size={18} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.locationCardTitle, { color: isDark ? '#FCD34D' : '#92400E' }]}>
+                  <Text style={[styles.locationCardTitle, { color: isDark ? '#FCD34D' : '#92400E' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                     No Delivery Location Selected
                   </Text>
-                  <Text style={[styles.locationCardSubtitle, { color: isDark ? '#FDE68A' : '#B45309' }]}>
+                  <Text style={[styles.locationCardSubtitle, { color: isDark ? '#FDE68A' : '#B45309' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                     Please select or pin your delivery address in Tacurong City before submitting.
                   </Text>
                 </View>
@@ -591,7 +657,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                 onPress={() => navigation.navigate('CustomerLocation', { user })}
               >
                 <MapPin size={15} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.setLocationBtnText}>Set Delivery Location Now</Text>
+                <Text style={styles.setLocationBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Set Delivery Location Now</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -603,19 +669,13 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
               testID="validation-error-banner"
             >
               <AlertCircle size={16} color={colors.danger} />
-              <Text style={[styles.errorText, { color: colors.danger }]} testID="validation-error-text">
+              <Text style={[styles.errorText, { color: colors.danger }]} testID="validation-error-text" maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                 {validationError}
               </Text>
             </View>
           ) : null}
 
-          {/* WHAT HAPPENS NEXT — placed BEFORE the item entry, not after.
-              Reciprocity is strongest before the ask and close to useless after
-              it: a customer still deciding whether to trust an errand with a
-              stranger's shopping needs to read this while deciding, not once
-              they have already typed everything in. Sitting below the input it
-              reached only the people who no longer needed it, and its position
-              quietly implied the ask had been uncomfortable. */}
+          {/* WHAT HAPPENS NEXT */}
           <View
             style={[
               styles.trustCard,
@@ -627,10 +687,10 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
               <ShieldCheck size={20} color={colors.primary} strokeWidth={2.2} />
             </View>
             <View style={styles.trustTextCol}>
-              <Text style={[styles.trustTitle, { color: colors.textDark }]}>
+              <Text style={[styles.trustTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                 What happens next
               </Text>
-              <Text style={[styles.trustSub, { color: colors.textGray }]}>
+              <Text style={[styles.trustSub, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                 1. Dispatcher verifies availability & calculates upfront delivery fare via chat.{'\n'}
                 2. Rider purchases items with official store receipts.{'\n'}
                 3. Pay total Cash on Delivery (COD) upon arrival.
@@ -661,8 +721,8 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                       <CatIcon size={18} color={colors.primary} strokeWidth={2.2} />
                     </View>
                     <View>
-                      <Text style={[styles.sectionTitle, { color: colors.textDark }]}>{cat}</Text>
-                      <Text style={[styles.sectionSubtitle, { color: colors.textGray }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>{cat}</Text>
+                      <Text style={[styles.sectionSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                         {validCount === 0
                           ? 'Add your first item'
                           : `${validCount} item${validCount > 1 ? 's' : ''} added`}
@@ -687,6 +747,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                         styles.badgeText,
                         { color: validCount > 0 ? (isDark ? '#34D399' : '#065F46') : colors.textGray },
                       ]}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                     >
                       {validCount > 0 ? 'Ready' : 'Pending'}
                     </Text>
@@ -698,7 +759,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                   <View style={styles.suggestionsContainer}>
                     <View style={styles.suggestionTitleRow}>
                       <Sparkles size={12} color={colors.primary} />
-                      <Text style={[styles.suggestionTitle, { color: colors.textGray }]}>Popular here — tap to add</Text>
+                      <Text style={[styles.suggestionTitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Popular here — tap to add</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
                       {suggestions.map((sugItem, sugIdx) => (
@@ -713,21 +774,17 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                             },
                           ]}
                           onPress={() => handleQuickAdd(cat, sugItem)}
+                          hitSlop={PortalTouchTargets.compactHitSlop}
                         >
                           <Plus size={11} color={colors.primary} />
-                          <Text style={[styles.sugChipText, { color: colors.textDark }]}>{sugItem}</Text>
+                          <Text style={[styles.sugChipText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{sugItem}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                   </View>
                 )}
 
-                {/* THE LIST — what the customer has actually asked for.
-                    Rendered as settled rows, not text fields, so it reads as a
-                    shopping list they are building rather than a form they are
-                    filling. That difference is the whole point: a visible,
-                    growing list is something you protect; a column of identical
-                    inputs is something you abandon. */}
+                {/* THE LIST */}
                 {rows.length > 0 && (
                   <View style={styles.listWrapper}>
                     {rows.map((row, index) => (
@@ -749,10 +806,11 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                             onPress={() => adjustCommittedQuantity(cat, row.id, -1)}
                             testID={`decrement-qty-${cat}-${index}`}
                             accessibilityLabel={`Reduce quantity of ${row.name}`}
+                            hitSlop={PortalTouchTargets.compactHitSlop}
                           >
                             <Minus size={12} color={colors.textGray} strokeWidth={2.6} />
                           </TouchableOpacity>
-                          <Text style={[styles.listQtyValue, { color: colors.textDark }]}>
+                          <Text style={[styles.listQtyValue, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                             {row.quantity}
                           </Text>
                           <TouchableOpacity
@@ -761,6 +819,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                             onPress={() => adjustCommittedQuantity(cat, row.id, 1)}
                             testID={`increment-qty-${cat}-${index}`}
                             accessibilityLabel={`Increase quantity of ${row.name}`}
+                            hitSlop={PortalTouchTargets.compactHitSlop}
                           >
                             <Plus size={12} color={colors.textGray} strokeWidth={2.6} />
                           </TouchableOpacity>
@@ -769,6 +828,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                         <Text
                           style={[styles.listItemName, { color: colors.textDark }]}
                           numberOfLines={2}
+                          maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                         >
                           {row.name}
                         </Text>
@@ -779,6 +839,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                           onPress={() => removeItemRow(cat, row.id)}
                           testID={`remove-item-${cat}-${index}`}
                           accessibilityLabel={`Remove ${row.name}`}
+                          hitSlop={PortalTouchTargets.compactHitSlop}
                         >
                           <X size={13} color={colors.textLight} strokeWidth={2.4} />
                         </TouchableOpacity>
@@ -787,54 +848,55 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                   </View>
                 )}
 
-                {/* THE COMPOSE ROW — always one, always at the bottom, always
-                    ready. Submitting from the keyboard commits and keeps focus,
-                    so a customer with five things to buy types five times
-                    without reaching for a button between each one. */}
+                {/* THE COMPOSE ROW */}
                 <View style={styles.composeRow}>
                   <TextInput
                     style={[
                       styles.composeInput,
                       {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FAFAFA',
-                        borderColor: colors.border,
+                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                        borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
                         color: colors.textDark,
+                        shadowOpacity: isDark ? 0.22 : 0.06,
                       },
                     ]}
-                    /* A concrete example of a good entry, and no mention of
-                       quantity — the stepper owns that now. The old hint asked
-                       for quantity in a field that was not for quantity. */
-                    placeholder="e.g. Coke 1.5L"
-                    placeholderTextColor={colors.textLight}
+                    placeholder="5 kilo chicken x2"
+                    placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                     value={getDraft(cat).name}
                     onChangeText={(val) => setDraftName(cat, val)}
                     onSubmitEditing={() => commitDraft(cat)}
                     returnKeyType="done"
                     blurOnSubmit={false}
                     testID={`item-name-input-${cat}`}
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
                   />
 
                   <View
                     style={[
                       styles.composeStepper,
                       {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.bgGray,
-                        borderColor: colors.border,
+                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                        borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+                        shadowOpacity: isDark ? 0.22 : 0.06,
                       },
                     ]}
+                    testID={`draft-stepper-${cat}`}
                   >
                     <TouchableOpacity
                       activeOpacity={0.7}
                       style={styles.stepperBtn}
                       onPress={() => setDraftQuantity(cat, -1)}
                       testID={`draft-decrement-${cat}`}
+                      hitSlop={PortalTouchTargets.compactHitSlop}
                     >
                       <Minus
                         size={13}
                         color={getDraft(cat).quantity > 1 ? colors.textDark : colors.textLight}
                       />
                     </TouchableOpacity>
-                    <Text style={[styles.stepperValueText, { color: colors.textDark }]}>
+                    <Text style={[styles.stepperValueText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                       {getDraft(cat).quantity}
                     </Text>
                     <TouchableOpacity
@@ -842,6 +904,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                       style={styles.stepperBtn}
                       onPress={() => setDraftQuantity(cat, 1)}
                       testID={`draft-increment-${cat}`}
+                      hitSlop={PortalTouchTargets.compactHitSlop}
                     >
                       <Plus size={13} color={colors.textDark} />
                     </TouchableOpacity>
@@ -862,6 +925,7 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                     onPress={() => commitDraft(cat)}
                     testID={`add-item-btn-${cat}`}
                     accessibilityLabel={`Add item to ${cat}`}
+                    hitSlop={PortalTouchTargets.compactHitSlop}
                   >
                     <Plus
                       size={17}
@@ -881,10 +945,10 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
         <View style={[styles.bottomBar, { backgroundColor: colors.card, borderTopColor: colors.border }, Shadows.liftedUp]}>
           <View style={styles.summaryRow}>
             <View>
-              <Text style={[styles.summaryLabel, { color: colors.textGray }]}>
+              <Text style={[styles.summaryLabel, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                 {totalItemCount === 0 ? 'Your list' : 'Ready to send'}
               </Text>
-              <Text style={[styles.summaryValue, { color: colors.textDark }]}>
+              <Text style={[styles.summaryValue, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                 {totalItemCount === 0
                   ? `Add your first item`
                   : `${totalItemCount} ${totalItemCount === 1 ? 'item' : 'items'} · ${selectedCats.length} ${selectedCats.length === 1 ? 'store' : 'stores'}`}
@@ -923,19 +987,19 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
             ) : locationLoading ? (
               <View style={styles.submitBtnContent}>
                 <ActivityIndicator size="small" color={colors.textDark} />
-                <Text style={[styles.submitBtnText, { color: colors.textDark }]}>
+                <Text style={[styles.submitBtnText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
                   Locating Delivery Address...
                 </Text>
               </View>
             ) : !defaultLocation ? (
               <View style={styles.submitBtnContent}>
                 <MapPin size={16} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.submitBtnText}>Set Delivery Location to Continue</Text>
+                <Text style={styles.submitBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Set Delivery Location to Continue</Text>
               </View>
             ) : (
               <View style={styles.submitBtnContent}>
                 <ShoppingBag size={17} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.submitBtnText}>
+                <Text style={styles.submitBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
                   {totalItemCount > 0
                     ? `Send my errand (${totalItemCount} ${totalItemCount === 1 ? 'item' : 'items'})`
                     : 'Send my errand'}
@@ -978,21 +1042,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.full,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md, 0.35),
+    fontSize: scaledPortalFontSize(17),
+    lineHeight: getPortalLineHeight(17, 'heading'),
   },
   navHeaderRightPlaceholder: {
-    width: 36,
+    width: 44,
   },
   scrollContent: {
     paddingHorizontal: Spacing.md,
@@ -1016,7 +1081,7 @@ const styles = StyleSheet.create({
   },
   stepTextCompleted: {
     fontFamily: FontFamily.bold,
-    fontSize: 10.5,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   stepperLine: {
     flex: 1,
@@ -1032,21 +1097,21 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   stepNumCircleActive: {
-    width: 17,
-    height: 17,
-    borderRadius: 8.5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNumActive: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     color: '#F62459',
   },
   stepTextActive: {
     fontFamily: FontFamily.bold,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     color: '#FFFFFF',
   },
   stepPillInactive: {
@@ -1059,37 +1124,35 @@ const styles = StyleSheet.create({
   },
   stepNumInactive: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   stepTextInactive: {
     fontFamily: FontFamily.medium,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   heroBanner: {
     marginBottom: Spacing.sm,
   },
   headerTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xl,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
+    lineHeight: getPortalLineHeight(PortalFontSizes.title, 'heading'),
     letterSpacing: -0.3,
     marginBottom: 2,
   },
-  // ── The committed list ────────────────────────────────────────────────
-  // Quantity sits to the LEFT of the name, the way a written shopping list
-  // reads ("2 Coke 1.5L"), and is visually lighter than the item itself —
-  // the name is what the customer cares about, the number is an adjustment.
   listWrapper: {
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
+    minHeight: 48,
   },
   listQtyGroup: {
     flexDirection: 'row',
@@ -1097,60 +1160,68 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   listQtyBtn: {
-    width: 22,
-    height: 22,
+    minWidth: 32,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   listQtyValue: {
     fontFamily: FontFamily.bold,
-    fontSize: 12.5,
-    minWidth: 16,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    minWidth: 20,
     textAlign: 'center',
   },
   listItemName: {
     flex: 1,
     fontFamily: FontFamily.medium,
-    fontSize: 13,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
   },
   listRemoveBtn: {
-    width: 24,
-    height: 24,
+    minWidth: 36,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // ── The compose row ───────────────────────────────────────────────────
   composeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
   },
   composeInput: {
     flex: 1,
-    height: 42,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
     fontFamily: FontFamily.medium,
-    fontSize: 13,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   composeStepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 42,
-    paddingHorizontal: 2,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    minHeight: 48,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   composeAddBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.md,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   carryOverPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1163,13 +1234,13 @@ const styles = StyleSheet.create({
   },
   carryOverText: {
     fontFamily: FontFamily.bold,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     color: '#059669',
   },
   subTitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 1,
-    lineHeight: 18,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   locationCard: {
     padding: Spacing.md,
@@ -1183,54 +1254,58 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   locationIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   locationCardLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   locationAddressText: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
-    marginTop: 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
+    marginTop: 2,
   },
   changeLocationBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 36,
+    justifyContent: 'center',
     borderRadius: BorderRadius.full,
   },
   changeLocationBtnText: {
     fontFamily: FontFamily.bold,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   locationCardTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: 2,
   },
   locationCardSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   setLocationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: BorderRadius.md,
     marginTop: Spacing.sm,
   },
   setLocationBtnText: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     color: '#FFFFFF',
   },
   errorBanner: {
@@ -1244,7 +1319,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
     flex: 1,
   },
   sectionCard: {
@@ -1266,99 +1342,100 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   catIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   sectionSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   badgePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   badgeText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   suggestionsContainer: {
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: Spacing.sm,
   },
   suggestionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   suggestionTitle: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   suggestionsScroll: {
-    gap: 6,
-    paddingVertical: 2,
+    gap: 8,
+    paddingVertical: 4,
   },
   sugChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 34,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   sugChipText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   stepperBtn: {
-    width: 28,
-    height: 32,
+    minWidth: 36,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperValueText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    minWidth: 16,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    minWidth: 20,
     textAlign: 'center',
   },
   removeBtn: {
-    width: 32,
-    height: 36,
+    minWidth: 36,
+    minHeight: 36,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeBtnPlaceholder: {
-    width: 32,
+    width: 36,
   },
   trustCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     marginBottom: Spacing.xl,
   },
   trustIconHalo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1367,13 +1444,13 @@ const styles = StyleSheet.create({
   },
   trustTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    marginBottom: 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    marginBottom: 2,
   },
   trustSub: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    lineHeight: 14,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
   },
   bottomBar: {
     paddingHorizontal: Spacing.md,
@@ -1389,20 +1466,20 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(9, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   summaryValue: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   submitBtn: {
-    paddingVertical: moderateScale(11, 0.2),
+    paddingVertical: moderateScale(12, 0.2),
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: moderateScale(48, 0.2),
+    minHeight: moderateScale(50, 0.2),
   },
   submitBtnContent: {
     flexDirection: 'row',
@@ -1412,7 +1489,7 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     color: '#FFFFFF',
   },
 });

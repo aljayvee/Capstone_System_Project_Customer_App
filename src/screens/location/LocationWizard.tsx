@@ -1,15 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
+import { showAppAlert } from '../../services/alertModal';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { FontSizes, Spacing, BorderRadius, FontFamily, scaledFontSize, moderateScale } from '../../config/theme';
+import {
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  FontFamily,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../../config/theme';
 import { MapCoordinate, sanitizeCoordinate } from '../../utils/coords';
 import WizardStepPin from './WizardStepPin';
 import WizardStepDetails from './WizardStepDetails';
 import { LocationDraftPayload, SavedLocation } from './types';
 
 export interface LocationWizardProps {
-  initialValues: SavedLocation | null;
+  initialValues: SavedLocation | Partial<LocationDraftPayload> | null;
+  initialStep?: 1 | 2;
   saving: boolean;
   gpsLoading: boolean;
   onUseCurrentLocation: () => Promise<MapCoordinate | null>;
@@ -19,6 +32,7 @@ export interface LocationWizardProps {
 
 export default function LocationWizard({
   initialValues,
+  initialStep = 1,
   saving,
   gpsLoading,
   onUseCurrentLocation,
@@ -26,11 +40,18 @@ export default function LocationWizard({
   onCancel,
 }: LocationWizardProps) {
   const { colors, isDark } = useThemeColor();
-  const [step, setStep] = useState<1 | 2>(1);
-  const [pin, setPin] = useState<MapCoordinate | null>(initialValues ? sanitizeCoordinate(initialValues) : null);
-  const [label, setLabel] = useState(initialValues?.label ?? '');
+  const [step, setStep] = useState<1 | 2>(initialStep);
+  const [pin, setPin] = useState<MapCoordinate | null>(
+    initialValues && typeof initialValues.latitude === 'number' && typeof initialValues.longitude === 'number'
+      ? sanitizeCoordinate({ latitude: initialValues.latitude, longitude: initialValues.longitude })
+      : null
+  );
+  const [label, setLabel] = useState(initialValues?.label ?? (initialStep === 2 ? 'Home' : ''));
   const [address, setAddress] = useState(initialValues?.address ?? '');
-  const [isDefault, setIsDefault] = useState(initialValues?.isDefault ?? false);
+  const [streetName, setStreetName] = useState(initialValues?.streetName ?? '');
+  const [landmark, setLandmark] = useState(initialValues?.landmark ?? '');
+  const [notes, setNotes] = useState(initialValues?.notes ?? '');
+  const [isDefault, setIsDefault] = useState(initialValues?.isDefault ?? (initialStep === 2 ? true : false));
 
   const isCurrentDefault = initialValues?.isDefault === true;
 
@@ -61,20 +82,36 @@ export default function LocationWizard({
 
   const handleSave = () => {
     if (!label.trim()) {
-      Alert.alert('Validation Error', 'Please enter a label (e.g. Home, Work).');
+      showAppAlert({
+        title: 'Validation Error',
+        message: 'Please enter a label (e.g. Home, Work).',
+        variant: 'warning',
+      });
       return;
     }
     if (!address.trim()) {
-      Alert.alert('Validation Error', 'Please enter an address or delivery landmark.');
+      showAppAlert({
+        title: 'Validation Error',
+        message: 'Please enter an address.',
+        variant: 'warning',
+      });
       return;
     }
     if (!pin) {
-      Alert.alert('Validation Error', 'Please pin a location first.');
+      showAppAlert({
+        title: 'Validation Error',
+        message: 'Please pin a location first.',
+        variant: 'warning',
+      });
       return;
     }
     onSave({
       label: label.trim(),
       address: address.trim(),
+      // Optional. Blank goes as null so editing a place can clear one again.
+      streetName: streetName.trim() || null,
+      landmark: landmark.trim() || null,
+      notes: notes.trim() || null,
       latitude: pin.latitude,
       longitude: pin.longitude,
       isDefault: isCurrentDefault ? true : isDefault,
@@ -87,14 +124,17 @@ export default function LocationWizard({
         <TouchableOpacity
           style={styles.backBtn}
           onPress={handleBack}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={PortalTouchTargets.compactHitSlop}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
           <ChevronLeft size={24} color={colors.textDark} />
         </TouchableOpacity>
         <View style={styles.stepIndicatorCol}>
-          <Text style={[styles.stepLabel, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
+          <Text
+            style={[styles.stepLabel, { color: colors.textGray }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+          >
             Step {step} of 2
           </Text>
           <View style={styles.dotsRow}>
@@ -129,11 +169,17 @@ export default function LocationWizard({
           onLabelChange={setLabel}
           address={address}
           onAddressChange={setAddress}
+          streetName={streetName}
+          onStreetNameChange={setStreetName}
+          landmark={landmark}
+          onLandmarkChange={setLandmark}
+          notes={notes}
+          onNotesChange={setNotes}
           isDefault={isDefault}
           onIsDefaultChange={setIsDefault}
           isCurrentDefault={isCurrentDefault}
           saving={saving}
-          isEditing={initialValues !== null}
+          isEditing={Boolean(initialValues && 'id' in initialValues && (initialValues as SavedLocation).id)}
           onSave={handleSave}
         />
       )}
@@ -152,19 +198,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backBtnPlaceholder: {
-    width: 36,
+    width: PortalTouchTargets.compact,
   },
   stepIndicatorCol: { alignItems: 'center' },
   stepLabel: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: PortalFontSizes.caption,
     marginBottom: 4,
   },
   dotsRow: { flexDirection: 'row', gap: 6 },

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -8,12 +8,25 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Search, X, HelpCircle } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { BorderRadius, FontSizes, Spacing, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../../config/theme';
+import {
+  BorderRadius,
+  FontSizes,
+  Spacing,
+  FontFamily,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../../config/theme';
 import ErrandChannelList from '../../components/ErrandChannelList';
-import CustomerHelpModal from '../../components/CustomerHelpModal';
 import { useActiveErrands } from '../../hooks/useActiveErrands';
 import { formatErrandId } from '../../utils/formatErrandId';
 
@@ -22,29 +35,28 @@ export const CHAT_STATUS_FILTERS = ['ALL', 'PENDING', 'ASSIGNED', 'IN_TRANSIT'] 
 export interface ChatTabProps {
   user: any;
   navigation: any;
+  onScroll?: (event: any) => void;
 }
 
-export default function ChatTab({ user, navigation }: ChatTabProps) {
+export default function ChatTab({ user, navigation, onScroll }: ChatTabProps) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
   const { width: windowWidth, isTablet, isCompact } = useResponsive();
   const { errands, loading, error, refresh } = useActiveErrands(user?.id);
+  // The spinner follows the customer's own pull only. The list refreshes
+  // quietly on each visit (it is cached, 2026-10-14); showing the spinner for
+  // that would make every return look like the reload this removed.
+  const [pulling, setPulling] = useState(false);
+  const pullToRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refresh();
+    } finally {
+      setPulling(false);
+    }
+  }, [refresh]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-
-  // Compute live filter counts
-  const counts = useMemo(() => {
-    const pending = errands.filter((e) => e.status === 'PENDING').length;
-    const assigned = errands.filter((e) => e.status === 'ASSIGNED').length;
-    const inTransit = errands.filter((e) => e.status === 'IN_TRANSIT').length;
-    return {
-      all: errands.length,
-      pending,
-      assigned,
-      inTransit,
-    };
-  }, [errands]);
 
   const filteredErrands = useMemo(() => {
     return errands.filter((e) => {
@@ -64,10 +76,10 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
   }, [errands, statusFilter, search]);
 
   const filterTabs = [
-    { key: 'ALL', label: 'All', count: counts.all },
-    { key: 'PENDING', label: 'Pending', count: counts.pending },
-    { key: 'ASSIGNED', label: 'Assigned', count: counts.assigned },
-    { key: 'IN_TRANSIT', label: 'In Transit', count: counts.inTransit },
+    { key: 'ALL', label: 'All' },
+    { key: 'PENDING', label: 'Pending' },
+    { key: 'ASSIGNED', label: 'Assigned' },
+    { key: 'IN_TRANSIT', label: 'In Transit' },
   ];
 
   return (
@@ -86,47 +98,32 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
         <View style={styles.headerContainer}>
           <View style={styles.headerTitleRow}>
             <View style={styles.headerLeftCol}>
-              <Text style={[styles.screenTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+              <Text style={[styles.screenTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
                 Messages & Support
               </Text>
-              <Text style={[styles.screenSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
-                Chat live with dispatchers or tap (?) for customer assistance and FAQs.
-              </Text>
             </View>
-
-            {/* Quick Help Guide Button */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={[
-                styles.headerHelpBtn,
-                { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray },
-              ]}
-              onPress={() => setIsHelpModalOpen(true)}
-              testID="chat-help-guide-btn"
-              accessibilityLabel="Get Help, Customer Guide & FAQ"
-            >
-              <HelpCircle size={20} color={colors.textGray} strokeWidth={2} />
-            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Capsule Search Bar */}
+        {/* Apple Liquid Glass Search Bar */}
         <View style={styles.searchSection}>
           <View
             style={[
               styles.searchBar,
               {
-                backgroundColor: colors.card,
-                borderColor: isDark ? colors.border : '#EDEFF2',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+                shadowOpacity: isDark ? 0.25 : 0.08,
               },
-              Shadows.soft,
             ]}
+            testID="chat-search-bar"
           >
-            <Search size={18} color={colors.primary} strokeWidth={2.2} />
+            <Search size={18} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.4} />
             <TextInput
               style={[styles.searchInput, { color: colors.textDark }]}
               placeholder="Search by errand # or item..."
-              placeholderTextColor={colors.textLight}
+              placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
               value={search}
               onChangeText={setSearch}
               testID="chat-search-input"
@@ -134,83 +131,43 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
             {search.length > 0 && (
               <TouchableOpacity
                 onPress={() => setSearch('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={PortalTouchTargets.compactHitSlop}
                 style={styles.clearBtn}
               >
-                <X size={14} color={colors.textMedium} />
+                <X size={14} color={isDark ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Dynamic Status Filter Capsules */}
+        {/* Dynamic Status Filter Capsules - Flat Minimalist */}
         <View style={styles.filterBar}>
           {filterTabs.map((tab) => {
             const isActive = statusFilter === tab.key;
-            const isPulsing = tab.key === 'IN_TRANSIT' && tab.count > 0;
             return (
               <TouchableOpacity
                 key={tab.key}
-                activeOpacity={0.85}
+                activeOpacity={0.8}
                 style={[
                   styles.filterTab,
                   {
-                    backgroundColor: isActive
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255,255,255,0.06)'
-                      : colors.card,
-                    borderColor: isActive
-                      ? colors.primary
-                      : isDark
-                      ? colors.border
-                      : '#E5E7EB',
+                    backgroundColor: isActive ? colors.primary : 'transparent',
                   },
-                  isActive ? Shadows.soft : null,
                 ]}
                 onPress={() => setStatusFilter(tab.key)}
                 testID={`chat-filter-${tab.key}`}
+                hitSlop={PortalTouchTargets.compactHitSlop}
               >
-                {isPulsing && (
-                  <View
-                    style={[
-                      styles.tabDot,
-                      { backgroundColor: isActive ? '#FFFFFF' : colors.primary },
-                    ]}
-                  />
-                )}
                 <Text
                   style={[
                     styles.filterTabText,
                     { color: isActive ? '#FFFFFF' : colors.textDark },
                     isActive && styles.filterTabTextActive,
                   ]}
-                  maxFontSizeMultiplier={1.15}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                 >
                   {tab.label}
                 </Text>
-                <View
-                  style={[
-                    styles.tabBadge,
-                    {
-                      backgroundColor: isActive
-                        ? 'rgba(255,255,255,0.25)'
-                        : isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : '#F3F4F6',
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tabBadgeText,
-                      { color: isActive ? '#FFFFFF' : colors.textGray },
-                    ]}
-                    maxFontSizeMultiplier={1.15}
-                  >
-                    {tab.count}
-                  </Text>
-                </View>
               </TouchableOpacity>
             );
           })}
@@ -220,12 +177,19 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
       {/* 2. ONLY THIS SCROLLS: ITEMIZED CHAT CARDS LIST */}
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
+        // The search field above stays put while the keyboard covers the bottom
+        // of this list: a drag puts it away so every row can be reached, and a
+        // tap on a row works first time instead of only closing the keyboard.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
-            onRefresh={refresh}
+            refreshing={pulling}
+            onRefresh={pullToRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
@@ -236,7 +200,6 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
           loading={loading}
           error={error}
           onRefresh={refresh}
-          onNewErrandPress={() => navigation.navigate('ServiceList', { user })}
           onSelect={(errandId, status) =>
             navigation.navigate('CustomerChat', { user, errandId, initialStatus: status })
           }
@@ -245,16 +208,10 @@ export default function ChatTab({ user, navigation }: ChatTabProps) {
               ? `No active chats matching "${search}".`
               : errands.length === 0
               ? 'Chats are automatically created when you place an errand so you can coordinate directly with your assigned dispatcher.'
-              : 'No chats match this status filter.'
+              : undefined
           }
         />
       </ScrollView>
-
-      {/* 3. CUSTOMER HELP MODAL */}
-      <CustomerHelpModal
-        visible={isHelpModalOpen}
-        onClose={() => setIsHelpModalOpen(false)}
-      />
     </View>
   );
 }
@@ -276,6 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: PortalTouchTargets.compact,
   },
   headerLeftCol: {
     flex: 1,
@@ -283,20 +241,20 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xl, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     letterSpacing: -0.3,
-    lineHeight: moderateScale(26, 0.2),
+    lineHeight: getPortalLineHeight(PortalFontSizes.title, 1.25),
     marginBottom: 2,
   },
   screenSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(16, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
   },
   headerHelpBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
+    borderRadius: PortalTouchTargets.compact / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -306,21 +264,31 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: Spacing.md,
-    paddingVertical: moderateScale(8, 0.2),
-    minHeight: moderateScale(40, 0.2),
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.2,
+    borderTopWidth: 1.5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 1.3),
     padding: 0,
   },
   clearBtn: {
-    padding: 2,
+    padding: Spacing.xs,
+    minWidth: 32,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterBar: {
     flexDirection: 'row',
@@ -332,36 +300,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: moderateScale(7, 0.2),
-    paddingHorizontal: 4,
+    paddingVertical: moderateScale(8, 0.2),
+    paddingHorizontal: Spacing.xs,
+    minHeight: 36,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  tabDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
   },
   filterTabText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
   },
   filterTabTextActive: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.2),
-  },
-  tabBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: BorderRadius.full,
-    minWidth: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabBadgeText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
   },
   scrollArea: {
     flex: 1,

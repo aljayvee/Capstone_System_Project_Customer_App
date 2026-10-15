@@ -23,6 +23,7 @@ const NEARBY_THRESHOLD_KM = 0.3;
 
 export interface ErrandPinpoint extends MapCoordinate {
   storeName?: string;
+  sequence?: number | null;
   // Set by the server's geofence from the rider's breadcrumb. Present on every
   // errand payload; used here only to tell a finished stop from an outstanding
   // one.
@@ -36,6 +37,12 @@ export interface ErrandProgressInput {
   pinpoints?: ErrandPinpoint[] | null;
   riderLocation?: MapCoordinate | null;
   destination?: MapCoordinate | null;
+  /**
+   * Road distance from the rider to the next store in visiting order, from the
+   * live route. When present it replaces the straight-line figure, which put a
+   * rider 52.9 km away by road at "33.4 km".
+   */
+  nextStopRoadMeters?: number | null;
 }
 
 export interface ErrandProgressStage {
@@ -53,7 +60,7 @@ export interface ErrandProgressStage {
 // treated as effectively simultaneous (no separate persisted signal splits
 // them further).
 export function getErrandProgressStage(input: ErrandProgressInput): ErrandProgressStage {
-  const { status, itemsPurchasedAt, pinpoints, riderLocation, destination } = input;
+  const { status, itemsPurchasedAt, pinpoints, riderLocation, destination, nextStopRoadMeters } = input;
   const normalizedStatus = String(status || '').toUpperCase();
 
   if (normalizedStatus === 'DELIVERED' || normalizedStatus === 'COMPLETED') {
@@ -78,9 +85,16 @@ export function getErrandProgressStage(input: ErrandProgressInput): ErrandProgre
     // is true and useless, and looks like the tracker is stuck. Filtering here
     // rather than at each call site so every screen showing this stage agrees.
     const remaining = (pinpoints ?? []).filter((pin) => !pin.departedAt && !pin.arrivedAt);
-    const nearest = remaining.length > 0 ? nearestPoint(riderLocation, remaining) : null;
+    // With a road distance the stop is the next one in visiting order, the one
+    // the route actually goes to; without one, the nearest as the crow flies.
+    const byRoad = nextStopRoadMeters != null && nextStopRoadMeters >= 0 && remaining.length > 0;
+    const nearest = byRoad
+      ? [...remaining].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))[0]
+      : remaining.length > 0
+        ? nearestPoint(riderLocation, remaining)
+        : null;
     if (nearest) {
-      const km = haversineDistanceKm(riderLocation, nearest);
+      const km = byRoad ? (nextStopRoadMeters as number) / 1000 : haversineDistanceKm(riderLocation, nearest);
       const distanceText = km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
       subLabel = `${distanceText} from ${nearest.storeName || 'store'}`;
     }

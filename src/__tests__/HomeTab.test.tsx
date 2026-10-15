@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
@@ -27,11 +28,11 @@ jest.mock('../services/apiClient', () => ({
       if (url === '/merchant-categories') {
         return Promise.resolve({
           data: [
-            { id: 1, name: 'Supermarket & Grocery', status: 'Active' },
-            { id: 2, name: 'Pharmacy & Health', status: 'Active' },
-            { id: 3, name: 'Bakery & Pastries', status: 'Active' },
-            { id: 4, name: 'Food & Restaurant', status: 'Active' },
-            { id: 5, name: 'Retail & General Merchandise', status: 'Active' },
+            { id: 1, name: 'Supermarket & Grocery', description: 'Fresh produce and pantry staples', status: 'Active' },
+            { id: 2, name: 'Pharmacy & Health', description: 'Medicines and wellness essentials', status: 'Active' },
+            { id: 3, name: 'Bakery & Pastries', description: 'Freshly baked bread and cakes', status: 'Active' },
+            { id: 4, name: 'Food & Restaurant', description: 'Local meals and dining', status: 'Active' },
+            { id: 5, name: 'Retail & General Merchandise', description: 'Everyday household goods', status: 'Active' },
           ],
         });
       }
@@ -39,6 +40,18 @@ jest.mock('../services/apiClient', () => ({
     }),
     post: jest.fn(() => Promise.resolve({ data: {} })),
   },
+}));
+
+// "Stores near you" centres on the customer's saved place. The real hook uses
+// useFocusEffect, which throws outside a navigator. The row itself is covered
+// in NearbyStoresRow.test.tsx.
+jest.mock('../hooks/useDefaultDeliveryLocation', () => ({
+  useDefaultDeliveryLocation: () => ({
+    location: { address: 'Purok 5', latitude: 6.69, longitude: 124.68 },
+    loading: false,
+    failed: false,
+    retry: jest.fn(),
+  }),
 }));
 
 jest.mock('../hooks/useRateConfig', () => ({
@@ -107,13 +120,10 @@ jest.setTimeout(30000);
 describe('HomeTab Revamped UI/UX', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // The categories hook caches at module scope so the grid and the "See More"
-    // sheet share one fetch. Clear it between tests or the first test's list
-    // satisfies the next one and the fetch under test never runs.
     __resetMerchantCategoriesCache();
   });
 
-  it('renders recommended categories grid with all 6 quick-access buttons', async () => {
+  it('renders Explore merchants categories as an unboxed vertical list with all active categories and descriptions', async () => {
     const res: any = await render(
       <HomeTab
         user={mockUser}
@@ -124,16 +134,38 @@ describe('HomeTab Revamped UI/UX', () => {
       />
     );
 
-    expect(res.getByText('What would you like to buy?')).toBeTruthy();
-    expect(res.getByTestId('category-btn-pabili')).toBeTruthy();
+    expect(res.queryByText('What would you like to buy?')).toBeNull();
+    expect(res.queryByTestId('category-btn-pabili')).toBeNull();
+    expect(res.getByTestId('home-store-search')).toBeTruthy();
+    expect(res.getByTestId('nearby-stores')).toBeTruthy();
+    expect(res.getByText('Stores near you')).toBeTruthy();
+    expect(res.getByText('Explore merchants categories')).toBeTruthy();
+    expect(res.queryByText('Merchant Categories')).toBeNull();
+
+    const tree = JSON.stringify(res.toJSON());
+    const at = (marker: string) => tree.indexOf(marker);
+    expect(at('"popular-stores"')).toBeLessThan(at('"nearby-stores"'));
+    expect(at('"nearby-stores"')).toBeLessThan(at('"Explore merchants categories"'));
+    expect(at('"Explore merchants categories"')).toBeLessThan(at('"category-btn-pharmacy"'));
+
+    expect(res.getByTestId('explore-merchants-categories-list')).toBeTruthy();
     expect(res.getByTestId('category-btn-malls')).toBeTruthy();
     expect(res.getByTestId('category-btn-pharmacy')).toBeTruthy();
     expect(res.getByTestId('category-btn-bakery')).toBeTruthy();
     expect(res.getByTestId('category-btn-restaurant')).toBeTruthy();
-    expect(res.getByTestId('category-btn-see_more')).toBeTruthy();
+    expect(res.getByTestId('category-btn-retail')).toBeTruthy();
+    expect(res.getByText('Fresh produce and pantry staples')).toBeTruthy();
+    expect(res.getByText('Medicines and wellness essentials')).toBeTruthy();
+    // Merchant category description must have a smaller font size than the merchant category name
+    const catTitleStyle = StyleSheet.flatten(res.getByText('Pharmacy & Health').props.style);
+    const catDescStyle = StyleSheet.flatten(res.getByTestId('category-desc-pharmacy').props.style);
+    expect(catDescStyle.fontSize).toBeLessThan(catTitleStyle.fontSize);
+    // Bento "See More" tile is removed because all active categories are shown in the vertical list
+    expect(res.queryByTestId('category-btn-see_more')).toBeNull();
+    expect(res.queryByText(/From 20min/i)).toBeNull();
   });
 
-  it('navigates to ErrandForm when Pabili is pressed and opens MerchantCategoriesModal when See More is pressed', async () => {
+  it('opens the store search from the Search button', async () => {
     const res: any = await render(
       <HomeTab
         user={mockUser}
@@ -144,26 +176,11 @@ describe('HomeTab Revamped UI/UX', () => {
       />
     );
 
-    // Press Pabili -> Goes to ErrandForm
-    await fireEvent.press(res.getByTestId('category-btn-pabili'));
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('ErrandForm', {
-      user: mockUser,
-      selectedServices: ['Pabili'],
-    });
-
-    // Press See More -> Opens MerchantCategoriesModal collection
-    await fireEvent.press(res.getByTestId('category-btn-see_more'));
-    expect(res.getByText('Store & Merchant Categories')).toBeTruthy();
-
-    // Selecting a category from the modal navigates directly to ErrandItems
-    await fireEvent.press(res.getByTestId('merchant-category-card-Retail & General Merchandise'));
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('ErrandItems', {
-      user: mockUser,
-      selectedCats: ['Retail & General Merchandise'],
-    });
+    await fireEvent.press(res.getByTestId('home-store-search'));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('StoreSearch', { user: mockUser });
   });
 
-  it('directly navigates to ErrandItems with chosen category when specific store button is pressed', async () => {
+  it("opens MerchantCategoryStores when a category row is pressed", async () => {
     const res: any = await render(
       <HomeTab
         user={mockUser}
@@ -176,34 +193,66 @@ describe('HomeTab Revamped UI/UX', () => {
 
     // Press Pharmacy
     await fireEvent.press(res.getByTestId('category-btn-pharmacy'));
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('ErrandItems', {
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('MerchantCategoryStores', {
       user: mockUser,
-      selectedCats: ['Pharmacy & Health'],
+      category: {
+        id: 2,
+        name: 'Pharmacy & Health',
+        description: 'Medicines and wellness essentials',
+      },
     });
 
     // Press Restaurant
     await fireEvent.press(res.getByTestId('category-btn-restaurant'));
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('ErrandItems', {
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('MerchantCategoryStores', {
       user: mockUser,
-      selectedCats: ['Food & Restaurant'],
+      category: {
+        id: 4,
+        name: 'Food & Restaurant',
+        description: 'Local meals and dining',
+      },
     });
   });
 
-  it('renders active errand card with summary item box and status badge', async () => {
+  it('shows active errands as a liquid glass button that opens Active Errands, not as a card (2026-10-10)', async () => {
+    const second = { ...mockActiveErrand, id: 102, orderId: 'SGO-C34D56', status: 'IN_TRANSIT' };
     const res: any = await render(
       <HomeTab
         user={mockUser}
         navigation={mockNavigation}
         activeErrand={mockActiveErrand}
+        activeErrands={[mockActiveErrand, second, mockRecentErrands[0]]}
         recentErrands={mockRecentErrands}
         onViewTrack={jest.fn()}
       />
     );
 
-    expect(res.getByText(/Active Errand/)).toBeTruthy();
-    expect(res.getByText('Summary Item:')).toBeTruthy();
-    expect(res.getByText(/2x Rice/)).toBeTruthy();
-    expect(res.getByText('See more...')).toBeTruthy();
+    // The old card is gone.
+    expect(res.queryByText(/Active Errand #/)).toBeNull();
+    expect(res.queryByText('Summary Item:')).toBeNull();
+    // The button counts the active ones only.
+    expect(res.getByTestId('active-errands-fab-count')).toBeTruthy();
+    expect(res.getByText('2')).toBeTruthy();
+
+    await fireEvent.press(res.getByTestId('active-errands-fab'));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('ActiveErrands', {
+      user: mockUser,
+      errands: [mockActiveErrand, second],
+    });
+  });
+
+  it('leaves the active errands button out when nothing is active', async () => {
+    const res: any = await render(
+      <HomeTab
+        user={mockUser}
+        navigation={mockNavigation}
+        activeErrand={null}
+        activeErrands={[]}
+        recentErrands={mockRecentErrands}
+        onViewTrack={jest.fn()}
+      />
+    );
+    expect(res.queryByTestId('active-errands-fab')).toBeNull();
   });
 
   it('renders recent activity with DELIVERED status badge for fulfilled orders and supports navigation', async () => {
@@ -230,54 +279,45 @@ describe('HomeTab Revamped UI/UX', () => {
   });
 
   it('dynamically hides category buttons when deactivated by the owner in the backend', async () => {
-    (apiClient.get as jest.Mock).mockResolvedValueOnce({
-      data: [
-        { id: 1, name: 'Supermarket & Grocery', status: 'Active' },
-        { id: 2, name: 'Food & Restaurant', status: 'Active' },
-        { id: 3, name: 'Pharmacy & Health', status: 'Inactive' }, // Deactivated category
-      ],
-    });
-
-    const res: any = await render(
-      <HomeTab
-        user={mockUser}
-        navigation={mockNavigation}
-        activeErrand={null}
-        recentErrands={[]}
-        onViewTrack={jest.fn()}
-      />
+    // Answered by address, not as "the next call": Home makes several requests
+    // on mount (the account reminder's profile among them), in no fixed order.
+    const defaultGet = (apiClient.get as jest.Mock).getMockImplementation()!;
+    (apiClient.get as jest.Mock).mockImplementation((url: string) =>
+      url === '/merchant-categories'
+        ? Promise.resolve({
+            data: [
+              { id: 1, name: 'Supermarket & Grocery', status: 'Active' },
+              { id: 2, name: 'Food & Restaurant', status: 'Active' },
+              { id: 3, name: 'Pharmacy & Health', status: 'Inactive' }, // Deactivated category
+            ],
+          })
+        : defaultGet(url)
     );
 
-    // Active categories are rendered
-    expect(res.getByTestId('category-btn-malls')).toBeTruthy();
-    expect(res.getByTestId('category-btn-restaurant')).toBeTruthy();
+    try {
+      const res: any = await render(
+        <HomeTab
+          user={mockUser}
+          navigation={mockNavigation}
+          activeErrand={null}
+          recentErrands={[]}
+          onViewTrack={jest.fn()}
+        />
+      );
 
-    // Deactivated category is HIDDEN
-    expect(res.queryByTestId('category-btn-pharmacy')).toBeNull();
+      // Active categories are rendered
+      expect(res.getByTestId('category-btn-malls')).toBeTruthy();
+      expect(res.getByTestId('category-btn-restaurant')).toBeTruthy();
+
+      // Deactivated category is HIDDEN
+      expect(res.queryByTestId('category-btn-pharmacy')).toBeNull();
+    } finally {
+      (apiClient.get as jest.Mock).mockImplementation(defaultGet);
+    }
   });
 
-  it('renders prompt to set address for new customers with no saved locations, and renders formatted address when saved', async () => {
-    // 1. New customer with NO address
-    const emptyRes: any = await render(
-      <HomeTab
-        user={mockUser}
-        navigation={mockNavigation}
-        defaultAddressText={null}
-        defaultLocationLabel={null}
-        activeErrand={null}
-        recentErrands={[]}
-        onViewTrack={jest.fn()}
-      />
-    );
-
-    expect(emptyRes.getByText('DELIVERING TO')).toBeTruthy();
-    expect(emptyRes.getByText('+ Tap to set your delivery address')).toBeTruthy();
-    expect(emptyRes.queryByText(/Poblacion, Tacurong City, Sultan Kudarat/)).toBeNull();
-    // When recentErrands is empty, Recent Activity section is completely hidden
-    expect(emptyRes.queryByText('Recent Activity')).toBeNull();
-
-    // 2. Customer WITH saved address
-    const savedRes: any = await render(
+  it('floats the search bar above the page and leaves the address to the header (2026-10-11)', async () => {
+    const res: any = await render(
       <HomeTab
         user={mockUser}
         navigation={mockNavigation}
@@ -289,9 +329,13 @@ describe('HomeTab Revamped UI/UX', () => {
       />
     );
 
-    expect(savedRes.getByText('DELIVERING TO')).toBeTruthy();
-    expect(savedRes.getByText('Home • Barangay San Emmanuel, Tacurong City')).toBeTruthy();
-    expect(savedRes.queryByText('Recent Activity')).toBeNull();
+    // Fixed over the page rather than a sticky row of it, so it never scrolls away.
+    const slot = StyleSheet.flatten(res.getByTestId('home-sticky-search').props.style);
+    expect(slot).toMatchObject({ position: 'absolute', top: 0, left: 0, right: 0 });
+    // The "Delivering to" card is gone from Home.
+    expect(res.queryByTestId('home-location-pill')).toBeNull();
+    expect(res.queryByText('DELIVERING TO')).toBeNull();
+    expect(res.queryByText(/Barangay San Emmanuel/)).toBeNull();
   });
 
   it('hides Recent Activity when no past orders exist and displays it once orders are present', async () => {
@@ -319,6 +363,29 @@ describe('HomeTab Revamped UI/UX', () => {
     );
     expect(hasOrdersRes.getByText('Recent Activity')).toBeTruthy();
   });
-});
 
+  it('renders RECOMMENDED badges for the first 4 merchant categories and omits for subsequent categories', async () => {
+    const res: any = await render(
+      <HomeTab
+        user={mockUser}
+        navigation={mockNavigation}
+        activeErrand={null}
+        recentErrands={[]}
+        onViewTrack={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      // First 4 categories have RECOMMENDED badge
+      expect(res.getByTestId('category-badge-recommended-malls')).toBeTruthy();
+      expect(res.getByTestId('category-badge-recommended-pharmacy')).toBeTruthy();
+      expect(res.getByTestId('category-badge-recommended-bakery')).toBeTruthy();
+      expect(res.getByTestId('category-badge-recommended-restaurant')).toBeTruthy();
+
+      // 5th category does not have RECOMMENDED badge
+      expect(res.queryByTestId('category-badge-recommended-retail')).toBeNull();
+    });
+  });
+
+});
 

@@ -1,7 +1,9 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { FontSizes, FontFamily, Spacing, BorderRadius, scaledFontSize } from '../config/theme';
+import { useThemeColor } from '../hooks/useThemeColor';
+import { RETRY_LABEL } from '../services/errorMessages';
 
 interface Props {
   children: ReactNode;
@@ -15,6 +17,78 @@ interface State {
   error?: Error;
   incidentId: string;
 }
+
+interface FallbackProps {
+  title: string;
+  description: string;
+  incidentId: string;
+  onReset: () => void;
+}
+
+/**
+ * Split out of the class so it can read the theme.
+ *
+ * It used to hardcode a slate palette (#0F172A / #1E293B / #3B82F6) that
+ * ignored both the tokens and the customer's light/dark choice, which meant the
+ * one screen shown when everything else has failed was also the one screen that
+ * did not look like Sugo. palette.test.ts governs these colors now.
+ */
+const CrashFallback: React.FC<FallbackProps> = ({ title, description, incidentId, onReset }) => {
+  const { colors, isDark } = useThemeColor();
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.bgApp }]} testID="crash-fallback">
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: isDark ? 'rgba(252,165,165,0.12)' : colors.dangerBg,
+            },
+          ]}
+        >
+          <AlertTriangle size={30} color={colors.danger} strokeWidth={2} />
+        </View>
+
+        <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
+          {title}
+        </Text>
+
+        <Text style={[styles.description, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
+          {description}
+        </Text>
+
+        <View style={[styles.incidentRow, { backgroundColor: colors.bgGray }]}>
+          <Text
+            style={[styles.incidentLabel, { color: colors.textGray }]}
+            maxFontSizeMultiplier={1.2}
+          >
+            Reference
+          </Text>
+          <Text
+            style={[styles.incidentCode, { color: colors.textMedium }]}
+            maxFontSizeMultiplier={1.2}
+          >
+            {incidentId}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={onReset}
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          accessibilityRole="button"
+          accessibilityLabel={RETRY_LABEL}
+          testID="crash-retry"
+        >
+          <RefreshCw size={16} color="#FFFFFF" />
+          <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>
+            {RETRY_LABEL}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
 export class MobileErrorBoundary extends Component<Props, State> {
   public state: State = {
@@ -43,36 +117,18 @@ export class MobileErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <View style={styles.container}>
-          <View style={styles.card}>
-            <View style={styles.iconBox}>
-              <AlertTriangle size={32} color="#DC2626" />
-            </View>
-
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Runtime Protection</Text>
-            </View>
-
-            <Text style={styles.title}>
-              {this.props.fallbackTitle || 'Something went wrong'}
-            </Text>
-
-            <Text style={styles.description}>
-              {this.props.fallbackDescription ||
-                'A component encountered an unexpected error. Your saved data and session remain secure.'}
-            </Text>
-
-            <View style={styles.incidentRow}>
-              <Text style={styles.incidentLabel}>Incident Ref:</Text>
-              <Text style={styles.incidentCode}>#{this.state.incidentId}</Text>
-            </View>
-
-            <TouchableOpacity onPress={this.handleReload} style={styles.button}>
-              <RefreshCw size={16} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <CrashFallback
+          // "Runtime Protection" and "A component encountered an unexpected
+          // error" named the implementation rather than what happened. Nobody
+          // has ever wanted a component to succeed; they wanted their errand.
+          title={this.props.fallbackTitle || 'This screen stopped working'}
+          description={
+            this.props.fallbackDescription ||
+            'Sugo hit a problem it could not recover from. Your account and anything you saved are safe.'
+          }
+          incidentId={this.state.incidentId}
+          onReset={this.handleReload}
+        />
       );
     }
 
@@ -83,7 +139,6 @@ export class MobileErrorBoundary extends Component<Props, State> {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.xl,
@@ -91,10 +146,8 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: '#334155',
     padding: Spacing.xl,
     alignItems: 'center',
     gap: Spacing.sm,
@@ -103,34 +156,17 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 18,
-    backgroundColor: 'rgba(220, 38, 38, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(220, 38, 38, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-  },
-  badgeText: {
-    color: '#F87171',
-    fontSize: 10,
-    fontFamily: FontFamily.bold,
-    textTransform: 'uppercase',
-  },
   title: {
-    color: '#F8FAFC',
-    fontSize: FontSizes.lg,
+    fontSize: scaledFontSize(FontSizes.lg, 0.2),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
   },
   description: {
-    color: '#94A3B8',
-    fontSize: FontSizes.xs,
+    fontSize: scaledFontSize(FontSizes.sm, 0.2),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
     lineHeight: 18,
@@ -141,27 +177,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderRadius: BorderRadius.md,
     marginVertical: Spacing.xs,
   },
   incidentLabel: {
-    color: '#64748B',
     fontSize: 11,
     fontFamily: FontFamily.medium,
   },
   incidentCode: {
-    color: '#FBBF24',
     fontSize: 11,
     fontFamily: FontFamily.monoBold,
   },
   button: {
     width: '100%',
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#3B82F6',
+    minHeight: 48,
+    borderRadius: BorderRadius.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,8 +200,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
-    fontFamily: FontFamily.bold,
+    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    fontFamily: FontFamily.semibold,
   },
 });
 

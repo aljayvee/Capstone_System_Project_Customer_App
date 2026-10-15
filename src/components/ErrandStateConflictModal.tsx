@@ -15,8 +15,8 @@ interface ErrandStateConflictModalProps {
 
 export const ErrandStateConflictModal: React.FC<ErrandStateConflictModalProps> = ({
   visible,
-  title = 'Order Updated by Dispatcher',
-  message = 'The order details or pricing were modified while you were reviewing. Please refresh to load the latest changes.',
+  title = 'Your dispatcher changed this errand',
+  message = 'The details or price moved while you were looking. Load the latest before you continue.',
   onSync,
   onCancel,
   isLoading = false,
@@ -56,7 +56,7 @@ export const ErrandStateConflictModal: React.FC<ErrandStateConflictModalProps> =
               ) : (
                 <>
                   <RefreshCw size={15} color="#FFFFFF" />
-                  <Text style={styles.syncButtonText}>Sync Latest</Text>
+                  <Text style={styles.syncButtonText} maxFontSizeMultiplier={1.15}>Show me the latest</Text>
                 </>
               )}
             </TouchableOpacity>

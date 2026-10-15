@@ -28,7 +28,7 @@ export default function ChatSearchFilterBar({
       <View
         style={[
           styles.searchRow,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray, borderColor: colors.border },
+          { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray },
         ]}
       >
         <Search size={16} color={colors.textGray} />
@@ -52,8 +52,7 @@ export default function ChatSearchFilterBar({
               style={[
                 styles.filterChip,
                 {
-                  backgroundColor: isActive ? colors.primary : isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray,
-                  borderColor: isActive ? colors.primary : colors.border,
+                  backgroundColor: isActive ? colors.primary : 'transparent',
                 },
               ]}
               onPress={() => onStatusFilterChange(status)}
@@ -76,7 +75,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    borderWidth: 1,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
   },
@@ -91,7 +89,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
   },
   filterChipText: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs },
 });

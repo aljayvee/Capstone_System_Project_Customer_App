@@ -27,20 +27,23 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows } from '../config/theme';
-import { apiClient } from '../services/apiClient';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
+import { useNotifications, type CustomerNotification } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 import { RootStackScreenProps } from '../navigation/types';
 
-export interface CustomerNotification {
-  id: number;
-  type: string;
-  title: string;
-  body: string;
-  isRead: boolean;
-  createdAt: string;
-  customerId?: number;
-  errandId?: string;
-}
+export type { CustomerNotification };
 
 export type DateFilter = 'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
@@ -108,6 +111,9 @@ function matchesDateFilter(iso: string, filter: DateFilter): boolean {
 
 function getNotificationVisuals(type: string) {
   const t = String(type || '').toUpperCase();
+  if (t === 'RIDER_NEARBY' || t.includes('NEARBY') || t.includes('PROXIMITY')) {
+    return { icon: Bike, iconColor: '#0284C7', haloBg: '#E0F2FE' };
+  }
   if (t.includes('RIDER') || t.includes('DISPATCH') || t.includes('ASSIGN')) {
     return { icon: Bike, iconColor: '#3B82F6', haloBg: '#EFF6FF' };
   }
@@ -129,53 +135,74 @@ export default function NotificationScreen({
 }: RootStackScreenProps<'Notification'>) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
-  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    markAsRead,
+    markAllAsRead,
+    refreshNotifications,
+  } = useNotifications();
+  const { user: authUser } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('ALL');
 
-  const fetchNotifications = useCallback(async (isPullRefresh = false) => {
-    if (isPullRefresh) setRefreshing(true);
-    else setLoading(true);
-
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const res = await apiClient.get<CustomerNotification[]>('/notifications');
-      setNotifications(res.data ?? []);
-    } catch (err: any) {
-      console.warn('[NotificationScreen] Failed to load notifications:', err.message);
+      await refreshNotifications(true);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshNotifications]);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  const markSingleAsRead = async (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
-    try {
-      await apiClient.patch(`/notifications/${id}/read`);
-    } catch (err: any) {
-      console.warn('[NotificationScreen] Failed to mark as read:', err.message);
+  const handleNotificationPress = async (item: CustomerNotification) => {
+    if (!item.isRead) {
+      await markAsRead(item.id);
     }
-  };
 
-  const markAllAsRead = async () => {
-    const unread = notifications.filter((n) => !n.isRead);
-    if (unread.length === 0) return;
+    const t = String(item.type || '').toUpperCase();
+    const effectiveUser = (route.params?.user || authUser) as any;
 
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    try {
-      await Promise.all(
-        unread.map((n) => apiClient.patch(`/notifications/${n.id}/read`).catch(() => {}))
-      );
-    } catch (err: any) {
-      console.warn('[NotificationScreen] Failed to mark all as read:', err.message);
+    if (!effectiveUser) return;
+
+    if (t.includes('CHAT') || t.includes('MESSAGE')) {
+      if (item.errandId) {
+        navigation.navigate('CustomerChat', {
+          user: effectiveUser,
+          errandId: item.errandId,
+        });
+      }
+      return;
+    }
+
+    if (t === 'RIDER_NEARBY' || t.includes('NEARBY') || t.includes('PROXIMITY')) {
+      navigation.navigate('CustomerPortal', {
+        user: effectiveUser,
+        initialTab: 'track',
+        focusedErrandId: item.errandId,
+      });
+      return;
+    }
+
+    if (t.includes('COMPLETE') || t.includes('DELIVER')) {
+      if (item.errandId) {
+        navigation.navigate('ErrandDetails', {
+          user: effectiveUser,
+          errandId: item.errandId,
+        });
+      }
+      return;
+    }
+
+    // Default: If notification has an errandId, open track view for that errand
+    if (item.errandId) {
+      navigation.navigate('CustomerPortal', {
+        user: effectiveUser,
+        initialTab: 'track',
+        focusedErrandId: item.errandId,
+      });
     }
   };
 
@@ -189,11 +216,6 @@ export default function NotificationScreen({
       YEAR: notifications.filter((n) => matchesDateFilter(n.createdAt, 'YEAR')).length,
     };
   }, [notifications]);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.isRead).length,
-    [notifications]
-  );
 
   // Filtered and searched list
   const filteredNotifications = useMemo(() => {
@@ -239,17 +261,27 @@ export default function NotificationScreen({
       <View style={styles.navHeaderRow}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={[styles.backBtn, { backgroundColor: isDark ? 'transparent' : colors.bgGray }]}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          style={styles.backBtn}
           testID="back-button"
         >
           <ChevronLeft size={22} color={colors.textDark} />
         </TouchableOpacity>
         <View style={styles.navTitleContainer}>
-          <Text style={[styles.navTitle, { color: colors.textDark }]}>Notifications</Text>
+          <Text
+            style={[styles.navTitle, { color: colors.textDark }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+          >
+            Notifications
+          </Text>
           {unreadCount > 0 && (
             <View style={[styles.unreadBadgePill, { backgroundColor: colors.primary }]}>
-              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+              <Text
+                style={styles.unreadBadgeText}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+              >
+                {unreadCount}
+              </Text>
             </View>
           )}
         </View>
@@ -257,10 +289,16 @@ export default function NotificationScreen({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={markAllAsRead}
+            hitSlop={PortalTouchTargets.compactHitSlop}
             style={styles.headerRightAction}
             testID="mark-all-read-btn"
           >
-            <Text style={[styles.headerActionText, { color: colors.primary }]}>Read All</Text>
+            <Text
+              style={[styles.headerActionText, { color: colors.primary }]}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+            >
+              Read All
+            </Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.navHeaderRightPlaceholder} />
@@ -287,11 +325,12 @@ export default function NotificationScreen({
             value={search}
             onChangeText={setSearch}
             testID="notification-search-input"
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
           />
           {search.length > 0 && (
             <TouchableOpacity
               onPress={() => setSearch('')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={PortalTouchTargets.compactHitSlop}
               style={styles.clearBtn}
             >
               <X size={14} color={colors.textMedium} />
@@ -313,6 +352,7 @@ export default function NotificationScreen({
             return (
               <TouchableOpacity
                 activeOpacity={0.85}
+                hitSlop={PortalTouchTargets.compactHitSlop}
                 style={[
                   styles.filterTab,
                   {
@@ -343,6 +383,7 @@ export default function NotificationScreen({
                     { color: isActive ? '#FFFFFF' : colors.textDark },
                     isActive && styles.filterTabTextActive,
                   ]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                 >
                   {tab.label}
                 </Text>
@@ -363,6 +404,7 @@ export default function NotificationScreen({
                       styles.tabBadgeText,
                       { color: isActive ? '#FFFFFF' : colors.textGray },
                     ]}
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                   >
                     {tab.count}
                   </Text>
@@ -385,12 +427,25 @@ export default function NotificationScreen({
         <FlatList
           data={filteredNotifications}
           keyExtractor={(item) => String(item.id)}
+          // The search field above stays put while the keyboard covers the bottom
+          // of this list: a drag puts it away so every row can be reached, and a
+          // tap on a row works first time instead of only closing the keyboard.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => (
+            <View
+              style={[
+                styles.separator,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' },
+              ]}
+            />
+          )}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => fetchNotifications(true)}
+              onRefresh={handleRefresh}
               colors={[colors.primary]}
               tintColor={colors.primary}
             />
@@ -418,10 +473,16 @@ export default function NotificationScreen({
               >
                 <Bell size={40} color={colors.primary} strokeWidth={1.8} />
               </View>
-              <Text style={[styles.emptyTitle, { color: colors.textDark }]}>
+              <Text
+                style={[styles.emptyTitle, { color: colors.textDark }]}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+              >
                 No Notifications Found
               </Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
+              <Text
+                style={[styles.emptySubtitle, { color: colors.textGray }]}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+              >
                 {search
                   ? `No alerts matching "${search}". Try searching with another keyword.`
                   : dateFilter === 'DAY'
@@ -443,22 +504,9 @@ export default function NotificationScreen({
 
             return (
               <TouchableOpacity
-                activeOpacity={0.88}
-                style={[
-                  styles.notificationCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: !item.isRead
-                      ? isDark
-                        ? 'rgba(246,36,89,0.35)'
-                        : '#FFE4EC'
-                      : isDark
-                      ? colors.border
-                      : '#EDEFF2',
-                  },
-                  !item.isRead ? Shadows.liftedUp : Shadows.soft,
-                ]}
-                onPress={() => markSingleAsRead(item.id)}
+                activeOpacity={0.7}
+                style={styles.notificationRow}
+                onPress={() => handleNotificationPress(item)}
                 testID={`notification-card-${item.id}`}
               >
                 <View style={styles.cardMainRow}>
@@ -474,7 +522,7 @@ export default function NotificationScreen({
                     ]}
                   >
                     <VisualIcon
-                      size={20}
+                      size={18}
                       color={visual.iconColor}
                       strokeWidth={2.2}
                     />
@@ -490,6 +538,7 @@ export default function NotificationScreen({
                           !item.isRead && styles.cardTitleUnread,
                         ]}
                         numberOfLines={1}
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
                       >
                         {item.title}
                       </Text>
@@ -506,6 +555,7 @@ export default function NotificationScreen({
                     <Text
                       style={[styles.cardBodyText, { color: colors.textGray }]}
                       numberOfLines={3}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                     >
                       {item.body}
                     </Text>
@@ -513,7 +563,10 @@ export default function NotificationScreen({
                     <View style={styles.cardFooterRow}>
                       <View style={styles.timeTag}>
                         <Clock size={11} color={colors.textLight} />
-                        <Text style={[styles.timeText, { color: colors.textLight }]}>
+                        <Text
+                          style={[styles.timeText, { color: colors.textLight }]}
+                          maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                        >
                           {timeInfo.relative} • {timeInfo.dateFormatted}
                         </Text>
                       </View>
@@ -521,11 +574,15 @@ export default function NotificationScreen({
                       {!item.isRead && (
                         <TouchableOpacity
                           activeOpacity={0.7}
-                          onPress={() => markSingleAsRead(item.id)}
+                          onPress={() => markAsRead(item.id)}
+                          hitSlop={PortalTouchTargets.compactHitSlop}
                           style={styles.markReadAction}
                         >
                           <CheckCheck size={13} color={colors.primary} strokeWidth={2.2} />
-                          <Text style={[styles.markReadText, { color: colors.primary }]}>
+                          <Text
+                            style={[styles.markReadText, { color: colors.primary }]}
+                            maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+                          >
                             Mark read
                           </Text>
                         </TouchableOpacity>
@@ -547,15 +604,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.lg,
   },
+  // The top three (header, search, filters) were 8 and 10 dp apart; 12 each
+  // now (2026-10-14). Filters to list was already 14 plus the row's own 14.
   navHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.sm + 4,
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -567,18 +626,20 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: PortalFontSizes.subheading,
   },
   navHeaderRightPlaceholder: {
-    width: 38,
+    width: PortalTouchTargets.compact,
   },
   headerRightAction: {
     paddingHorizontal: Spacing.xs,
     paddingVertical: 4,
+    minHeight: PortalTouchTargets.compact,
+    justifyContent: 'center',
   },
   headerActionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: PortalFontSizes.caption,
   },
   unreadBadgePill: {
     paddingHorizontal: 7,
@@ -588,28 +649,33 @@ const styles = StyleSheet.create({
   unreadBadgeText: {
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: PortalFontSizes.micro,
   },
   searchSection: {
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.xs + 2,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    minHeight: 48,
     paddingHorizontal: Spacing.md,
     paddingVertical: 9,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   searchInput: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 1,
+    fontSize: PortalFontSizes.body,
     padding: 0,
   },
   clearBtn: {
     padding: 2,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterSection: {
     paddingVertical: Spacing.xs + 2,
@@ -622,14 +688,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    minHeight: PortalTouchTargets.pillHeight,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   filterTabText: {
     fontFamily: FontFamily.medium,
-    fontSize: 11,
+    fontSize: PortalFontSizes.caption,
   },
   filterTabTextActive: {
     fontFamily: FontFamily.bold,
@@ -641,7 +708,7 @@ const styles = StyleSheet.create({
   },
   tabBadgeText: {
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: PortalFontSizes.micro,
   },
   loadingContainer: {
     flex: 1,
@@ -652,17 +719,23 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSizes.sm,
+    fontSize: PortalFontSizes.caption,
   },
   listContent: {
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.xl * 3,
   },
+  notificationRow: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+  },
   notificationCard: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm + 2,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+  },
+  separator: {
+    height: 1,
+    width: '100%',
   },
   cardMainRow: {
     flexDirection: 'row',
@@ -687,7 +760,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: PortalFontSizes.subheading,
     flex: 1,
     letterSpacing: -0.2,
   },
@@ -702,8 +775,8 @@ const styles = StyleSheet.create({
   },
   cardBodyText: {
     fontFamily: FontFamily.regular,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
     marginBottom: 6,
   },
   cardFooterRow: {
@@ -719,18 +792,19 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontFamily: FontFamily.regular,
-    fontSize: 10.5,
+    fontSize: PortalFontSizes.micro,
   },
   markReadAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    minHeight: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   markReadText: {
     fontFamily: FontFamily.bold,
-    fontSize: 11,
+    fontSize: PortalFontSizes.caption,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -750,13 +824,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.lg,
+    fontSize: PortalFontSizes.title,
+    lineHeight: getPortalLineHeight(PortalFontSizes.title, 'heading'),
     marginBottom: 4,
   },
   emptySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs,
+    fontSize: PortalFontSizes.caption,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
 });

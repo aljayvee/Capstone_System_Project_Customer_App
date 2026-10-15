@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MapPin, X, Navigation, CheckCircle2, LocateFixed } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { FontSizes, FontWeights, Spacing, BorderRadius, FontFamily, Shadows } from '../config/theme';
@@ -99,7 +99,9 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
           <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             <View style={styles.headerTextGroup}>
               <Text style={[styles.modalTitle, { color: colors.textDark }]}>{props.modalTitle || props.label}</Text>
-              <Text style={[styles.modalSubtitle, { color: colors.textGray }]}>Tap overlay or map to inspect location</Text>
+              <Text style={[styles.modalSubtitle, { color: colors.textGray }]}>
+                {props.editable ? 'Tap map or drag pin to update location' : 'Read-only location view'}
+              </Text>
             </View>
             <TouchableOpacity onPress={close} style={[styles.closeBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}>
               <X size={20} color={colors.textDark} strokeWidth={2.2} />
@@ -111,6 +113,8 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
             {open && (
               <MapView
                 ref={mapRef}
+                provider={PROVIDER_GOOGLE}
+                googleRenderer="LEGACY"
                 testID={props.mapTestID}
                 style={StyleSheet.absoluteFill}
                 initialRegion={toRegion(center)}
@@ -124,16 +128,20 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                     : undefined
                 }
               >
-                {/* Primary Draggable Pin */}
-                {props.editable && (
+                {/* Primary Pin: draggable when editable, static read-only when not editable */}
+                {Boolean(props.center) && (
                   <Marker
-                    draggable
+                    draggable={Boolean(props.editable)}
                     coordinate={draft}
-                    onDragEnd={(e) => {
-                      const coords = e.nativeEvent.coordinate;
-                      setDraft(coords);
-                      setSelectedMarkerKey(null);
-                    }}
+                    onDragEnd={
+                      props.editable
+                        ? (e) => {
+                            const coords = e.nativeEvent.coordinate;
+                            setDraft(coords);
+                            setSelectedMarkerKey(null);
+                          }
+                        : undefined
+                    }
                     pinColor={colors.primary}
                     title={activeLabel}
                     description={activeAddress}
@@ -253,7 +261,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
           </View>
 
           {/* Footer Actions */}
-          {props.editable && (
+          {props.editable ? (
             <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
               <TouchableOpacity
                 style={[styles.cancelBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
@@ -269,6 +277,17 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                 }}
               >
                 <Text style={styles.confirmBtnText}>{props.confirmLabel || 'Save Pinpoint Location'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.closeFooterBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel="Close map preview"
+              >
+                <Text style={[styles.cancelBtnText, { color: colors.textDark }]}>Close</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -390,4 +409,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBtnText: { color: '#FFFFFF', fontFamily: FontFamily.bold },
+  closeFooterBtn: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

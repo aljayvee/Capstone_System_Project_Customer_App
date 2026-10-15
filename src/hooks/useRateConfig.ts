@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
 
 export interface RateConfigData {
   id: number;
@@ -43,8 +44,10 @@ export function useRateConfig() {
         setRateConfig(res.data);
       }
     } catch (err: any) {
-      // Fallback silently to default rate config if offline or loading
-      setError(err?.message || 'Failed to load rate configuration');
+      // Deliberately soft: a missing rate config falls back to the defaults
+      // above, and a fee estimate the customer never asked for is not worth an
+      // error banner. Kept in state for callers that choose to read it.
+      setError(toUserMessage(err, 'errand'));
     } finally {
       setLoading(false);
     }

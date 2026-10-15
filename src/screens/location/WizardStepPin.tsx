@@ -2,7 +2,19 @@ import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LocateFixed, Navigation, ChevronRight } from 'lucide-react-native';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { FontSizes, FontWeights, Spacing, BorderRadius, FontFamily, Shadows, scaledFontSize, moderateScale } from '../../config/theme';
+import {
+  FontSizes,
+  FontWeights,
+  Spacing,
+  BorderRadius,
+  FontFamily,
+  Shadows,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../../config/theme';
 import MapPreviewField from '../../components/MapPreviewField';
 import SettingsRow from '../../components/SettingsRow';
 import SettingsSection from '../../components/SettingsSection';
@@ -37,10 +49,16 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+        <Text
+          style={[styles.title, { color: colors.textDark }]}
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+        >
           Pin Your Location
         </Text>
-        <Text style={[styles.subtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
+        <Text
+          style={[styles.subtitle, { color: colors.textGray }]}
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+        >
           Use your current GPS position or drop a pin on the map.
         </Text>
 
@@ -49,13 +67,19 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
           onPress={handleUseCurrentLocation}
           disabled={gpsLoading}
           activeOpacity={0.85}
+          hitSlop={PortalTouchTargets.compactHitSlop}
         >
           {gpsLoading ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <>
               <LocateFixed size={18} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.gpsBtnText} maxFontSizeMultiplier={1.15}>Use Current Location</Text>
+              <Text
+                style={styles.gpsBtnText}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+              >
+                Use Current Location
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -88,7 +112,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
               !pin && styles.statusTextMuted,
             ]}
             numberOfLines={3}
-            maxFontSizeMultiplier={1.2}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
           >
             {statusTextFor(pin, resolving, resolvedAddress)}
           </Text>
@@ -111,6 +135,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
           onPress={() => onNext(resolvedAddress)}
           disabled={!pin}
           activeOpacity={0.85}
+          hitSlop={PortalTouchTargets.compactHitSlop}
         >
           <Text
             style={[
@@ -123,7 +148,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
                   : colors.textLight,
               },
             ]}
-            maxFontSizeMultiplier={1.15}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
           >
             Next
           </Text>
@@ -147,30 +172,30 @@ const styles = StyleSheet.create({
   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl },
   title: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xl, 0.2),
+    fontSize: PortalFontSizes.title,
+    lineHeight: getPortalLineHeight(PortalFontSizes.title, 'heading'),
     marginBottom: 4,
     letterSpacing: -0.3,
   },
   subtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
     marginBottom: Spacing.lg,
-    lineHeight: moderateScale(18, 0.2),
   },
   gpsBtn: {
     flexDirection: 'row',
-    paddingVertical: moderateScale(12, 0.2),
+    minHeight: PortalTouchTargets.buttonHeight,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
-    minHeight: moderateScale(48, 0.2),
   },
   gpsBtnText: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: PortalFontSizes.subheading,
   },
   statusCard: {
     flexDirection: 'row',
@@ -184,9 +209,9 @@ const styles = StyleSheet.create({
   statusSpinner: { marginRight: 2 },
   statusText: {
     flex: 1,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: PortalFontSizes.caption,
     fontFamily: FontFamily.medium,
-    lineHeight: moderateScale(18, 0.2),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   statusTextMuted: {
     fontStyle: 'italic',
@@ -197,14 +222,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   nextBtn: {
-    paddingVertical: moderateScale(12, 0.2),
+    minHeight: PortalTouchTargets.buttonHeight,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: moderateScale(48, 0.2),
   },
   nextBtnText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: PortalFontSizes.subheading,
   },
 });

@@ -1,5 +1,6 @@
 import { push, ref } from 'firebase/database';
 import { database } from '../firebase/config';
+import { formatItemLabel } from '../utils/format';
 
 /**
  * Automated messages that narrate an errand's progress inside its chat.
@@ -33,6 +34,10 @@ export interface OrderSummaryItem {
   storeCategory: string;
   itemName: string;
   quantity: number;
+  /** How big one of them is ("5 kg"). Shown with the name; never parsed back. */
+  size?: string | null;
+  /** What to tell the rider about it. Shown with the name, like size. */
+  notes?: string | null;
 }
 
 interface SystemMessageBase {
@@ -86,7 +91,15 @@ export function postOrderSubmitted(
     deliveryFee: number;
   }
 ): Promise<void> {
-  const { items, deliveryAddress, categories, deliveryFee } = params;
+  const { deliveryAddress, categories, deliveryFee } = params;
+  // The chat card is a display snapshot that no client reads back as data, so
+  // the size and the note travel inside the name and every app version shows
+  // them: "Sibuyas · 1/2 kg · Note: walang bulok", as the server folds them.
+  const items = params.items.map(({ size, notes, ...item }) => {
+    const label = formatItemLabel(item.itemName, size);
+    const note = String(notes ?? '').trim();
+    return { ...item, itemName: note ? `${label} · Note: ${note}` : label };
+  });
   const totalUnits = items.reduce((sum, i) => sum + i.quantity, 0);
 
   const lines = items.map((i) => `• ${i.quantity} × ${i.itemName}  (${i.storeCategory})`);

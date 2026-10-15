@@ -9,65 +9,79 @@ import {
   Animated,
   StatusBar,
   useWindowDimensions,
-  Keyboard,
   Platform,
   Easing,
-  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ChevronLeft,
-  User,
-  Calendar as CalendarIcon,
-  Mail,
-  Phone,
-  Lock,
   Eye,
   EyeOff,
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
+  Mail,
+  Smartphone,
 } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
+  AuthFontSizeMultipliers,
+  AuthContainerHeights,
+} from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useAuthHeroGradient } from '../hooks/useAuthHeroGradient';
-import CalendarPickerModal from '../components/CalendarPickerModal';
 import AuthHeroPattern from '../components/AuthHeroPattern';
 
 // Matches LoginScreen: the white sheet is pulled up over the hero's bottom edge
 // by this much, and the hero pads the same amount back so nothing hides under it.
 const SHEET_OVERLAP = 34;
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 // Fallback only. The real wait comes from the server's `retryAfterSeconds`,
 // which doubles with each code sent to the same address.
 const RESEND_COOLDOWN_FALLBACK_SECONDS = 60;
 
 type VerificationChannel = 'EMAIL' | 'PHONE';
 
-export default function RegisterScreen({ navigation }: any) {
+export default function RegisterScreen({ navigation, route }: any) {
   const { login } = useAuth();
   const { colors, isDark } = useThemeColor();
   const heroGradient = useAuthHeroGradient();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // Active step: 1 to 5
+  // Active step: 1 to 4
   const [currentStep, setCurrentStep] = useState(1);
 
   // Form State
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [birthdate, setBirthdate] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  // Pinned to EMAIL: there is no SMS gateway wired up.
-  const [verificationChannel] = useState<VerificationChannel>('EMAIL');
+  const [verificationChannel, setVerificationChannel] = useState<VerificationChannel>('EMAIL');
+  const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
+  const [phoneVerified, setPhoneVerified] = useState<boolean>(false);
   const [otpCode, setOtpCode] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -77,7 +91,6 @@ export default function RegisterScreen({ navigation }: any) {
 
   // UI / Async State
   const [loading, setLoading] = useState(false);
-  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
 
@@ -90,13 +103,11 @@ export default function RegisterScreen({ navigation }: any) {
   // 60/90/120 FPS Native Animation Nodes
   const introFade = useRef(new Animated.Value(0)).current;
   const sheetRise = useRef(new Animated.Value(24)).current;
-  const expandProgress = useRef(new Animated.Value(0)).current;
   const stepFade = useRef(new Animated.Value(1)).current;
   const stepSlide = useRef(new Animated.Value(0)).current;
 
   const isSmallScreen = screenHeight < 680;
   const heroHeight = Math.max(195, Math.min(screenHeight * 0.28, 255)) + SHEET_OVERLAP;
-  const shiftDistance = Math.max(0, heroHeight - SHEET_OVERLAP - insets.top);
 
   useEffect(() => {
     Animated.parallel([
@@ -115,47 +126,6 @@ export default function RegisterScreen({ navigation }: any) {
       }),
     ]).start();
   }, [introFade, sheetRise]);
-
-  const animateExpand = (toValue: number, customDuration?: number) => {
-    const isOpening = toValue === 1;
-    const duration = customDuration && customDuration > 0 ? customDuration : isOpening ? 280 : 240;
-    const easing = isOpening
-      ? Easing.bezier(0.2, 0.0, 0.0, 1.0)
-      : Easing.bezier(0.4, 0.0, 0.2, 1.0);
-
-    Animated.timing(expandProgress, {
-      toValue,
-      duration,
-      easing,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const onKeyboardShow = (e?: any) => {
-      animateExpand(1, e?.duration);
-    };
-
-    const onKeyboardHide = (e?: any) => {
-      animateExpand(0, e?.duration);
-    };
-
-    const showSub = Keyboard.addListener(showEvent, onKeyboardShow);
-    const hideSub = Keyboard.addListener(hideEvent, onKeyboardHide);
-
-    const didShowSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardDidShow', onKeyboardShow) : null;
-    const didHideSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardDidHide', onKeyboardHide) : null;
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-      didShowSub?.remove();
-      didHideSub?.remove();
-    };
-  }, [expandProgress]);
 
   const goToStep = (nextStep: number, direction: 'forward' | 'backward' = 'forward') => {
     stepFade.setValue(0);
@@ -176,25 +146,6 @@ export default function RegisterScreen({ navigation }: any) {
       }),
     ]).start();
   };
-
-  // Adaptive native transforms
-  const heroTranslateY = expandProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -shiftDistance * 0.4],
-  });
-
-  const heroOpacity = expandProgress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 0.2, 0],
-  });
-
-  const sheetTranslateY = Animated.add(
-    sheetRise,
-    expandProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, -shiftDistance],
-    })
-  );
 
   const triggerShake = () => {
     shakeAnim.setValue(0);
@@ -222,17 +173,18 @@ export default function RegisterScreen({ navigation }: any) {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+
   // Step 1: Personal Info Validation & Next
   const handleStep1Next = () => {
     const newErrors: Record<string, string | null> = {};
     let hasError = false;
 
     if (!firstName.trim()) {
-      newErrors.firstName = 'First name required!';
+      newErrors.firstName = 'Required';
       hasError = true;
     }
     if (!lastName.trim()) {
-      newErrors.lastName = 'Last name required!';
+      newErrors.lastName = 'Required';
       hasError = true;
     }
 
@@ -246,33 +198,22 @@ export default function RegisterScreen({ navigation }: any) {
     goToStep(2, 'forward');
   };
 
-  // Step 2: Birthdate Validation & Next
-  const handleStep2Next = () => {
-    if (!birthdate.trim()) {
-      setErrors({ birthdate: 'Birthdate required!' });
-      triggerShake();
-      return;
-    }
-    setErrors({});
-    goToStep(3, 'forward');
-  };
-
-  // Step 3: Contact Info Validation & Send OTP (Email or Phone)
-  const handleStep3Next = async () => {
+  // Step 2: Contact Info Validation & Send OTP (Email or Phone)
+  const handleStep2Next = async () => {
     const newErrors: Record<string, string | null> = {};
     let hasError = false;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) {
-      newErrors.email = 'Email address required!';
+      newErrors.email = 'Required';
       hasError = true;
     } else if (!emailRegex.test(email.trim())) {
-      newErrors.email = 'Enter a valid email address!';
+      newErrors.email = 'Check this address';
       hasError = true;
     }
 
     if (!phone.trim()) {
-      newErrors.phone = 'Phone number required!';
+      newErrors.phone = 'Required';
       hasError = true;
     }
 
@@ -282,40 +223,78 @@ export default function RegisterScreen({ navigation }: any) {
       return;
     }
 
-    const target = verificationChannel === 'EMAIL' ? email.trim().toLowerCase() : phone.trim();
+    if (verificationChannel === 'PHONE') {
+      await handleVerifyPhoneWithFirebase();
+      return;
+    }
+
+    const target = email.trim().toLowerCase();
 
     // Same recipient, code still fresh: go straight back to the code screen
     if (otpSentTo === target && cooldown > 0) {
       setErrors({});
       setGlobalError(null);
-      goToStep(4, 'forward');
+      goToStep(3, 'forward');
       return;
     }
 
     setLoading(true);
     setGlobalError(null);
     try {
-      const res =
-        verificationChannel === 'EMAIL'
-          ? await apiClient.post('/customers/send-registration-otp', { email: target })
-          : await apiClient.post('/customers/send-registration-phone-otp', { phone: target });
+      const res = await apiClient.post('/customers/send-registration-otp', { email: target });
       setErrors({});
       setCooldown(res.data?.retryAfterSeconds ?? RESEND_COOLDOWN_FALLBACK_SECONDS);
       setOtpSentTo(target);
-      goToStep(4, 'forward');
+      goToStep(3, 'forward');
     } catch (error: any) {
-      const msg = error.response?.data?.error || error.message || 'Could not send verification code.';
-      setGlobalError(msg);
+      setGlobalError(toUserMessage(error, 'otp'));
       triggerShake();
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 4: Verify OTP Code
-  const handleStep4Verify = async () => {
+  const handleVerifyPhoneWithFirebase = async () => {
+    setLoading(true);
+    setGlobalError(null);
+    try {
+      const cleanPhone = phone.trim();
+      const redirectUrl = Linking.createURL('phone-verified');
+      const authUrl = `https://portal.sugo-express.org/verify-phone?phone=${encodeURIComponent(cleanPhone)}&redirect=${encodeURIComponent(redirectUrl)}`;
+
+      const authResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+      if (authResult.type === 'success' && authResult.url) {
+        const parsed = Linking.parse(authResult.url);
+        const token = (parsed.queryParams?.token as string) || null;
+        const verifiedNumber = (parsed.queryParams?.phone as string) || null;
+
+        if (token) {
+          setFirebaseIdToken(token);
+          setPhoneVerified(true);
+          if (verifiedNumber) {
+            setPhone(verifiedNumber);
+          }
+          setErrors({});
+          setGlobalError(null);
+          goToStep(4, 'forward');
+          return;
+        }
+      } else if (authResult.type === 'cancel') {
+        setGlobalError('Phone verification was cancelled.');
+      }
+    } catch (err: any) {
+      setGlobalError(toUserMessage(err, 'otp'));
+      triggerShake();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 3: Verify OTP Code
+  const handleStep3Verify = async () => {
     if (otpCode.trim().length !== 6) {
-      setErrors({ otp: 'Enter 6-digit code!' });
+      setErrors({ otp: 'Enter all 6 digits' });
       triggerShake();
       return;
     }
@@ -335,17 +314,16 @@ export default function RegisterScreen({ navigation }: any) {
         });
       }
       setErrors({});
-      goToStep(5, 'forward');
+      goToStep(4, 'forward');
     } catch (error: any) {
-      const msg = error.response?.data?.error || error.message || 'Invalid or expired code.';
-      setGlobalError(msg);
+      setGlobalError(toUserMessage(error, 'otp'));
       triggerShake();
     } finally {
       setLoading(false);
     }
   };
 
-  // Resend OTP in Step 4
+  // Resend OTP in Step 3
   const handleResendOtp = async () => {
     if (cooldown > 0) return;
     setLoading(true);
@@ -362,34 +340,33 @@ export default function RegisterScreen({ navigation }: any) {
       setCooldown(res.data?.retryAfterSeconds ?? RESEND_COOLDOWN_FALLBACK_SECONDS);
       setOtpSentTo(verificationChannel === 'EMAIL' ? email.trim().toLowerCase() : phone.trim());
     } catch (error: any) {
-      const msg = error.response?.data?.error || error.message || 'Could not resend code.';
-      setGlobalError(msg);
+      setGlobalError(toUserMessage(error, 'otp'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 5: Final Registration Submit
-  const handleStep5Submit = async () => {
+  // Step 4: Final Registration Submit
+  const handleStep4Submit = async () => {
     const newErrors: Record<string, string | null> = {};
     let hasError = false;
 
     if (!username.trim()) {
-      newErrors.username = 'Username required!';
+      newErrors.username = 'Required';
       hasError = true;
     }
     const trimmedPassword = password.trim();
     const trimmedConfirm = confirmPassword.trim();
 
     if (trimmedPassword.length === 0) {
-      newErrors.password = 'Password required!';
+      newErrors.password = 'Required';
       hasError = true;
     } else if (trimmedPassword.length < 6) {
-      newErrors.password = 'Min 6 characters!';
+      newErrors.password = 'Use 6+ characters';
       hasError = true;
     }
     if (trimmedPassword !== trimmedConfirm) {
-      newErrors.confirmPassword = 'Passwords do not match!';
+      newErrors.confirmPassword = 'Passwords must match';
       hasError = true;
     }
 
@@ -409,23 +386,37 @@ export default function RegisterScreen({ navigation }: any) {
         firstName: firstName.trim(),
         middleName: middleName.trim() || undefined,
         lastName: lastName.trim(),
-        birthdate: birthdate.trim(),
         phone: phone.trim(),
-        emailVerified: true,
+        emailVerified: verificationChannel === 'EMAIL',
+        phoneVerified: phoneVerified,
+        firebaseIdToken: firebaseIdToken || undefined,
       });
 
       const data = response.data;
       const userPayload = data.user || data;
 
       if (data.token) {
+        await AsyncStorage.setItem('@sugo_customer_onboarding_completed', 'true');
+        await AsyncStorage.setItem('@sugo_pending_onboarding_location_setup', 'true');
+        if (route?.params?.detectedLocation) {
+          try {
+            await AsyncStorage.setItem(
+              '@sugo_onboarding_location_draft',
+              JSON.stringify(route.params.detectedLocation)
+            );
+          } catch {}
+        }
         await login(userPayload, data.token, data.refreshToken);
-        navigation.replace('CustomerPortal', { user: userPayload });
+        navigation.replace('CustomerPortal', {
+          user: userPayload,
+          triggerOnboardingLocationSetup: true,
+          detectedLocation: route?.params?.detectedLocation,
+        });
       } else {
         navigation.replace('Login');
       }
     } catch (error: any) {
-      const msg = error.response?.data?.error || error.message || 'Registration failed. Please try again.';
-      setGlobalError(msg);
+      setGlobalError(toUserMessage(error, 'register'));
       triggerShake();
     } finally {
       setLoading(false);
@@ -448,14 +439,13 @@ export default function RegisterScreen({ navigation }: any) {
   // sheet takes the answer.
   const heroTitle = [
     "What's your name?",
-    'When were you born?',
     'Account Verification',
     'Enter 6-Digit Code',
     'Create Credentials',
   ][currentStep - 1];
 
   const heroSubtitle =
-    currentStep === 4 ? (
+    currentStep === 3 ? (
       <>
         {verificationChannel === 'EMAIL'
           ? 'We sent a verification code to '
@@ -468,7 +458,6 @@ export default function RegisterScreen({ navigation }: any) {
     ) : (
       [
         'Please enter your legal name as it appears on your official ID.',
-        'Your birthdate is used to verify eligibility and personalize your experience.',
         "We'll email you a 6-digit verification code.",
         '',
         'Choose your username and secure password to complete account setup.',
@@ -489,16 +478,24 @@ export default function RegisterScreen({ navigation }: any) {
     <View style={[styles.root, { backgroundColor: colors.card }]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={[styles.container, { backgroundColor: colors.card }]}>
+      {/* Scrolls, and brings the focused field above the keyboard, the same way
+          ForgotPasswordScreen does. This used to slide the sheet up a fixed
+          distance instead, inside a View that could not scroll: under Android
+          edge-to-edge the window no longer shrinks for the keyboard, so on the
+          longer steps the lower fields and the Continue button stayed under
+          it with no way to reach them. A tap outside a field still closes the
+          keyboard ("handled" lets taps on buttons and fields through). */}
+      <KeyboardAwareScrollView
+        style={[styles.container, { backgroundColor: colors.card }]}
+        contentContainerStyle={styles.scrollContent}
+        bottomOffset={Spacing.xxl}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
           {/* GRADIENT HERO — back, progress, and this step's question */}
           <Animated.View
             renderToHardwareTextureAndroid
             needsOffscreenAlphaCompositing={Platform.OS === 'android'}
-            style={{
-              opacity: heroOpacity,
-              transform: [{ translateY: heroTranslateY }],
-            }}
           >
             <LinearGradient
               colors={heroGradient}
@@ -523,7 +520,7 @@ export default function RegisterScreen({ navigation }: any) {
                 </TouchableOpacity>
 
                 <View style={styles.heroStepPill}>
-                  <Text style={styles.heroStepPillText}>
+                  <Text style={styles.heroStepPillText} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
                     STEP {currentStep} OF {TOTAL_STEPS}
                   </Text>
                 </View>
@@ -542,8 +539,8 @@ export default function RegisterScreen({ navigation }: any) {
                 ))}
               </View>
 
-              <Text style={styles.heroTitle}>{heroTitle}</Text>
-              {heroSubtitle ? <Text style={styles.heroSubtitleText}>{heroSubtitle}</Text> : null}
+              <Text style={styles.heroTitle} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>{heroTitle}</Text>
+              {heroSubtitle ? <Text style={styles.heroSubtitleText} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>{heroSubtitle}</Text> : null}
             </LinearGradient>
           </Animated.View>
 
@@ -555,10 +552,9 @@ export default function RegisterScreen({ navigation }: any) {
               {
                 backgroundColor: colors.card,
                 marginTop: -SHEET_OVERLAP,
-                minHeight: screenHeight + shiftDistance + 300,
-                paddingBottom: insets.bottom + Spacing.xl + 300,
+                paddingBottom: insets.bottom + Spacing.xl,
                 opacity: introFade,
-                transform: [{ translateY: sheetTranslateY }],
+                transform: [{ translateY: sheetRise }],
               },
             ]}
           >
@@ -567,7 +563,7 @@ export default function RegisterScreen({ navigation }: any) {
               {globalError ? (
                 <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}>
                   <AlertCircle size={16} color={colors.danger} />
-                  <Text style={[styles.errorBannerText, { color: colors.danger }]}>{globalError}</Text>
+                  <Text style={[styles.errorBannerText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{globalError}</Text>
                 </View>
               ) : null}
 
@@ -586,11 +582,11 @@ export default function RegisterScreen({ navigation }: any) {
                   <View style={styles.stepContent}>
                     {/* FIRST NAME */}
                     <View style={styles.labelHeaderRow}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>FIRST NAME *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>FIRST NAME *</Text>
                       {errors.firstName ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.firstName}</Text>
+                          <Text style={[styles.shoutText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{errors.firstName}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -603,7 +599,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <User size={18} color={errors.firstName ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Enter first name"
@@ -613,35 +608,34 @@ export default function RegisterScreen({ navigation }: any) {
                           setFirstName(text);
                           clearError('firstName');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         autoCapitalize="words"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                     </View>
 
                     {/* MIDDLE NAME (OPTIONAL) */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>MIDDLE NAME (OPTIONAL)</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>MIDDLE NAME (OPTIONAL)</Text>
                     </View>
                     <View style={[styles.inputWrapper, { backgroundColor: inputFill, borderColor: inputHairline }]}>
-                      <User size={18} color={colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Enter middle name"
                         placeholderTextColor={colors.textLight}
                         value={middleName}
                         onChangeText={setMiddleName}
-                        onFocus={() => animateExpand(1, 260)}
                         autoCapitalize="words"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                     </View>
 
                     {/* LAST NAME */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>LAST NAME *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>LAST NAME *</Text>
                       {errors.lastName ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.lastName}</Text>
+                          <Text style={[styles.shoutText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{errors.lastName}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -654,7 +648,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <User size={18} color={errors.lastName ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Enter last name"
@@ -664,8 +657,8 @@ export default function RegisterScreen({ navigation }: any) {
                           setLastName(text);
                           clearError('lastName');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         autoCapitalize="words"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                     </View>
 
@@ -675,89 +668,20 @@ export default function RegisterScreen({ navigation }: any) {
                       onPress={handleStep1Next}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.primaryBtnText}>Continue</Text>
+                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Continue</Text>
                       <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
                     </TouchableOpacity>
                   </View>
                 )}
 
                 {/* ========================================================================= */}
-                {/* STEP 2: BIRTHDATE */}
+                {/* STEP 2: CONTACT & VERIFICATION METHOD CHOICE */}
                 {/* ========================================================================= */}
                 {currentStep === 2 && (
                   <View style={styles.stepContent}>
-                    {/* BIRTHDATE SELECTOR */}
-                    <View style={styles.labelHeaderRow}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>BIRTHDATE (YYYY-MM-DD) *</Text>
-                      {errors.birthdate ? (
-                        <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
-                          <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.birthdate}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.inputWrapper,
-                        {
-                          backgroundColor: inputFill,
-                          borderColor: errors.birthdate ? colors.danger : inputHairline,
-                        },
-                      ]}
-                      onPress={() => setShowCalendarModal(true)}
-                      activeOpacity={0.8}
-                    >
-                      <CalendarIcon size={18} color={colors.primary} />
-                      <Text
-                        style={[
-                          styles.dateSelectText,
-                          { color: birthdate ? colors.textDark : colors.textLight },
-                        ]}
-                      >
-                        {birthdate || 'Tap to choose birthdate from calendar'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* CALENDAR PICKER MODAL */}
-                    <CalendarPickerModal
-                      visible={showCalendarModal}
-                      onClose={() => setShowCalendarModal(false)}
-                      initialDate={birthdate}
-                      onSelectDate={(d) => {
-                        setBirthdate(d);
-                        clearError('birthdate');
-                      }}
-                    />
-
-                    {/* HELPER CARD */}
-                    <View style={[styles.infoCard, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.08)' : '#FFF5F8', borderColor: isDark ? 'rgba(246, 36, 89, 0.2)' : '#FCE7F0' }]}>
-                      <Sparkles size={18} color={colors.primary} />
-                      <Text style={[styles.infoCardText, { color: colors.textMedium }]}>
-                        We use your birthdate to secure account recovery and verify legal capacity for errand orders.
-                      </Text>
-                    </View>
-
-                    {/* NEXT BUTTON */}
-                    <TouchableOpacity
-                      style={[styles.primaryBtn, { backgroundColor: colors.primary }, Shadows.liftedUp]}
-                      onPress={handleStep2Next}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.primaryBtnText}>Continue</Text>
-                      <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* ========================================================================= */}
-                {/* STEP 3: CONTACT & VERIFICATION METHOD CHOICE */}
-                {/* ========================================================================= */}
-                {currentStep === 3 && (
-                  <View style={styles.stepContent}>
                     {/* EMAIL ADDRESS */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.md }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
                         EMAIL ADDRESS *
                       </Text>
                       {errors.email ? (
@@ -776,7 +700,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <Mail size={18} color={errors.email ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="name@example.com"
@@ -786,16 +709,16 @@ export default function RegisterScreen({ navigation }: any) {
                           setEmail(text);
                           clearError('email');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                     </View>
 
                     {/* PHONE NUMBER */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
                         PHONE NUMBER *
                       </Text>
                       {errors.phone ? (
@@ -814,7 +737,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <Phone size={18} color={errors.phone ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="09123456789"
@@ -824,15 +746,69 @@ export default function RegisterScreen({ navigation }: any) {
                           setPhone(text);
                           clearError('phone');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         keyboardType="phone-pad"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
+                    </View>
+
+                    {/* VERIFICATION METHOD PICKER */}
+                    <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
+                        VERIFY VIA *
+                      </Text>
+                    </View>
+                    <View style={[styles.channelToggleContainer, { borderColor: inputHairline, backgroundColor: inputFill }]}>
+                      <TouchableOpacity
+                        style={[
+                          styles.channelTab,
+                          verificationChannel === 'EMAIL' && [
+                            styles.channelTabActive,
+                            { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.16)' : '#FEE2E2' },
+                          ],
+                        ]}
+                        onPress={() => setVerificationChannel('EMAIL')}
+                        activeOpacity={0.8}
+                      >
+                        <Mail size={16} color={verificationChannel === 'EMAIL' ? colors.primary : colors.textMedium} />
+                        <Text
+                          style={[
+                            styles.channelTabText,
+                            { color: verificationChannel === 'EMAIL' ? colors.primary : colors.textMedium },
+                          ]}
+                          maxFontSizeMultiplier={AuthFontSizeMultipliers.label}
+                        >
+                          Email OTP
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.channelTab,
+                          verificationChannel === 'PHONE' && [
+                            styles.channelTabActive,
+                            { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.16)' : '#FEE2E2' },
+                          ],
+                        ]}
+                        onPress={() => setVerificationChannel('PHONE')}
+                        activeOpacity={0.8}
+                      >
+                        <Smartphone size={16} color={verificationChannel === 'PHONE' ? colors.primary : colors.textMedium} />
+                        <Text
+                          style={[
+                            styles.channelTabText,
+                            { color: verificationChannel === 'PHONE' ? colors.primary : colors.textMedium },
+                          ]}
+                          maxFontSizeMultiplier={AuthFontSizeMultipliers.label}
+                        >
+                          SMS (Phone)
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
                     {/* SEND OTP BUTTON */}
                     <TouchableOpacity
                       style={[styles.primaryBtn, { backgroundColor: colors.primary }, Shadows.liftedUp, loading && { opacity: 0.7 }]}
-                      onPress={handleStep3Next}
+                      onPress={handleStep2Next}
                       disabled={loading}
                       activeOpacity={0.85}
                     >
@@ -840,12 +816,12 @@ export default function RegisterScreen({ navigation }: any) {
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText}>
-                            {otpSentTo === email.trim().toLowerCase() && cooldown > 0
-                              ? 'Back to Code'
-                              : verificationChannel === 'EMAIL'
-                                ? 'Send Code via Email'
-                                : 'Send Code via SMS'}
+                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
+                            {verificationChannel === 'PHONE'
+                              ? 'Verify Phone via SMS'
+                              : otpSentTo === email.trim().toLowerCase() && cooldown > 0
+                                ? 'Back to Code'
+                                : 'Send Code via Email'}
                           </Text>
                           <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
                         </>
@@ -855,13 +831,13 @@ export default function RegisterScreen({ navigation }: any) {
                 )}
 
                 {/* ========================================================================= */}
-                {/* STEP 4: OTP VERIFICATION */}
+                {/* STEP 3: OTP VERIFICATION */}
                 {/* ========================================================================= */}
-                {currentStep === 4 && (
+                {currentStep === 3 && (
                   <View style={styles.stepContent}>
                     {/* OTP INPUT */}
                     <View style={styles.labelHeaderRow}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>VERIFICATION CODE *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>VERIFICATION CODE *</Text>
                       {errors.otp ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
@@ -886,16 +862,16 @@ export default function RegisterScreen({ navigation }: any) {
                         setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 6));
                         clearError('otp');
                       }}
-                      onFocus={() => animateExpand(1, 260)}
                       keyboardType="number-pad"
                       maxLength={6}
+                      maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       autoFocus
                     />
 
                     {/* VERIFY CODE ACTION BUTTON */}
                     <TouchableOpacity
                       style={[styles.primaryBtn, { backgroundColor: colors.primary }, Shadows.liftedUp, loading && { opacity: 0.7 }]}
-                      onPress={handleStep4Verify}
+                      onPress={handleStep3Verify}
                       disabled={loading}
                       activeOpacity={0.85}
                     >
@@ -903,7 +879,7 @@ export default function RegisterScreen({ navigation }: any) {
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText}>Verify & Proceed</Text>
+                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify & Proceed</Text>
                           <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
                         </>
                       )}
@@ -916,7 +892,7 @@ export default function RegisterScreen({ navigation }: any) {
                       style={styles.resendBtn}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Text style={[styles.resendText, { color: cooldown > 0 ? colors.textLight : colors.primary }]}>
+                      <Text style={[styles.resendText, { color: cooldown > 0 ? colors.textLight : colors.primary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                         {cooldown > 0 ? `Resend code in ${cooldown}s` : "Didn't receive the code? Resend Code"}
                       </Text>
                     </TouchableOpacity>
@@ -924,13 +900,36 @@ export default function RegisterScreen({ navigation }: any) {
                 )}
 
                 {/* ========================================================================= */}
-                {/* STEP 5: USERNAME & PASSWORD CREATION */}
+                {/* STEP 4: USERNAME & PASSWORD CREATION */}
                 {/* ========================================================================= */}
-                {currentStep === 5 && (
+                {currentStep === 4 && (
                   <View style={styles.stepContent}>
+                    {phoneVerified ? (
+                      <View
+                        style={[
+                          styles.verifiedBadge,
+                          {
+                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#D1FAE5',
+                            borderColor: '#10B981',
+                          },
+                        ]}
+                      >
+                        <CheckCircle2 size={16} color="#10B981" />
+                        <Text
+                          style={[
+                            styles.verifiedBadgeText,
+                            { color: isDark ? '#34D399' : '#065F46' },
+                          ]}
+                          maxFontSizeMultiplier={AuthFontSizeMultipliers.body}
+                        >
+                          Phone Verified: {phone}
+                        </Text>
+                      </View>
+                    ) : null}
+
                     {/* USERNAME */}
                     <View style={styles.labelHeaderRow}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>USERNAME *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>USERNAME *</Text>
                       {errors.username ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
@@ -947,7 +946,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <User size={18} color={errors.username ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Choose a username"
@@ -957,15 +955,15 @@ export default function RegisterScreen({ navigation }: any) {
                           setUsername(text);
                           clearError('username');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         autoCapitalize="none"
                         autoCorrect={false}
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                     </View>
 
                     {/* PASSWORD */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>PASSWORD *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>PASSWORD *</Text>
                       {errors.password ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
@@ -982,7 +980,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <Lock size={18} color={errors.password ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Create a strong password (min 6)"
@@ -992,9 +989,9 @@ export default function RegisterScreen({ navigation }: any) {
                           setPassword(text);
                           clearError('password');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                       <TouchableOpacity
                         onPress={() => setShowPassword((p) => !p)}
@@ -1006,14 +1003,14 @@ export default function RegisterScreen({ navigation }: any) {
                     </View>
 
                     {hasEdgeSpace ? (
-                      <Text style={[styles.spaceHint, { color: colors.textGray }]} testID="password-space-hint">
+                      <Text style={[styles.spaceHint, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body} testID="password-space-hint">
                         Spaces at the start and end are ignored. Spaces inside your password still count.
                       </Text>
                     ) : null}
 
                     {/* CONFIRM PASSWORD */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.sm }]}>
-                      <Text style={[styles.inputLabel, { color: colors.textMedium }]}>CONFIRM PASSWORD *</Text>
+                      <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>CONFIRM PASSWORD *</Text>
                       {errors.confirmPassword ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
@@ -1030,7 +1027,6 @@ export default function RegisterScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <Lock size={18} color={errors.confirmPassword ? colors.danger : colors.textGray} />
                       <TextInput
                         style={[styles.input, { color: colors.textDark }]}
                         placeholder="Re-enter your password"
@@ -1040,9 +1036,9 @@ export default function RegisterScreen({ navigation }: any) {
                           setConfirmPassword(text);
                           clearError('confirmPassword');
                         }}
-                        onFocus={() => animateExpand(1, 260)}
                         secureTextEntry={!showConfirmPassword}
                         autoCapitalize="none"
+                        maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                       />
                       <TouchableOpacity
                         onPress={() => setShowConfirmPassword((p) => !p)}
@@ -1056,7 +1052,7 @@ export default function RegisterScreen({ navigation }: any) {
                     {/* FINAL SUBMIT BUTTON */}
                     <TouchableOpacity
                       style={[styles.primaryBtn, { backgroundColor: colors.primary }, Shadows.liftedUp, loading && { opacity: 0.7 }]}
-                      onPress={handleStep5Submit}
+                      onPress={handleStep4Submit}
                       disabled={loading}
                       activeOpacity={0.85}
                     >
@@ -1064,7 +1060,7 @@ export default function RegisterScreen({ navigation }: any) {
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText}>Complete Account Creation</Text>
+                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Complete Account Creation</Text>
                           <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
                         </>
                       )}
@@ -1079,15 +1075,14 @@ export default function RegisterScreen({ navigation }: any) {
                 style={styles.footerLink}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={[styles.footerText, { color: colors.textGray }]}>
+                <Text style={[styles.footerText, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
                   Already have an account?{' '}
-                  <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }}>Log In</Text>
+                  <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>Log In</Text>
                 </Text>
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
-        </View>
-      </TouchableWithoutFeedback>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -1098,6 +1093,9 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   hero: {
     paddingHorizontal: Spacing.xxl,
@@ -1127,7 +1125,8 @@ const styles = StyleSheet.create({
   heroStepPillText: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs - 1,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     letterSpacing: 1.5,
   },
   heroProgressRow: {
@@ -1145,16 +1144,16 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     letterSpacing: -0.3,
     marginBottom: Spacing.xs,
   },
   heroSubtitleText: {
     color: 'rgba(255,255,255,0.88)',
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-    lineHeight: 18,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
   heroSubtitleStrong: {
     color: '#FFFFFF',
@@ -1177,7 +1176,8 @@ const styles = StyleSheet.create({
   },
   spaceHint: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'body'),
     marginTop: -Spacing.xs,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.md,
@@ -1194,7 +1194,8 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     flex: 1,
   },
   // Unused while verification is email-only. Kept so restoring the Email/SMS
@@ -1221,7 +1222,8 @@ const styles = StyleSheet.create({
   },
   channelTabText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
   },
   labelHeaderRow: {
     flexDirection: 'row',
@@ -1231,7 +1233,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   inputLabel: {
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.bold,
     letterSpacing: 0.8,
   },
@@ -1245,29 +1248,25 @@ const styles = StyleSheet.create({
   },
   shoutText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.md,
     borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
     marginBottom: Spacing.sm + 4,
-    minHeight: moderateScale(48, 0.2),
+    minHeight: AuthContainerHeights.inputMinHeight,
   },
   input: {
     flex: 1,
     paddingVertical: moderateScale(Spacing.sm + 2, 0.2),
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'input'),
     fontFamily: FontFamily.regular,
-  },
-  dateSelectText: {
-    flex: 1,
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
-    fontFamily: FontFamily.medium,
-    paddingVertical: moderateScale(Spacing.sm + 2, 0.2),
   },
   eyeBtn: {
     padding: Spacing.xs,
@@ -1275,28 +1274,14 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     borderWidth: 1.5,
-    borderRadius: BorderRadius.xl + 4,
+    borderRadius: BorderRadius.md,
     paddingVertical: moderateScale(Spacing.md, 0.2),
-    fontSize: scaledFontSize(22, 0.2),
+    fontSize: scaledAuthFontSize(22),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(22), 'heading'),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     letterSpacing: 8,
     marginBottom: Spacing.md,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    marginVertical: Spacing.sm,
-  },
-  infoCardText: {
-    flex: 1,
-    fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(16, 0.2),
   },
   primaryBtn: {
     flexDirection: 'row',
@@ -1306,12 +1291,13 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(Spacing.md, 0.2),
     borderRadius: BorderRadius.full,
     marginTop: Spacing.md,
-    minHeight: moderateScale(50, 0.2),
+    minHeight: AuthContainerHeights.buttonMinHeight,
   },
   primaryBtnText: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'heading'),
   },
   resendBtn: {
     marginTop: Spacing.md,
@@ -1319,7 +1305,8 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
   footerLink: {
     marginTop: Spacing.lg,
@@ -1329,6 +1316,36 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  verifiedBadgeText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.xl,
+    gap: Spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledFontSize(11, 0.2),
+    letterSpacing: 0.8,
   },
 });

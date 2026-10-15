@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.setTimeout(30000);
@@ -99,7 +99,7 @@ describe('ChatTab (Messages & Support Screen)', () => {
     const res: any = await render(<ChatTab user={mockUser} navigation={mockNavigation} />);
 
     expect(res.getByText('Messages & Support')).toBeTruthy();
-    expect(res.getByText('Chat live with dispatchers or tap (?) for customer assistance and FAQs.')).toBeTruthy();
+    expect(res.queryByText('Chat live with dispatchers or tap (?) for customer assistance and FAQs.')).toBeNull();
     expect(res.queryByText('Need Dispatcher Assistance?')).toBeNull();
     expect(res.getByTestId('chat-search-input')).toBeTruthy();
     expect(res.getByTestId('chat-filter-ALL')).toBeTruthy();
@@ -144,17 +144,13 @@ describe('ChatTab (Messages & Support Screen)', () => {
     });
   });
 
-  it('renders empty state card with CTA when there are no active chats', async () => {
+  it('renders empty state card without request CTA when there are no active chats', async () => {
     mockErrandsList = [];
 
     const res: any = await render(<ChatTab user={mockUser} navigation={mockNavigation} />);
 
     expect(res.getByText('No Active Errand Chats')).toBeTruthy();
-    const newErrandBtn = res.getByTestId('empty-request-errand-btn');
-    expect(newErrandBtn).toBeTruthy();
-
-    fireEvent.press(newErrandBtn);
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('ServiceList', { user: mockUser });
+    expect(res.queryByTestId('empty-request-errand-btn')).toBeNull();
   });
 
   it('navigates to customer chat when clicking an errand channel row', async () => {

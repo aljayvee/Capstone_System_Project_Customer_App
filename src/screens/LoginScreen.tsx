@@ -12,15 +12,37 @@ import {
   Keyboard,
   Platform,
   Easing,
-  TouchableWithoutFeedback,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Eye, EyeOff, AtSign, Lock, ArrowRight, Bike, AlertCircle } from 'lucide-react-native';
+import { Eye, EyeOff, ArrowRight, Bike, AlertCircle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthHeroPattern from '../components/AuthHeroPattern';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage, retryAfterSeconds } from '../services/errorMessages';
+import RateLimitCountdown from '../components/RateLimitCountdown';
+import GoogleSignInButton from '../components/GoogleSignInButton';
+import { signInWithGoogleNative } from '../services/googleAuth';
 import { useAuth } from '../context/AuthContext';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import {
+  FontFamily,
+  FontSizes,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
+  AuthFontSizeMultipliers,
+  AuthContainerHeights,
+} from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useAuthHeroGradient } from '../hooks/useAuthHeroGradient';
 
@@ -45,7 +67,13 @@ export default function LoginScreen({ navigation }: any) {
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  // Seconds left on a login lockout, when the server told us. Drives the
+  // countdown below the banner so the wait is a visible number, not a guess.
+  const [lockoutSeconds, setLockoutSeconds] = useState<number | null>(null);
+  // True once the white sheet has scrolled up under the status bar, which then
+  // needs dark icons. It used to follow the keyboard, because the keyboard was
+  // what slid the sheet up.
+  const [sheetUnderStatusBar, setSheetUnderStatusBar] = useState(false);
 
   const shakeIdentifier = useRef(new Animated.Value(0)).current;
   const shakePassword = useRef(new Animated.Value(0)).current;
@@ -54,12 +82,9 @@ export default function LoginScreen({ navigation }: any) {
   const introFade = useRef(new Animated.Value(0)).current;
   const sheetRise = useRef(new Animated.Value(24)).current;
 
-  // Expanding & collapsing layout animation for keyboard adaptation (60/90/120 fps native driver)
-  const expandProgress = useRef(new Animated.Value(0)).current;
-
   const isSmallScreen = screenHeight < 680;
   const heroHeight = Math.max(200, Math.min(screenHeight * 0.32, 270)) + SHEET_OVERLAP;
-  const shiftDistance = Math.max(0, heroHeight - SHEET_OVERLAP - insets.top);
+  const sheetReachesStatusBarAt = Math.max(0, heroHeight - SHEET_OVERLAP - insets.top);
 
   useEffect(() => {
     Animated.parallel([
@@ -79,69 +104,6 @@ export default function LoginScreen({ navigation }: any) {
     ]).start();
   }, [introFade, sheetRise]);
 
-  const animateExpand = (toValue: number, customDuration?: number) => {
-    const isOpening = toValue === 1;
-    // Balanced timing curve calibrated for 60Hz, 90Hz, and 120Hz display refresh rates
-    const duration = customDuration && customDuration > 0 ? customDuration : isOpening ? 280 : 240;
-    const easing = isOpening
-      ? Easing.bezier(0.2, 0.0, 0.0, 1.0) // Material 3 Decelerate (responsive start, smooth landing)
-      : Easing.bezier(0.4, 0.0, 0.2, 1.0); // Standard Motion (balanced exit)
-
-    Animated.timing(expandProgress, {
-      toValue,
-      duration,
-      easing,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const onKeyboardShow = (e?: any) => {
-      setIsKeyboardOpen(true);
-      animateExpand(1, e?.duration);
-    };
-
-    const onKeyboardHide = (e?: any) => {
-      setIsKeyboardOpen(false);
-      animateExpand(0, e?.duration);
-    };
-
-    const showSub = Keyboard.addListener(showEvent, onKeyboardShow);
-    const hideSub = Keyboard.addListener(hideEvent, onKeyboardHide);
-
-    const didShowSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardDidShow', onKeyboardShow) : null;
-    const didHideSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardDidHide', onKeyboardHide) : null;
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-      didShowSub?.remove();
-      didHideSub?.remove();
-    };
-  }, [expandProgress]);
-
-  // Adaptive native transforms for smooth expanding & collapsing
-  const heroTranslateY = expandProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -shiftDistance * 0.4],
-  });
-
-  const heroOpacity = expandProgress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 0.2, 0],
-  });
-
-  const sheetTranslateY = Animated.add(
-    sheetRise,
-    expandProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, -shiftDistance],
-    })
-  );
-
   // Leading/trailing spaces are trimmed before the password is sent, so an
   // invisible edge keystroke cannot silently fail the sign-in. Spaces INSIDE
   // the password are kept. Saying so beats leaving the customer to wonder
@@ -150,6 +112,11 @@ export default function LoginScreen({ navigation }: any) {
     () => password.length > 0 && password.trim().length !== password.length,
     [password]
   );
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const under = e.nativeEvent.contentOffset.y >= sheetReachesStatusBarAt;
+    if (under !== sheetUnderStatusBar) setSheetUnderStatusBar(under);
+  };
 
   const triggerShake = (animValue: Animated.Value) => {
     animValue.setValue(0);
@@ -168,9 +135,10 @@ export default function LoginScreen({ navigation }: any) {
     setIdentifierError(null);
     setPasswordError(null);
     setApiError(null);
+    setLockoutSeconds(null);
 
     if (!identifier.trim()) {
-      setIdentifierError('Required!');
+      setIdentifierError('Required');
       triggerShake(shakeIdentifier);
       hasError = true;
     }
@@ -178,7 +146,7 @@ export default function LoginScreen({ navigation }: any) {
     // Measured on the trimmed value, which is what actually gets sent: a box
     // holding only spaces is an empty box.
     if (password.trim().length === 0) {
-      setPasswordError('Required!');
+      setPasswordError('Required');
       triggerShake(shakePassword);
       hasError = true;
     }
@@ -200,15 +168,67 @@ export default function LoginScreen({ navigation }: any) {
       const data = response.data;
       const userPayload = data.user || data;
 
+      await AsyncStorage.setItem('@sugo_customer_onboarding_completed', 'true');
       await login(userPayload, data.token, data.refreshToken);
       navigation.replace('CustomerPortal', { user: userPayload });
     } catch (error: any) {
-      const msg = error.message || 'Invalid credentials. Please try again.';
-      setApiError(msg);
+      // Never render error.message here. This app talks to a deployed backend
+      // whose wording - or a CDN's, in front of it - is not ours to show, and
+      // it used to land in this banner verbatim. Decide from the status code.
+      setApiError(toUserMessage(error, 'login'));
+      setLockoutSeconds(retryAfterSeconds(error) ?? null);
       triggerShake(shakeIdentifier);
       triggerShake(shakePassword);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleLoadingText, setGoogleLoadingText] = useState<string | null>(null);
+
+  const handleGoogleLogin = async () => {
+    Keyboard.dismiss();
+    setGoogleLoading(true);
+    setGoogleLoadingText(null);
+    setApiError(null);
+    try {
+      const googleUser = await signInWithGoogleNative();
+      if (!googleUser) {
+        return;
+      }
+
+      setGoogleLoadingText('Signing In...');
+
+      const response = await apiClient.post('/customers/google-login', {
+        idToken: googleUser.firebaseIdToken,
+      });
+
+      const data = response.data;
+      if (data.status === 'PHONE_SETUP_REQUIRED') {
+        navigation.navigate('GooglePhoneSetup', {
+          googleIdToken: googleUser.firebaseIdToken,
+          email: data.email || googleUser.email,
+          firstName: data.firstName || googleUser.firstName,
+          lastName: data.lastName || googleUser.lastName,
+          googleUid: data.googleUid || googleUser.googleUid,
+          avatar: data.avatar || googleUser.photoUrl,
+        });
+      } else {
+        const userPayload = data.user || data;
+        await AsyncStorage.setItem('@sugo_customer_onboarding_completed', 'true');
+        await login(userPayload, data.token, data.refreshToken);
+        navigation.replace('CustomerPortal', { user: userPayload });
+      }
+    } catch (error: any) {
+      if (error?.message && error.message.includes('Google Sign-In')) {
+        setApiError(error.message);
+      } else {
+        setApiError(toUserMessage(error, 'login'));
+      }
+    } finally {
+      setGoogleLoading(false);
+      setGoogleLoadingText(null);
     }
   };
 
@@ -225,21 +245,30 @@ export default function LoginScreen({ navigation }: any) {
   return (
     <View style={[styles.root, { backgroundColor: colors.card }]}>
       <StatusBar
-        barStyle={isKeyboardOpen ? (isDark ? 'light-content' : 'dark-content') : 'light-content'}
+        barStyle={sheetUnderStatusBar ? (isDark ? 'light-content' : 'dark-content') : 'light-content'}
         backgroundColor="transparent"
         translucent
       />
 
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={[styles.container, { backgroundColor: colors.card }]}>
-          {/* GRADIENT HERO — brand mark + headline (Collapses smoothly on typing) */}
+      {/* Scrolls, and brings the focused field above the keyboard, the same way
+          ForgotPasswordScreen does. This used to slide the sheet up a fixed
+          distance instead, inside a View that could not scroll: under Android
+          edge-to-edge the window no longer shrinks for the keyboard, so with
+          an error banner showing the Log In button stayed under it with no way
+          to reach it. A tap outside a field still closes the keyboard
+          ("handled" lets taps on buttons and fields through). */}
+      <KeyboardAwareScrollView
+        style={[styles.container, { backgroundColor: colors.card }]}
+        contentContainerStyle={styles.scrollContent}
+        bottomOffset={Spacing.xxl + 16}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+      >
+          {/* GRADIENT HERO — brand mark + headline */}
           <Animated.View
             renderToHardwareTextureAndroid
             needsOffscreenAlphaCompositing={Platform.OS === 'android'}
-            style={{
-              opacity: heroOpacity,
-              transform: [{ translateY: heroTranslateY }],
-            }}
           >
             <LinearGradient
               colors={heroGradient}
@@ -254,12 +283,12 @@ export default function LoginScreen({ navigation }: any) {
                   <View style={styles.brandMark}>
                     <Bike size={18} color="#FFFFFF" strokeWidth={2.4} />
                   </View>
-                  <Text style={styles.brandWordmark} maxFontSizeMultiplier={1.15}>SUGO EXPRESS</Text>
+                  <Text style={styles.brandWordmark} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>SUGO EXPRESS</Text>
                 </View>
 
-                <Text style={[styles.heroHeadline, isSmallScreen && styles.heroHeadlineSmall]} maxFontSizeMultiplier={1.15}>
+                <Text style={[styles.heroHeadline, isSmallScreen && styles.heroHeadlineSmall]} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>
                   Welcome to Sugo Express{'\n'}
-                  <Text style={styles.heroHeadlineSoft} maxFontSizeMultiplier={1.15}>
+                  <Text style={styles.heroHeadlineSoft} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>
                     Log in and let a rider{'\n'}run the errand for you.
                   </Text>
                 </Text>
@@ -267,7 +296,7 @@ export default function LoginScreen({ navigation }: any) {
             </LinearGradient>
           </Animated.View>
 
-          {/* WHITE SHEET — smoothly expands to fill the screen above keyboard */}
+          {/* WHITE SHEET — overlaps the hero's bottom edge */}
           <Animated.View
             renderToHardwareTextureAndroid
             style={[
@@ -275,15 +304,14 @@ export default function LoginScreen({ navigation }: any) {
               {
                 backgroundColor: colors.card,
                 marginTop: -SHEET_OVERLAP,
-                minHeight: screenHeight + shiftDistance + 300,
-                paddingBottom: insets.bottom + Spacing.xxl + 400,
+                paddingBottom: insets.bottom + Spacing.xxl,
                 opacity: introFade,
-                transform: [{ translateY: sheetTranslateY }],
+                transform: [{ translateY: sheetRise }],
               },
             ]}
           >
-            <Text style={[styles.sheetTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.15}>Login</Text>
-            <Text style={[styles.sheetSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+            <Text style={[styles.sheetTitle, { color: colors.textDark }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>Login</Text>
+            <Text style={[styles.sheetSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
               Sign in with your username or email address
             </Text>
 
@@ -296,13 +324,25 @@ export default function LoginScreen({ navigation }: any) {
                 ]}
               >
                 <AlertCircle size={16} color={colors.danger} />
-                <Text style={[styles.apiErrorText, { color: colors.danger }]} maxFontSizeMultiplier={1.15}>{apiError}</Text>
+                <Text style={[styles.apiErrorText, { color: colors.danger }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>{apiError}</Text>
               </View>
+            ) : null}
+
+            {lockoutSeconds ? (
+              <RateLimitCountdown
+                seconds={lockoutSeconds}
+                message="Too many sign-in attempts. You can try again in:"
+                onComplete={() => {
+                  setLockoutSeconds(null);
+                  setApiError(null);
+                }}
+                style={styles.lockoutSpacing}
+              />
             ) : null}
 
             {/* IDENTIFIER — username OR email */}
             <View style={styles.labelRow}>
-              <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={1.15}>USERNAME OR EMAIL</Text>
+              <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>USERNAME OR EMAIL</Text>
               {identifierError ? renderFieldError(identifierError) : null}
             </View>
             <Animated.View style={{ transform: [{ translateX: shakeIdentifier }] }}>
@@ -312,13 +352,10 @@ export default function LoginScreen({ navigation }: any) {
                   {
                     backgroundColor: inputFill,
                     borderColor: identifierError ? colors.danger : idFocused ? colors.primary : inputHairline,
+                    borderWidth: identifierError || idFocused ? 1.5 : 1,
                   },
                 ]}
               >
-                <AtSign
-                  size={18}
-                  color={identifierError ? colors.danger : idFocused ? colors.primary : colors.textGray}
-                />
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="Enter your username or email"
@@ -331,8 +368,6 @@ export default function LoginScreen({ navigation }: any) {
                   }}
                   onFocus={() => {
                     setIdFocused(true);
-                    setIsKeyboardOpen(true);
-                    animateExpand(1, 260);
                   }}
                   onBlur={() => setIdFocused(false)}
                   keyboardType="email-address"
@@ -341,7 +376,7 @@ export default function LoginScreen({ navigation }: any) {
                   autoComplete="username"
                   textContentType="username"
                   returnKeyType="next"
-                  maxFontSizeMultiplier={1.15}
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="username-input"
                 />
               </View>
@@ -349,7 +384,7 @@ export default function LoginScreen({ navigation }: any) {
 
             {/* PASSWORD — spaces preserved verbatim */}
             <View style={[styles.labelRow, { marginTop: Spacing.lg }]}>
-              <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={1.15}>PASSWORD</Text>
+              <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>PASSWORD</Text>
               {passwordError ? renderFieldError(passwordError) : null}
             </View>
             <Animated.View style={{ transform: [{ translateX: shakePassword }] }}>
@@ -359,13 +394,10 @@ export default function LoginScreen({ navigation }: any) {
                   {
                     backgroundColor: inputFill,
                     borderColor: passwordError ? colors.danger : passFocused ? colors.primary : inputHairline,
+                    borderWidth: passwordError || passFocused ? 1.5 : 1,
                   },
                 ]}
               >
-                <Lock
-                  size={18}
-                  color={passwordError ? colors.danger : passFocused ? colors.primary : colors.textGray}
-                />
                 <TextInput
                   style={[styles.input, { color: colors.textDark }]}
                   placeholder="Enter your password"
@@ -378,8 +410,6 @@ export default function LoginScreen({ navigation }: any) {
                   }}
                   onFocus={() => {
                     setPassFocused(true);
-                    setIsKeyboardOpen(true);
-                    animateExpand(1, 260);
                   }}
                   onBlur={() => setPassFocused(false)}
                   secureTextEntry={!showPassword}
@@ -390,7 +420,7 @@ export default function LoginScreen({ navigation }: any) {
                   textContentType="password"
                   returnKeyType="go"
                   onSubmitEditing={handleLogin}
-                  maxFontSizeMultiplier={1.15}
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="password-input"
                 />
                 <TouchableOpacity
@@ -409,7 +439,7 @@ export default function LoginScreen({ navigation }: any) {
             </Animated.View>
 
             {hasEdgeSpace ? (
-              <Text style={[styles.spaceHint, { color: colors.textGray }]} maxFontSizeMultiplier={1.15} testID="password-space-hint">
+              <Text style={[styles.spaceHint, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body} testID="password-space-hint">
                 Spaces at the start and end are ignored. Spaces inside your password still count.
               </Text>
             ) : null}
@@ -421,7 +451,7 @@ export default function LoginScreen({ navigation }: any) {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="forgot-password-link"
             >
-              <Text style={[styles.forgotText, { color: colors.primary }]} maxFontSizeMultiplier={1.15}>Forgot Password?</Text>
+              <Text style={[styles.forgotText, { color: colors.primary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* SUBMIT */}
@@ -436,11 +466,32 @@ export default function LoginScreen({ navigation }: any) {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <View style={styles.buttonRow}>
-                  <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>Log In</Text>
+                  <Text style={styles.buttonText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Log In</Text>
                   <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
                 </View>
               )}
             </TouchableOpacity>
+
+            {/* DIVIDER */}
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: inputHairline }]} />
+              <Text
+                style={[styles.dividerText, { color: colors.textLight }]}
+                maxFontSizeMultiplier={AuthFontSizeMultipliers.label}
+              >
+                OR
+              </Text>
+              <View style={[styles.dividerLine, { backgroundColor: inputHairline }]} />
+            </View>
+
+            {/* GOOGLE SIGN IN */}
+            <GoogleSignInButton
+              onPress={handleGoogleLogin}
+              loading={googleLoading}
+              loadingText={googleLoadingText}
+              disabled={loading}
+              testID="login-google-button"
+            />
 
             {/* SIGN UP */}
             <TouchableOpacity
@@ -449,14 +500,13 @@ export default function LoginScreen({ navigation }: any) {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="register-link"
             >
-              <Text style={[styles.linkText, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+              <Text style={[styles.linkText, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
                 Don&apos;t have an account?{' '}
-                <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }} maxFontSizeMultiplier={1.15}>Sign Up</Text>
+                <Text style={{ color: colors.primary, fontFamily: FontFamily.bold }} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
-      </TouchableWithoutFeedback>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -467,6 +517,9 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   hero: {
     paddingHorizontal: Spacing.xxl,
@@ -490,25 +543,27 @@ const styles = StyleSheet.create({
   brandWordmark: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
-    letterSpacing: 2,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
+    letterSpacing: 1.5,
   },
   heroHeadline: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 29,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'display'),
     letterSpacing: -0.3,
   },
   heroHeadlineSmall: {
-    fontSize: 19,
-    lineHeight: 25,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xl),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xl), 'heading'),
   },
   heroHeadlineSoft: {
     fontFamily: FontFamily.regular,
     color: 'rgba(255,255,255,0.88)',
   },
   sheet: {
+    flex: 1,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: Spacing.xl,
@@ -519,14 +574,19 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xxl, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     letterSpacing: -0.3,
   },
   sheetSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
     marginTop: Spacing.xs,
     marginBottom: moderateScale(Spacing.lg, 0.2),
+  },
+  lockoutSpacing: {
+    marginBottom: Spacing.md,
   },
   apiErrorBanner: {
     flexDirection: 'row',
@@ -540,7 +600,8 @@ const styles = StyleSheet.create({
   },
   apiErrorText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     flex: 1,
   },
   labelRow: {
@@ -550,9 +611,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   inputLabel: {
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.bold,
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
   errorPill: {
     flexDirection: 'row',
@@ -564,22 +626,25 @@ const styles = StyleSheet.create({
   },
   errorPillText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs - 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    borderWidth: 1,
     paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
+    minHeight: AuthContainerHeights.inputMinHeight,
   },
   input: {
     flex: 1,
     paddingVertical: moderateScale(Spacing.sm + 2, 0.2),
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'input'),
     fontFamily: FontFamily.regular,
-    minHeight: moderateScale(48, 0.2),
+    minHeight: AuthContainerHeights.inputMinHeight,
   },
   eyeButton: {
     paddingVertical: Spacing.sm,
@@ -587,7 +652,8 @@ const styles = StyleSheet.create({
   },
   spaceHint: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'body'),
     marginTop: Spacing.xs,
     marginLeft: Spacing.md,
   },
@@ -599,15 +665,16 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
   },
   button: {
     paddingVertical: moderateScale(Spacing.md, 0.2),
-    borderRadius: BorderRadius.full,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.lg,
-    minHeight: moderateScale(48, 0.2),
+    minHeight: AuthContainerHeights.buttonMinHeight,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -617,7 +684,8 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'heading'),
   },
   linkContainer: {
     marginTop: Spacing.xl,
@@ -627,7 +695,23 @@ const styles = StyleSheet.create({
   linkText: {
     textAlign: 'center',
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'body'),
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.xl,
+    gap: Spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledFontSize(11, 0.2),
+    letterSpacing: 0.8,
   },
 });
 

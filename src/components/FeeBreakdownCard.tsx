@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { FontFamily, FontSizes, Spacing, scaledFontSize, moderateScale } from '../config/theme';
 import { formatPeso } from '../utils/format';
-import type { FeeQuote } from '../services/quoteService';
+import type { FeeQuote, PaymentPlan } from '../services/quoteService';
 
 interface FeeBreakdownCardProps {
   /**
@@ -11,6 +11,11 @@ interface FeeBreakdownCardProps {
    * payload or the result of a quote — they are the same shape by design.
    */
   breakdown: FeeQuote | null;
+  /**
+   * Where the money stands on a GCash / PayMaya or Bank Transfer errand.
+   * Omitted or null on COD, which renders nothing extra.
+   */
+  paymentPlan?: PaymentPlan | null;
   /** Hidden on compact surfaces like a list row. */
   showNote?: boolean;
   testIDPrefix?: string;
@@ -30,6 +35,7 @@ interface FeeBreakdownCardProps {
  */
 export default function FeeBreakdownCard({
   breakdown,
+  paymentPlan = null,
   showNote = true,
   testIDPrefix = 'fee',
 }: FeeBreakdownCardProps) {
@@ -109,6 +115,58 @@ export default function FeeBreakdownCard({
         </Text>
       </View>
 
+      {/* ── what is owed at the door ───────────────────────────────────────
+          The grand total above is the whole bill and stays the headline. Since
+          2026-10-08 nothing is sent before the rider arrives, so this says how
+          much to pay them and how. "Payment received" shows only when money is
+          already in: an errand that paid the old 50%, or one settled.
+
+          Every figure is the server's — this component still computes nothing. */}
+      {paymentPlan?.hasLedger && (
+        <View
+          style={[styles.planBlock, { borderTopColor: colors.border }]}
+          testID={`${testIDPrefix}-payment-plan`}
+        >
+          {paymentPlan.amountPaid > 0 && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+                Payment received
+              </Text>
+              <Text
+                style={[styles.value, { color: colors.textGray }]}
+                testID={`${testIDPrefix}-amount-paid`}
+                maxFontSizeMultiplier={1.25}
+              >
+                {peso(paymentPlan.amountPaid)}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+              Pay the rider at your door
+            </Text>
+            <Text
+              style={[styles.value, { color: colors.textDark }]}
+              testID={`${testIDPrefix}-balance-due`}
+              maxFontSizeMultiplier={1.25}
+            >
+              {peso(paymentPlan.balanceDue)}
+            </Text>
+          </View>
+
+          {showNote && (
+            <Text
+              style={[styles.note, { color: colors.textGray }]}
+              testID={`${testIDPrefix}-plan-note`}
+              maxFontSizeMultiplier={1.2}
+            >
+              {PLAN_NOTE[paymentPlan.state]}
+            </Text>
+          )}
+        </View>
+      )}
+
       {showNote && !breakdown.isFinal && (
         <Text style={[styles.note, { color: colors.textGray }]} testID={`${testIDPrefix}-estimate-note`} maxFontSizeMultiplier={1.2}>
           This is an estimate. The distance fee is added once your dispatcher confirms the stores, and
@@ -119,9 +177,27 @@ export default function FeeBreakdownCard({
   );
 }
 
+/**
+ * One line per state, addressed to the customer and phrased as what happens
+ * next — never as the rule being enforced. The cash fallback is said up front,
+ * so a transfer the rider's photo cannot confirm is not a surprise at the door.
+ */
+const PLAN_NOTE: Record<PaymentPlan['state'], string> = {
+  AWAITING_BALANCE:
+    'Pay when your rider arrives. Send it by GCash, PayMaya or bank transfer and show them the confirmation, or pay in cash.',
+  SETTLED: 'Paid in full. Thank you!',
+  REFUNDED: 'This errand was cancelled and your payment is being returned.',
+  CANCELLED: 'This errand was cancelled. No payment was collected.',
+};
+
 const styles = StyleSheet.create({
   container: {
     width: '100%',
+  },
+  planBlock: {
+    borderTopWidth: 1,
+    paddingTop: moderateScale(Spacing.xs + 2, 0.2),
+    marginTop: moderateScale(Spacing.sm, 0.2),
   },
   row: {
     flexDirection: 'row',

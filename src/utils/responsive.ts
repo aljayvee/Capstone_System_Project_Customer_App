@@ -45,16 +45,30 @@ export function verticalScale(size: number, height?: number): number {
 }
 
 /**
+ * The width sizes are worked out at: the screen's, but never more than the
+ * 360 dp design (2026-10-13).
+ *
+ * Sizes used to grow with the screen, so a bigger phone showed the same
+ * screenful zoomed in (larger text, padding and cards, nothing more on
+ * screen), which customers felt as cramped. Apps like foodpanda keep a dp a dp
+ * and let a bigger phone show more. Below 360 dp sizes still shrink, gently,
+ * so small phones keep fitting; at 360 dp every size is what it always was.
+ */
+export function sizingWidth(width?: number): number {
+  return Math.min(width ?? Dimensions.get('window').width, BASE_WIDTH);
+}
+
+/**
  * Damped moderate scale: The graphic designer standard for mobile UI.
- * Applies a gentle dampening factor (0.30) so elements scale smoothly on compact phones
- * and large phablets without extreme shrinking or ballooning.
+ * Applies a gentle dampening factor (0.30) so elements shrink smoothly on
+ * compact phones. Never grows past the 360 dp design (see sizingWidth).
  *
  * @param size Base size in dp / pt
  * @param factor Dampening factor (0 = no scale, 1 = full linear scale). Default 0.30.
  * @param width Optional custom screen width for testability or split views.
  */
 export function moderateScale(size: number, factor = 0.30, width?: number): number {
-  const currentWidth = width ?? Dimensions.get('window').width;
+  const currentWidth = sizingWidth(width);
   const scaled = (currentWidth / BASE_WIDTH) * size;
   return Math.round(size + (scaled - size) * factor);
 }
@@ -70,8 +84,8 @@ export function moderateVerticalScale(size: number, factor = 0.30, height?: numb
 
 /**
  * Scaled font size with strict anti-overflow safety clamping:
- * Calibrated against Samsung A04 (360dp width).
- * Upper cap clamped to max 1.06x base size to prevent ballooning on 1080x2408 (FHD+) screens.
+ * Calibrated against Samsung A04 (360dp width), and never larger than there
+ * (moderateScale stops at 360 dp; the 1.06x cap below is now a backstop).
  * Lower bound clamped to 0.85x base size for compact screens.
  */
 export function scaledFontSize(size: number, factor = 0.20, width?: number): number {

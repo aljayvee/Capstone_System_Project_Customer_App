@@ -67,6 +67,18 @@ function composeAddress(entry: LocationGeocodedAddress): string | null {
  * null` — callers should treat that as "let the user type it in", never surface
  * it as an error.
  */
+export async function resolveCoordinateToAddress(point: { latitude: number; longitude: number }): Promise<string | null> {
+  const place = await fetchNearestPlace(point);
+  if (place) return place.name;
+
+  try {
+    const results = await Location.reverseGeocodeAsync(point);
+    return results[0] ? composeAddress(results[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useReverseGeocodedAddress(coordinate: MapCoordinate | null): ReverseGeocodedAddress {
   const [resolving, setResolving] = useState(false);
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
@@ -86,19 +98,7 @@ export function useReverseGeocodedAddress(coordinate: MapCoordinate | null): Rev
 
     const point = { latitude: coordinate.latitude, longitude: coordinate.longitude };
 
-    const resolve = async (): Promise<string | null> => {
-      const place = await fetchNearestPlace(point);
-      if (place) return place.name;
-
-      try {
-        const results = await Location.reverseGeocodeAsync(point);
-        return results[0] ? composeAddress(results[0]) : null;
-      } catch {
-        return null;
-      }
-    };
-
-    resolve()
+    resolveCoordinateToAddress(point)
       .then((address) => {
         if (generationRef.current !== generation) return;
         setResolvedAddress(address);

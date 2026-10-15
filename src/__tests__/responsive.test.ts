@@ -95,6 +95,36 @@ describe('Responsive Scaling Engine (Samsung A04 360x800 Baseline)', () => {
     });
   });
 
+  // 2026-10-13: a bigger phone shows more, not bigger. Sizes stop at the 360 dp
+  // design; small phones still shrink; a 360 dp phone is exactly as before.
+  describe('no growth past the 360 dp design', () => {
+    const { scaledPortalFontSize, PortalFontSizes } = require('../config/portalTypography');
+    const { scaledAuthFontSize } = require('../config/authTypography');
+
+    it.each([392, 412, 428, 480, 800])('keeps the 360 dp sizes at %i dp', (width) => {
+      expect(moderateScale(46, 0.2, width)).toBe(moderateScale(46, 0.2, 360));
+      expect(moderateScale(21, 0.3, width)).toBe(moderateScale(21, 0.3, 360));
+      expect(scaledFontSize(16, 0.2, width)).toBe(scaledFontSize(16, 0.2, 360));
+      for (const size of Object.values(PortalFontSizes) as number[]) {
+        expect(scaledPortalFontSize(size, width)).toBe(scaledPortalFontSize(size, 360));
+        expect(scaledAuthFontSize(size, width)).toBe(scaledAuthFontSize(size, 360));
+      }
+    });
+
+    it('keeps the 360 dp sizes exactly as they were', () => {
+      expect(scaledPortalFontSize(PortalFontSizes.body, 360)).toBe(15);
+      expect(scaledPortalFontSize(PortalFontSizes.subheading, 360)).toBe(16);
+      expect(moderateScale(46, 0.2, 360)).toBe(46);
+    });
+
+    it('still shrinks on small phones', () => {
+      expect(moderateScale(46, 0.3, 320)).toBeLessThan(46);
+      expect(scaledPortalFontSize(PortalFontSizes.title, 280)).toBeLessThan(
+        scaledPortalFontSize(PortalFontSizes.title, 360)
+      );
+    });
+  });
+
   describe('container limits', () => {
     it('defines max content width for tablets', () => {
       expect(MAX_CONTENT_WIDTH).toBe(580);

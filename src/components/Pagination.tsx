@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { Colors, FontSizes, FontWeights, Spacing, BorderRadius } from '../config/theme';
+import { FontSizes, FontWeights, Spacing, BorderRadius } from '../config/theme';
+import { useThemeColor } from '../hooks/useThemeColor';
 
 export interface PaginationProps {
   currentPage: number;
@@ -10,32 +11,44 @@ export interface PaginationProps {
 }
 
 export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
+  const { colors, isDark } = useThemeColor();
   if (totalPages <= 1) return null;
+
+  const btnBg = isDark ? 'rgba(246,36,89,0.18)' : colors.primaryLight;
+  const btnDisabledBg = isDark ? 'rgba(255,255,255,0.06)' : colors.borderLight;
 
   return (
     <View style={styles.row}>
       <TouchableOpacity
-        style={[styles.navBtn, currentPage === 1 && styles.navBtnDisabled]}
+        style={[
+          styles.navBtn,
+          { backgroundColor: btnBg },
+          currentPage === 1 && { backgroundColor: btnDisabledBg },
+        ]}
         onPress={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
         accessibilityRole="button"
         accessibilityLabel="Previous page"
       >
-        <ChevronLeft size={18} color={currentPage === 1 ? Colors.textLight : Colors.primary} strokeWidth={2.4} />
+        <ChevronLeft size={18} color={currentPage === 1 ? colors.textLight : colors.primary} strokeWidth={2.4} />
       </TouchableOpacity>
 
-      <Text style={styles.pageText}>
+      <Text style={[styles.pageText, { color: colors.textMedium }]}>
         Page {currentPage} of {totalPages}
       </Text>
 
       <TouchableOpacity
-        style={[styles.navBtn, currentPage === totalPages && styles.navBtnDisabled]}
+        style={[
+          styles.navBtn,
+          { backgroundColor: btnBg },
+          currentPage === totalPages && { backgroundColor: btnDisabledBg },
+        ]}
         onPress={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
         accessibilityRole="button"
         accessibilityLabel="Next page"
       >
-        <ChevronRight size={18} color={currentPage === totalPages ? Colors.textLight : Colors.primary} strokeWidth={2.4} />
+        <ChevronRight size={18} color={currentPage === totalPages ? colors.textLight : colors.primary} strokeWidth={2.4} />
       </TouchableOpacity>
     </View>
   );
@@ -47,10 +60,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navBtnDisabled: { backgroundColor: Colors.borderLight },
-  pageText: { fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, color: Colors.textMedium },
+  pageText: { fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
 });

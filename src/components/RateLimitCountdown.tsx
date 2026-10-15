@@ -11,9 +11,16 @@ interface RateLimitCountdownProps {
   style?: object;
 }
 
+function formatRemaining(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+}
+
 export const RateLimitCountdown: React.FC<RateLimitCountdownProps> = ({
   seconds,
-  message = 'Too many requests. Temporary security cooldown active.',
+  message = 'Too many tries. You can try again shortly.',
   onComplete,
   style,
 }) => {
@@ -51,24 +58,28 @@ export const RateLimitCountdown: React.FC<RateLimitCountdownProps> = ({
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FEF3C7',
-          borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+          backgroundColor: colors.warningBg,
+          borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : colors.warning + '33',
         },
         style,
       ]}
     >
       <View style={styles.topRow}>
         <View style={styles.badgeRow}>
-          <ShieldAlert size={14} color="#D97706" />
-          <Text style={styles.badgeText}>Cooldown Active</Text>
+          <ShieldAlert size={14} color={colors.warning} />
+          <Text style={[styles.badgeText, { color: colors.warning }]} maxFontSizeMultiplier={1.2}>
+            Please wait
+          </Text>
         </View>
-        <View style={[styles.timerPill, { backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }]}>
-          <Clock size={12} color="#D97706" />
-          <Text style={styles.timerText}>{timeLeft}s</Text>
+        <View style={[styles.timerPill, { backgroundColor: colors.card }]}>
+          <Clock size={12} color={colors.warning} />
+          <Text style={[styles.timerText, { color: colors.warning }]} maxFontSizeMultiplier={1.2}>
+            {formatRemaining(timeLeft)}
+          </Text>
         </View>
       </View>
 
-      <Text style={[styles.message, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+      <Text style={[styles.message, { color: colors.warning }]} maxFontSizeMultiplier={1.2}>
         {message}
       </Text>
     </View>
@@ -96,7 +107,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontFamily: FontFamily.bold,
-    color: '#D97706',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -111,7 +121,6 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: FontSizes.xs,
     fontFamily: FontFamily.bold,
-    color: '#D97706',
   },
   message: {
     fontSize: FontSizes.xs,

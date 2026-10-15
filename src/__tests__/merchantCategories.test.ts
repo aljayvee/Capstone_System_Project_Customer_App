@@ -2,7 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fetchBackendMerchantCategories,
   isSelectableCategory,
+  isPabiliCategory,
   FALLBACK_BACKEND_CATEGORIES,
+  prioritizeCategoriesWithAffinity,
+  recordCategorySearchAffinity,
+  getCategorySearchAffinities,
 } from '../services/merchantCategories';
 import { apiClient } from '../services/apiClient';
 
@@ -139,3 +143,118 @@ describe('isSelectableCategory', () => {
     expect(isSelectableCategory(input as any)).toBe(expected);
   });
 });
+
+describe('isPabiliCategory', () => {
+  it.each([
+    'Fast Food & Restaurant',
+    'Pharmacy & Health',
+    'Supermarket & Grocery',
+    'Retail & General Merchandise',
+    'Water Refilling Station',
+    'Bakery & Pastry',
+  ])('allows valid Pabili category %s', (name) => {
+    expect(isPabiliCategory(name)).toBe(true);
+  });
+
+  it.each([
+    'Logistics',
+    'Logicstics',
+    'Logistics & Freight',
+    'Courier Services',
+    'Express Courier',
+    'Tacurong Cargo Forwarder',
+    'Salons',
+    'Beauty Salon',
+    'Hair Salon',
+    'Barbershop',
+    'Barber Shop',
+    'Spa & Salon',
+    'Carwash',
+    'Car Wash',
+    'Auto Wash Tacurong',
+    'Auto Detailing',
+    'Schools',
+    'Tacurong National High School',
+    'Banks',
+    'ATM & Banks',
+    'Padala Outlets',
+    'Remittance Centers',
+    'Motor Trades',
+    'Auto Parts',
+  ])('rejects non-Pabili service category %s', (name) => {
+    expect(isPabiliCategory(name)).toBe(false);
+  });
+});
+
+describe('prioritizeCategoriesWithAffinity', () => {
+  const sampleCategories = [
+    { id: 1, name: 'Fast Food & Restaurant', status: 'Active', isRecommended: true, orderedBefore: false, orderCount: 0 },
+    { id: 2, name: 'Pharmacy & Health', status: 'Active', isRecommended: true, orderedBefore: false, orderCount: 0 },
+    { id: 3, name: 'Supermarket & Grocery', status: 'Active', isRecommended: true, orderedBefore: false, orderCount: 0 },
+    { id: 4, name: 'Bakery & Pastry', status: 'Active', isRecommended: true, orderedBefore: false, orderCount: 0 },
+    { id: 5, name: 'Retail & General Merchandise', status: 'Active', isRecommended: false, orderedBefore: false, orderCount: 0 },
+    { id: 6, name: 'Cafe & Drinks', status: 'Active', isRecommended: false, orderedBefore: false, orderCount: 0 },
+  ];
+
+  it('cold start: stamps the first four as isRecommended: true and the rest as false', () => {
+    const result = prioritizeCategoriesWithAffinity(sampleCategories, {});
+    expect(result).toHaveLength(6);
+    expect(result.slice(0, 4).every((c) => c.isRecommended === true)).toBe(true);
+    expect(result.slice(4).every((c) => c.isRecommended === false)).toBe(true);
+  });
+
+  it('past orders: categories ordered before jump to top and receive isRecommended: true', () => {
+    const withOrders = [
+      ...sampleCategories.map((c) => ({ ...c })),
+    ];
+    // Suppose Retail (#5) was ordered 3 times, Bakery (#4) ordered 1 time
+    withOrders[4].orderCount = 3;
+    withOrders[4].orderedBefore = true;
+    withOrders[3].orderCount = 1;
+    withOrders[3].orderedBefore = true;
+
+    const result = prioritizeCategoriesWithAffinity(withOrders, {});
+    expect(result[0].name).toBe('Retail & General Merchandise');
+    expect(result[0].isRecommended).toBe(true);
+    expect(result[0].orderedBefore).toBe(true);
+
+    expect(result[1].name).toBe('Bakery & Pastry');
+    expect(result[1].isRecommended).toBe(true);
+    expect(result[1].orderedBefore).toBe(true);
+
+    expect(result[2].name).toBe('Fast Food & Restaurant');
+    expect(result[3].name).toBe('Pharmacy & Health');
+    expect(result.slice(0, 4).every((c) => c.isRecommended === true)).toBe(true);
+    expect(result.slice(4).every((c) => c.isRecommended === false)).toBe(true);
+  });
+
+  it('search affinity: high customer search count promotes a category into the top 4', () => {
+    const affinities = {
+      'Cafe & Drinks': 10,
+    };
+    const result = prioritizeCategoriesWithAffinity(sampleCategories, affinities);
+    // Cafe & Drinks had 0 orders but 10 searches, so it jumps to top
+    expect(result[0].name).toBe('Cafe & Drinks');
+    expect(result[0].isRecommended).toBe(true);
+    expect(result.slice(0, 4).every((c) => c.isRecommended === true)).toBe(true);
+    expect(result.slice(4).every((c) => c.isRecommended === false)).toBe(true);
+  });
+});
+
+describe('recordCategorySearchAffinity & getCategorySearchAffinities', () => {
+  it('records exact category name search affinity', async () => {
+    await recordCategorySearchAffinity('Pharmacy & Health');
+    await recordCategorySearchAffinity('Pharmacy & Health');
+    const affinities = await getCategorySearchAffinities();
+    expect(affinities['Pharmacy & Health']).toBe(2);
+  });
+
+  it('matches common keywords to standard categories', async () => {
+    await recordCategorySearchAffinity('burger');
+    await recordCategorySearchAffinity('medicine');
+    const affinities = await getCategorySearchAffinities();
+    expect(affinities['Fast Food & Restaurant']).toBe(1);
+    expect(affinities['Pharmacy & Health']).toBe(1);
+  });
+});
+

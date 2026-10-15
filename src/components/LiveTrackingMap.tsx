@@ -1,14 +1,32 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Circle, Marker, Polyline } from 'react-native-maps';
-import { Target, Radio, Navigation, Maximize2 } from 'lucide-react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE, UrlTile } from 'react-native-maps';
+import { Target, Radio, Navigation, Maximize2, Clock } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, BorderRadius, FontSizes, FontWeights, Spacing, Shadows } from '../config/theme';
+import { BorderRadius, FontSizes, FontWeights, Spacing, Shadows } from '../config/theme';
+import { useThemeColor } from '../hooks/useThemeColor';
 import { formatDuration, formatDistance } from '../utils/format';
 import { MapCoordinate, toRegion } from '../utils/coords';
-import RiderDotMarker from './RiderDotMarker';
 import type { RiderLiveLocation } from '../hooks/useRiderLiveLocation';
 import { useSmoothedRiderPosition } from '../hooks/useSmoothedRiderPosition';
+import {
+  OSM_ATTRIBUTION,
+  OSM_MAX_NATIVE_ZOOM,
+  OSM_MAX_ZOOM,
+  OSM_TILE_CACHE_MAX_AGE_SECONDS,
+  OSM_TILE_CACHE_PATH,
+  OSM_TILE_URL,
+} from '../config/mapTiles';
+import { lineFitsMap, type MapStyle } from '../config/mapChoice';
+
+/** The arrow puck the rider app draws too; source in assets/rider-puck.svg. */
+const RIDER_PUCK = require('../../assets/rider-puck.png');
+
+/** Fallback center for Tacurong City when coordinates are uninitialized */
+const DEFAULT_CENTER: MapCoordinate = {
+  latitude: 6.6975,
+  longitude: 124.6750,
+};
 
 /**
  * Used only for a stop the server sent no radius for — a pin dropped outside
@@ -46,6 +64,15 @@ export interface LiveTrackingMapProps {
   distanceMeters?: number | null;
   durationSeconds?: number | null;
   /**
+   * Figures for each drawn line (see useLiveRoute). When given, the badge
+   * quotes the line on screen and says which it is, instead of the whole
+   * errand beside only part of it. Omitted, it falls back to the totals above.
+   */
+  pickupDistanceMeters?: number | null;
+  pickupDurationSeconds?: number | null;
+  deliveryDistanceMeters?: number | null;
+  deliveryDurationSeconds?: number | null;
+  /**
    * True when the route is a straight-line estimate rather than a measured road
    * route. Drawn dashed: a solid line is a promise about the path the rider
    * takes, and this shape cannot keep it.
@@ -60,6 +87,20 @@ export interface LiveTrackingMapProps {
    * queueing at the first shop.
    */
   phase?: 'shopping' | 'delivering';
+  /**
+   * The map under the line: the same one the rider sees, decided by the
+   * server (the map of the engine whose roads the rider's route follows).
+   * 'osm' draws our OpenStreetMap tiles in place of Google's map. Null while
+   * the first route has not said which: no map is created until it has, so
+   * none is ever switched in place (config/mapChoice.ts).
+   */
+  mapStyle?: MapStyle | null;
+  /**
+   * Whose roads the route line follows (useLiveRoute `lineEngine`). A road
+   * line is drawn only on its own engine's map; another engine's would run
+   * metres beside the roads painted under it. A dashed guess stands on either.
+   */
+  lineEngine?: string | null;
 }
 
 /** How the camera is framed. */
@@ -69,6 +110,34 @@ type MapMode = 'full' | 'focus';
 const FOCUS_ZOOM = 17;
 /** A slight lean into the horizon, as every navigation view uses. */
 const FOCUS_PITCH = 45;
+
+/**
+ * The closest the customer can zoom. The route comes from OpenStreetMap's road
+ * data and the map underneath is Google's, and the two disagree by a few metres
+ * in places: outside Banga one mapped segment runs 5 degrees off the real road,
+ * which at full zoom put the line ten metres beside it. At street level that is
+ * a line on its road; past it the mismatch fills the screen.
+ */
+const MAX_ZOOM = 18;
+
+/**
+ * The rider's phone can sit off the road the route starts on (in a yard, a
+ * lot, the middle of a field), and the route starts where the road is. Beyond
+ * this gap a dotted link joins the two, so the line does not seem to begin
+ * nowhere near the rider. Past MAX_LINK_METERS the route is not from here.
+ */
+const MIN_LINK_METERS = 12;
+const MAX_LINK_METERS = 500;
+
+function metersBetween(a: MapCoordinate, b: MapCoordinate): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
 
 export default function LiveTrackingMap({
   customerCoordinate,
@@ -80,10 +149,18 @@ export default function LiveTrackingMap({
   height,
   distanceMeters,
   durationSeconds,
+  pickupDistanceMeters,
+  pickupDurationSeconds,
+  deliveryDistanceMeters,
+  deliveryDurationSeconds,
   degraded = false,
   phase = 'shopping',
+  mapStyle = 'google',
+  lineEngine,
 }: LiveTrackingMapProps) {
+  const showOsm = mapStyle === 'osm';
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useThemeColor();
   const mapRef = useRef<MapView>(null);
 
   // Full frames the whole route; Focus follows the rider, heading-up.
@@ -96,7 +173,6 @@ export default function LiveTrackingMap({
   // happened or how to undo it. A mode the viewer can see and switch back is the
   // same protection, made visible.
   const [mode, setMode] = useState<MapMode>('full');
-  const hasEta = distanceMeters != null && durationSeconds != null;
   // react-native-maps takes the dash pattern as an on/off pixel run.
   const routeDashPattern = degraded ? [12, 8] : undefined;
 
@@ -114,12 +190,34 @@ export default function LiveTrackingMap({
   const firstDrawable = (...candidates: (MapCoordinate[] | null | undefined)[]) =>
     candidates.find((line) => (line?.length ?? 0) > 1) ?? [];
 
-  const routeLine =
-    phase === 'delivering'
+  // Nothing at all while the line is another engine's: the moment between a
+  // map being chosen or changed and its own line arriving.
+  const lineOnMap = lineFitsMap(mapStyle, lineEngine, degraded);
+  const routeLine = !lineOnMap
+    ? []
+    : phase === 'delivering'
       ? firstDrawable(deliveryLegCoordinates, routeCoordinates, pickupLegCoordinates)
       : firstDrawable(pickupLegCoordinates, routeCoordinates);
 
-  const routeColor = phase === 'delivering' ? Colors.primary : '#F97316';
+  const routeColor = phase === 'delivering' ? colors.primary : '#F97316';
+
+  // The badge describes the line being drawn. The shopping line is the run
+  // through the stores, the delivery line the run in to the customer; each has
+  // its own figures. The whole-errand total is only the fallback, unlabelled,
+  // for a server or route that did not send per-leg figures.
+  const legEta =
+    phase === 'delivering'
+      ? { label: 'To you', meters: deliveryDistanceMeters, seconds: deliveryDurationSeconds }
+      : { label: 'To store', meters: pickupDistanceMeters, seconds: pickupDurationSeconds };
+  const eta =
+    legEta.meters != null && legEta.seconds != null
+      ? legEta
+      : { label: null, meters: distanceMeters, seconds: durationSeconds };
+  const hasEta = eta.meters != null && eta.seconds != null;
+
+  const routeStart = routeLine.length > 1 ? routeLine[0] : null;
+  const linkGap = riderLocation && routeStart ? metersBetween(riderLocation, routeStart) : 0;
+  const showLink = linkGap >= MIN_LINK_METERS && linkGap <= MAX_LINK_METERS;
 
   // Interpolates between GPS fixes. Rendering `riderLocation` directly made the
   // marker teleport each time Firebase pushed an update.
@@ -200,21 +298,68 @@ export default function LiveTrackingMap({
   }, []);
 
 
-  const initialCenter = customerCoordinate || riderLocation || pinpoints[0];
+  const initialCenter = customerCoordinate || riderLocation || pinpoints[0] || DEFAULT_CENTER;
+
+  // No map until the first route has said which one (at most
+  // MAP_CHOICE_WAIT_MS, then Google): one created as Google and turned into
+  // OpenStreetMap afterwards is exactly the switch Petal Maps ignores.
+  if (mapStyle === null) {
+    return (
+      <View
+        style={[
+          styles.wrapper,
+          height != null ? { height } : styles.wrapperFlex,
+          styles.placeholder,
+          { backgroundColor: colors.bgGray },
+        ]}
+        testID="map-placeholder"
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.placeholderText, { color: colors.textGray }]}>Loading the map</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.wrapper, height != null ? { height } : styles.wrapperFlex]}>
       <MapView
+        // A new native map for a new style, never a live one switched: the
+        // map type is read once, from the first props (MapViewManager
+        // createViewInstance), and Huawei's Petal Maps ignores a later switch
+        // to 'none', leaving its roads drawn under our tiles.
+        key={mapStyle}
         ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        googleRenderer="LEGACY"
         style={StyleSheet.absoluteFill}
-        initialRegion={initialCenter ? toRegion(initialCenter) : undefined}
+        initialRegion={toRegion(initialCenter)}
+        maxZoomLevel={MAX_ZOOM}
+        mapType={showOsm ? 'none' : 'standard'}
+        onMapReady={() => {
+          // A map created after the route arrived (the first, or one made
+          // again for another style) frames it once it exists.
+          if (mode === 'full') fitAllPoints();
+        }}
         onPanDrag={() => {
           // Touching the map while it is following takes the camera back. The
           // mode flips visibly rather than the follow silently ceasing.
           if (mode === 'focus') enterFull();
         }}
       >
-        <Marker coordinate={customerCoordinate} title="Delivery Address" pinColor={Colors.primary} />
+        {showOsm && (
+          <UrlTile
+            urlTemplate={OSM_TILE_URL}
+            maximumZ={OSM_MAX_ZOOM}
+            maximumNativeZ={OSM_MAX_NATIVE_ZOOM}
+            tileCachePath={OSM_TILE_CACHE_PATH ?? undefined}
+            tileCacheMaxAge={OSM_TILE_CACHE_MAX_AGE_SECONDS}
+            shouldReplaceMapContent
+            zIndex={-1}
+            testID="osm-tiles"
+          />
+        )}
+
+        <Marker coordinate={customerCoordinate} title="Delivery Address" pinColor={colors.primary} />
 
         {/* The arrival circle, drawn so the customer can see where "arrived at
             the store" is actually decided rather than having to trust a status
@@ -238,7 +383,13 @@ export default function LiveTrackingMap({
               coordinate={pin}
               title={`Store #${idx + 1}: ${pin.storeName}${done ? ' — done' : ''}`}
             >
-              <View style={[styles.pinBadge, done && styles.pinBadgeDone]}>
+              <View
+                style={[
+                  styles.pinBadge,
+                  { backgroundColor: colors.primary },
+                  done && [styles.pinBadgeDone, { backgroundColor: colors.textLight }],
+                ]}
+              >
                 <Text style={styles.pinBadgeText}>{done ? '✓' : idx + 1}</Text>
               </View>
             </Marker>
@@ -253,10 +404,12 @@ export default function LiveTrackingMap({
             rotation={smoothed.rotation}
             flat
             anchor={{ x: 0.5, y: 0.5 }}
-            style={{ backgroundColor: 'transparent' }}
-          >
-            <RiderDotMarker />
-          </Marker.Animated>
+            // An image, never a child view: on Android's new architecture a
+            // child view is snapshotted once and can come back blank after the
+            // map redraws (react-native-maps #5877; it happened to the rider
+            // app's own dot). The same arrow puck the rider sees.
+            image={RIDER_PUCK}
+          />
         )}
 
         {/* One line, coloured by which half of the errand this is.
@@ -274,21 +427,41 @@ export default function LiveTrackingMap({
             testID={phase === 'delivering' ? 'route-line-delivering' : 'route-line-shopping'}
           />
         )}
+
+        {/* From the rider to where their route joins the road. */}
+        {showLink && riderLocation && routeStart && (
+          <Polyline
+            coordinates={[riderLocation, routeStart]}
+            strokeColor={routeColor}
+            strokeWidth={3}
+            lineDashPattern={[2, 6]}
+            testID="route-link"
+          />
+        )}
       </MapView>
+
+      {/* The OpenStreetMap licence requires this wherever its map is shown. */}
+      {showOsm && (
+        <Text style={styles.attribution} maxFontSizeMultiplier={1}>
+          {OSM_ATTRIBUTION}
+        </Text>
+      )}
 
       {/* Floating Top Controls */}
       <View style={[styles.floatingTopBar, { top: insets.top > 0 ? insets.top + 8 : 12 }]}>
         {/* ETA & Distance Floating Badge */}
         {hasEta ? (
-          <View style={styles.etaBadge}>
+          <View style={styles.etaBadge} testID="map-eta-badge">
+            <Clock size={12} color="#FFFFFF" strokeWidth={2.4} />
             <Text style={styles.etaText}>
-              ⏱️ {formatDuration(durationSeconds!)} • {formatDistance(distanceMeters!)}
+              {eta.label ? `${eta.label} · ` : ''}
+              {formatDuration(eta.seconds!)} • {formatDistance(eta.meters!)}
             </Text>
           </View>
         ) : (
-          <View style={styles.livePill}>
-            <Radio size={12} color={riderLocation ? Colors.success : Colors.warning} strokeWidth={2.4} />
-            <Text style={[styles.livePillText, { color: riderLocation ? Colors.success : Colors.warning }]}>
+          <View style={[styles.livePill, { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}>
+            <Radio size={12} color={riderLocation ? colors.success : colors.warning} strokeWidth={2.4} />
+            <Text style={[styles.livePillText, { color: riderLocation ? colors.success : colors.warning }]}>
               {riderLocation ? 'Live GPS' : 'Connecting...'}
             </Text>
           </View>
@@ -297,29 +470,33 @@ export default function LiveTrackingMap({
         {/* Follow the rider, or step back and see the whole route. */}
         <TouchableOpacity
           activeOpacity={0.85}
-          style={[styles.recenterBtn, mode === 'focus' && styles.modeBtnActive]}
+          style={[
+            styles.recenterBtn,
+            { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' },
+            mode === 'focus' && [styles.modeBtnActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
+          ]}
           onPress={mode === 'focus' ? enterFull : enterFocus}
           accessibilityLabel={mode === 'focus' ? 'Show the whole route' : 'Follow the rider'}
           testID="map-mode-toggle"
         >
           {mode === 'focus' ? (
-            <Maximize2 size={18} color={Colors.textWhite} strokeWidth={2.2} />
+            <Maximize2 size={18} color="#FFFFFF" strokeWidth={2.2} />
           ) : (
-            <Navigation size={18} color={Colors.textDark} strokeWidth={2.2} />
+            <Navigation size={18} color={colors.textDark} strokeWidth={2.2} />
           )}
         </TouchableOpacity>
 
         {/* Re-frame the route without leaving Full. */}
         <TouchableOpacity
           activeOpacity={0.85}
-          style={styles.recenterBtn}
+          style={[styles.recenterBtn, { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}
           onPress={() => {
             enterFull();
             fitAllPoints();
           }}
           testID="map-recenter-btn"
         >
-          <Target size={18} color={Colors.textDark} strokeWidth={2.2} />
+          <Target size={18} color={colors.textDark} strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
     </View>
@@ -331,14 +508,33 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: 'hidden',
   },
+  attribution: {
+    position: 'absolute',
+    left: 6,
+    bottom: 4,
+    fontSize: 10,
+    color: '#1F2937',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
   wrapperFlex: {
     flex: 1,
+  },
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  placeholderText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
   },
   pinBadge: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: Colors.primary,
     borderWidth: 2,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -347,7 +543,6 @@ const styles = StyleSheet.create({
   // A finished stop recedes rather than disappearing: still placed, clearly not
   // part of the remaining trip.
   pinBadgeDone: {
-    backgroundColor: Colors.textLight,
     opacity: 0.75,
   },
   pinBadgeText: {
@@ -366,6 +561,9 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
   },
   etaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: 'rgba(17, 24, 39, 0.85)',
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -392,10 +590,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: '700',
   },
-  modeBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
+  modeBtnActive: {},
   recenterBtn: {
     width: 36,
     height: 36,

@@ -10,10 +10,12 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Lock, AlertCircle, LogIn, X } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
 import { FontSizes, FontFamily, Spacing } from '../config/theme';
 
 interface SessionExpiredSheetProps {
@@ -38,7 +40,7 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
 
   const handleReAuth = async () => {
     if (!password.trim()) {
-      setError('Please enter your password.');
+      setError('Enter your password to continue.');
       return;
     }
 
@@ -46,26 +48,27 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
     setError(null);
 
     try {
-      const identifier = user?.phone || user?.email || user?.username;
+      // The wire key is `username`, and the backend accepts a username, an
+      // email or a phone number in it - same contract LoginScreen posts under.
+      // This used to send `identifier`, which the validator ignored.
+      const username = user?.username || user?.email || user?.phone;
       const res = await apiClient.post('/customers/login', {
-        identifier,
+        username,
         password: password.trim(),
       });
 
-      if (res.data?.customer && res.data?.token) {
-        await login(res.data.customer, res.data.token, res.data.refreshToken);
+      // respondWithAuth returns { message, user, token, refreshToken, sessionId }.
+      // This used to read res.data.customer, which is never set, so even a
+      // correct password fell through to the error below.
+      if (res.data?.user && res.data?.token) {
+        await login(res.data.user, res.data.token, res.data.refreshToken);
         setPassword('');
         onSuccess?.();
       } else {
-        throw new Error('Authentication response invalid.');
+        throw new Error('SIGN_IN_RESPONSE_INCOMPLETE');
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          err.response?.data?.message ||
-          err.message ||
-          'Sign-in failed. Please verify your password.'
-      );
+      setError(toUserMessage(err, 'login'));
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +87,9 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
       onRequestClose={handleFullLogout}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.overlay}>
+        {/* Padding by the keyboard's height re-centres the card in the space
+            left above it, so the password field is never underneath. */}
+        <KeyboardAvoidingView behavior="padding" style={styles.overlay}>
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Header */}
             <View style={styles.headerRow}>
@@ -101,9 +106,11 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
             </View>
 
             {/* Title & Context */}
-            <Text style={[styles.title, { color: colors.textDark }]}>Session Paused</Text>
+            <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
+              Still you?
+            </Text>
             <Text style={[styles.description, { color: colors.textGray }]}>
-              Your session timed out for your account security. Please verify your password to keep your draft and continue.
+              You have been away a while. Enter your password to pick up exactly where you left off.
             </Text>
 
             {/* User Chip */}
@@ -176,7 +183,7 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
     </Modal>
   );

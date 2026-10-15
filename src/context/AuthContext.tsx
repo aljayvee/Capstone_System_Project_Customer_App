@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { resetSocket } from '../services/socketClient';
 import { apiClient } from '../services/apiClient';
+import { endRealtimeSession, settleRealtimeSession } from '../firebase/realtimeSession';
+import { clearCache } from '../services/swrCache';
 import {
   setCustomerToken,
   setCustomerRefreshToken,
@@ -21,6 +23,10 @@ interface User {
   name?: string;
   email?: string;
   phone?: string;
+  signUpMethod?: 'password' | 'google';
+  googleId?: string | null;
+  phoneVerified?: boolean;
+  phoneVerifiedAt?: string | null;
   avatar?: string | null;
   birthdate?: string | null;
   role?: string;
@@ -38,6 +44,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USER_STORAGE_KEY = '@sugo_customer_user';
+const ONBOARDING_COMPLETED_KEY = '@sugo_customer_onboarding_completed';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -49,8 +56,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const restoreSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
-        let storedToken: string | null = null;
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser) as User;
+            if (parsedUser && typeof parsedUser === 'object' && parsedUser.id) {
+              setUser(parsedUser);
+              void AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(() => {});
+            }
+          } catch {
+            // Invalid JSON, ignore
+          }
+        }
 
+        let storedToken: string | null = null;
         try {
           storedToken = await SecureStore.getItemAsync(SECURE_TOKEN_KEY);
         } catch {
@@ -64,21 +82,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (storedToken) {
           setAccessToken(storedToken);
           setCustomerToken(storedToken);
+          // A relaunch restores the JWT session silently, and the Firebase one
+          // has to come back with it.
+          await settleRealtimeSession(1500);
         }
 
-        // Hydrate the refresh token as well. Without this, an app reopened
-        // after its access token had already aged out (the common case — a
-        // phone is usually closed for longer than 15 minutes) would find
-        // nothing to refresh with and bounce the user to Login, which is the
-        // exact behaviour this change exists to remove.
+        // Hydrate the refresh token as well.
         await getCustomerRefreshToken();
-
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser) as User;
-          if (parsedUser && typeof parsedUser === 'object' && parsedUser.id) {
-            setUser(parsedUser);
-          }
-        }
       } catch (error) {
         console.error('[AuthContext] Failed to restore persistent user session:', error);
       } finally {
@@ -96,7 +106,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setUser(userData);
 
+    // Opens the Firebase identity the chat thread and the live rider pin now
+    // need. Awaited on the same bounded budget as the launch path, because the
+    // screen the customer lands on after signing in may subscribe immediately,
+    // and a listener opened before the session exists stays refused.
+    await settleRealtimeSession();
+
     await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+    await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(() => {});
     if (token) {
       try {
         await SecureStore.setItemAsync(SECURE_TOKEN_KEY, token);
@@ -141,6 +158,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Offline or already invalid; local teardown below is what matters.
     }
 
+    // Before the local teardown, so the Firebase credential cannot outlive the
+    // account that owns it and go on reading chats after sign-out.
+    await endRealtimeSession();
+    // The cached errands, chats and addresses (services/swrCache.ts), so the
+    // next account on this phone never opens on this one's.
+    await clearCache();
+
     setUser(null);
     setAccessToken(null);
     setCustomerToken(null);
@@ -158,6 +182,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Leaving this behind would let the next 401 silently resurrect the session
     // that was just signed out of.
     await setCustomerRefreshToken(null);
+    // Explicitly guarantee onboarding completion persists on sign out so returning users land on Login
+    await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(() => {});
   }, []);
 
   // One place decides what an unrecoverable 401 means. The interceptor has
@@ -165,12 +191,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // state, which is what actually returns the navigator to the Login screen.
   useEffect(() => {
     setOnSessionExpired(() => {
+      // The Firebase credential goes with the session, as on sign-out: left
+      // behind, it kept reading the expired account's chats.
+      void endRealtimeSession();
+      void clearCache();
       setUser(null);
       setAccessToken(null);
       resetSocket();
       void AsyncStorage.removeItem(USER_STORAGE_KEY);
       void AsyncStorage.removeItem(STORAGE_KEY_TOKEN_FALLBACK);
       SecureStore.deleteItemAsync(SECURE_TOKEN_KEY).catch(() => {});
+      void AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(() => {});
     });
     return () => setOnSessionExpired(null);
   }, []);

@@ -26,6 +26,13 @@ jest.mock('react-native-maps', () => {
       fitToSuppliedMarkers: jest.fn(),
       getCamera: jest.fn(() => Promise.resolve({ center: { latitude: 0, longitude: 0 }, zoom: 15 })),
     }));
+    // The real map reports ready some time after mounting. mapType is NOT
+    // held for it: the native map reads its type once, from the first props
+    // (LiveTrackingMap keys the MapView on the style).
+    const { onMapReady } = props;
+    React.useEffect(() => {
+      if (onMapReady) onMapReady();
+    }, []);
     return React.createElement(
       View,
       { ...props, testID: props.testID || 'mock-map-view' },
@@ -104,6 +111,7 @@ jest.mock('react-native-maps', () => {
     Callout: MockCallout,
     Polyline: MockPolyline,
     Circle: MockCircle,
+    UrlTile: (props) => React.createElement(View, { ...props, testID: props.testID || 'mock-url-tile' }),
     AnimatedRegion: MockAnimatedRegion,
     PROVIDER_GOOGLE: 'google',
     PROVIDER_DEFAULT: 'default',
@@ -227,3 +235,72 @@ jest.mock('firebase/database', () => ({
   set: jest.fn(() => Promise.resolve()),
   push: jest.fn(() => ({ key: 'mock-push-key' })),
 }));
+
+// Mirrors RiderMobileApp's mock. NetInfo is a native module with no JS
+// implementation under the test renderer; the default reading is "connected"
+// so no suite is accidentally blocked by the OfflineGate.
+jest.mock('@react-native-community/netinfo', () => ({
+  addEventListener: jest.fn(() => jest.fn()),
+  fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+  refresh: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+}));
+
+// Mock expo-notifications
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  getExpoPushTokenAsync: jest.fn(() => Promise.resolve({ data: 'ExponentPushToken[mock]' })),
+  getDevicePushTokenAsync: jest.fn(() => Promise.resolve({ type: 'android', data: 'fcm-device-token-mock' })),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  scheduleNotificationAsync: jest.fn(() => Promise.resolve('mock-notif-id')),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1 },
+}));
+
+// The OpenStreetMap tile probe (src/config/mapTiles.ts) is the only fetch() in
+// the app; apiClient goes through axios. Never let a test reach the network
+// for it: the probe answers "an image came back".
+global.fetch = jest.fn(() =>
+  Promise.resolve({ ok: true, headers: { get: () => 'image/png' }, json: () => Promise.resolve({}) })
+);
+
+// Mock @react-native-google-signin/google-signin
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(() => Promise.resolve(true)),
+    signIn: jest.fn(() => Promise.resolve({ data: { idToken: 'mock-id-token' } })),
+    signOut: jest.fn(() => Promise.resolve()),
+    isSignedIn: jest.fn(() => Promise.resolve(false)),
+  },
+  statusCodes: {
+    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+    IN_PROGRESS: 'IN_PROGRESS',
+    PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
+  },
+}));
+
+// Mock expo-navigation-bar
+jest.mock('expo-navigation-bar', () => ({
+  NavigationBar: () => null,
+  setStyle: jest.fn(),
+  setHidden: jest.fn(),
+  setVisibilityAsync: jest.fn(() => Promise.resolve()),
+  getVisibilityAsync: jest.fn(() => Promise.resolve('visible')),
+  setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
+  setPositionAsync: jest.fn(() => Promise.resolve()),
+}));
+
+// Mock expo-blur
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    BlurView: (props) => React.createElement(View, { ...props, testID: props.testID || 'mock-blur-view' }, props.children),
+    // What an Android blur samples (components/glass/LiquidGlass.tsx): a plain View here.
+    BlurTargetView: React.forwardRef((props, ref) => React.createElement(View, { ...props, ref }, props.children)),
+  };
+});

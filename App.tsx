@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect } from 'react';
-import { LogBox, View } from 'react-native';
+import React from 'react';
+import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +18,11 @@ import AppNavigator from './src/navigation/AppNavigator';
 
 LogBox.ignoreLogs(['FIREBASE WARNING: Missing appcheck token']);
 
+// Held until the animated splash has drawn, so nothing flashes between the two.
+// The system splash shows no logo (app.json points it at splash-blank.png,
+// on the animated splash's own background colour): Android 12+ always shows
+// one at launch and it cannot be switched off, so it is made invisible instead,
+// and AnimatedSplashScreen is the only splash the customer sees.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
@@ -30,18 +35,12 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
-  const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
-      await SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded]);
-
   if (!fontsLoaded) {
     return null;
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="auto" />
       <AppNavigator />
     </GestureHandlerRootView>

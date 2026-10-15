@@ -1,20 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { apiClient } from '../services/apiClient';
+import { toUserMessage } from '../services/errorMessages';
+import InlineFieldError from '../components/InlineFieldError';
 import { useAuth } from '../context/AuthContext';
-import { Colors, FontFamily, FontSizes, Spacing, BorderRadius, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { FontFamily, FontSizes, Spacing, BorderRadius, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { useThemeColor } from '../hooks/useThemeColor';
 import { RootStackScreenProps } from '../navigation/types';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function VerifyEmailScreen({ route, navigation }: RootStackScreenProps<'VerifyEmail'>) {
   const { login } = useAuth();
+  const { colors, isDark } = useThemeColor();
   const { customerId, email, pendingUser, pendingToken, pendingRefreshToken } = route.params;
 
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  // Inline rather than Alert.alert. A native dialog for a wrong digit makes a
+  // typo feel like a fault, and it used to print the raw axios message.
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -24,46 +33,59 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
 
   const handleVerify = async () => {
     if (code.trim().length !== 6) {
-      Alert.alert('Invalid Code', 'Enter the 6-digit code sent to your email.');
+      setError('Enter all 6 digits');
       return;
     }
+    setError(null);
+    setNotice(null);
     setIsVerifying(true);
     try {
       await apiClient.post('/customers/verify-email', { customerId, code: code.trim() });
       // Only now do we complete the authenticated swap — see RegisterScreen.tsx's note.
       await login(pendingUser, pendingToken, pendingRefreshToken);
-    } catch (error: any) {
-      Alert.alert('Verification Failed', error.message);
+    } catch (err: any) {
+      setError(toUserMessage(err, 'otp'));
     } finally {
       setIsVerifying(false);
     }
   };
 
   const handleResend = async () => {
+    setError(null);
+    setNotice(null);
     setIsResending(true);
     try {
       await apiClient.post('/customers/resend-verification-email', { customerId });
-      Alert.alert('Code Sent', 'A new verification code has been sent to your email.');
+      setNotice('New code sent. Check your email.');
       setCooldown(RESEND_COOLDOWN_SECONDS);
-    } catch (error: any) {
-      Alert.alert('Could Not Resend', error.message);
+    } catch (err: any) {
+      setError(toUserMessage(err, 'otp'));
     } finally {
       setIsResending(false);
     }
   };
 
   return (
-    <View style={styles.root}>
+    // The content is centred, which put the Verify button under the number pad.
+    // Padding by the keyboard's height re-centres it in the space left above.
+    <KeyboardAvoidingView behavior="padding" style={[styles.root, { backgroundColor: colors.bgApp }]}>
       <View style={styles.container}>
-        <Text style={styles.title} maxFontSizeMultiplier={1.15}>Verify Your Email</Text>
-        <Text style={styles.subtitle} maxFontSizeMultiplier={1.15}>
+        <Text style={[styles.title, { color: colors.primary }]} maxFontSizeMultiplier={1.15}>Verify Your Email</Text>
+        <Text style={[styles.subtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
           We sent a 6-digit code to {email}. Enter it below to finish creating your account.
         </Text>
 
         <TextInput
-          style={styles.codeInput}
+          style={[
+            styles.codeInput,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.textDark,
+            },
+          ]}
           placeholder="000000"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textLight}
           value={code}
           onChangeText={(text) => setCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
           keyboardType="number-pad"
@@ -72,9 +94,16 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
           testID="verification-code-input"
         />
 
+        <InlineFieldError error={error} />
+        {notice && !error ? (
+          <Text style={[styles.notice, { color: colors.success }]} maxFontSizeMultiplier={1.2}>
+            {notice}
+          </Text>
+        ) : null}
+
         <TouchableOpacity
           testID="verify-code-button"
-          style={styles.button}
+          style={[styles.button, { backgroundColor: colors.primary }]}
           onPress={handleVerify}
           disabled={isVerifying}
         >
@@ -92,21 +121,24 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
           style={styles.resendButton}
         >
           <Text
-            style={[styles.linkText, (isResending || cooldown > 0) && styles.linkTextDisabled]}
+            style={[
+              styles.linkText,
+              { color: colors.primary },
+              (isResending || cooldown > 0) && { color: colors.textLight },
+            ]}
             maxFontSizeMultiplier={1.15}
           >
             {cooldown > 0 ? `Resend code in ${cooldown}s` : isResending ? 'Sending...' : "Didn't get a code? Resend"}
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
   },
   container: {
@@ -118,33 +150,32 @@ const styles = StyleSheet.create({
   title: {
     fontSize: scaledFontSize(22, 0.2),
     fontFamily: FontFamily.bold,
-    color: Colors.primary,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: scaledFontSize(FontSizes.sm, 0.2),
     fontFamily: FontFamily.regular,
-    color: '#6B7280',
     textAlign: 'center',
     marginBottom: Spacing.lg,
     lineHeight: 18,
   },
+  notice: {
+    fontSize: FontSizes.sm,
+    fontFamily: FontFamily.medium,
+    marginTop: 4,
+  },
   codeInput: {
-    backgroundColor: '#FFFFFF',
     paddingVertical: moderateScale(Spacing.md, 0.2),
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    color: Colors.textDark,
     fontSize: scaledFontSize(22, 0.2),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     letterSpacing: 8,
   },
   button: {
-    backgroundColor: Colors.primary,
     paddingVertical: moderateScale(Spacing.md, 0.2),
     borderRadius: BorderRadius.full,
     alignItems: 'center',
@@ -161,11 +192,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: Colors.primary,
     fontFamily: FontFamily.semibold,
     fontSize: scaledFontSize(FontSizes.sm, 0.2),
-  },
-  linkTextDisabled: {
-    color: '#9CA3AF',
   },
 });

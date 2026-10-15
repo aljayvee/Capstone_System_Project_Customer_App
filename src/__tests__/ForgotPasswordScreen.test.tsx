@@ -7,6 +7,7 @@ jest.mock('../services/apiClient', () => ({
   apiClient: { post: (...args: any[]) => mockPost(...args) },
 }));
 
+import { ApiError } from '../services/ApiError';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
 const navigation = { navigate: jest.fn(), goBack: jest.fn() };
@@ -177,7 +178,7 @@ describe('ForgotPasswordScreen', () => {
     await fireEvent.press(res.getByTestId('forgot-submit'));
 
     expect(mockPost).not.toHaveBeenCalled();
-    expect(res.getByText('Enter the 6 digits!')).toBeTruthy();
+    expect(res.getByText('Enter all 6 digits')).toBeTruthy();
   });
 
   it('exchanges the code for a reset token and asks for the new password', async () => {
@@ -217,12 +218,17 @@ describe('ForgotPasswordScreen', () => {
     await fireEvent.press(res.getByTestId('forgot-submit'));
 
     expect(mockPost).not.toHaveBeenCalled();
-    expect(res.getByText('Passwords do not match!')).toBeTruthy();
+    expect(res.getByText('Passwords must match')).toBeTruthy();
   });
 
   it('surfaces a throttle response from the server', async () => {
+    // 429 with the server's own Retry-After. The wait becomes a number the
+    // customer can act on, not a sentence they have to interpret.
     mockPost.mockRejectedValue(
-      new Error('Too many password reset attempts from this device. Please try again later.')
+      new ApiError('Too many password reset attempts from this device.', {
+        status: 429,
+        retryAfterSeconds: 600,
+      })
     );
     const res: any = await render(<ForgotPasswordScreen navigation={navigation} />);
 
@@ -230,9 +236,7 @@ describe('ForgotPasswordScreen', () => {
     await fireEvent.press(res.getByTestId('forgot-submit'));
 
     await waitFor(() =>
-      expect(
-        res.getByText('Too many password reset attempts from this device. Please try again later.')
-      ).toBeTruthy()
+      expect(res.getByText('Too many tries. Wait 10 minutes and try again.')).toBeTruthy()
     );
     // Still on the first screen — a throttled caller must not reach the code step.
     expect(res.getByText('Forgot your password?')).toBeTruthy();

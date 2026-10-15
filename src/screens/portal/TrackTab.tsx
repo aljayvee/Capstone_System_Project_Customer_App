@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   Bike,
-  Compass,
   MapPin,
   Store,
   User,
@@ -11,9 +10,27 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import { BorderRadius, FontSizes, Spacing, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../../config/theme';
+import {
+  BorderRadius,
+  FontSizes,
+  Spacing,
+  FontFamily,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  scaledFontSize,
+  moderateScale,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../../config/theme';
 import StatusBadge from '../../components/StatusBadge';
 import LiveTrackingMap from '../../components/LiveTrackingMap';
+import RiderToStorePanel from '../../components/RiderToStorePanel';
+import { useOsmTilesAvailable } from '../../config/mapTiles';
+import { chosenMapFor, engineForMap, useMapChoice } from '../../config/mapChoice';
 import ErrandProgressStepper from '../../components/ErrandProgressStepper';
 import { toCoordinate, DEFAULT_CENTER } from '../../utils/coords';
 import { formatErrandId } from '../../utils/formatErrandId';
@@ -25,23 +42,40 @@ export interface TrackTabProps {
   user: any;
   navigation: any;
   activeErrands: any[];
+  focusedErrandId?: string;
+  onScroll?: (event: any) => void;
 }
 
-export default function TrackTab({ user, navigation, activeErrands }: TrackTabProps) {
+export default function TrackTab({ user, navigation, activeErrands, focusedErrandId, onScroll }: TrackTabProps) {
   const { colors, isDark } = useThemeColor();
   const { width: windowWidth, height: windowHeight, isTablet, isCompact, isTallAspect } = useResponsive();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // If focusedErrandId is provided, switch selectedIndex to matching errand
+  React.useEffect(() => {
+    if (focusedErrandId && activeErrands?.length > 0) {
+      const idx = activeErrands.findIndex(
+        (e) => String(e.id || e.errandId) === String(focusedErrandId)
+      );
+      if (idx !== -1) {
+        setSelectedIndex(idx);
+      }
+    }
+  }, [focusedErrandId, activeErrands]);
+
   const count = activeErrands.length;
   const safeIndex = Math.min(selectedIndex, Math.max(0, count - 1));
   const selectedErrand = activeErrands[safeIndex];
+
+  // Whether our OpenStreetMap tiles load, for when the rider's map is OSM.
+  const osmTilesUp = useOsmTilesAvailable(true);
 
   // Rider live location for the active errand
   const {
     location: riderLocation,
     freshness: gpsFreshness,
     label: gpsLabel,
-  } = useRiderLiveLocation(selectedErrand?.riderId ?? null);
+  } = useRiderLiveLocation(selectedErrand?.riderId ?? null, selectedErrand?.id ?? null);
 
   // Coordinates for the active errand
   const customerCoordinate =
@@ -68,6 +102,11 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
     .filter((p: any) => !p.arrivedAt)
     .map((p: any) => ({ latitude: p.latitude, longitude: p.longitude }));
 
+  // The map this errand's tracking already settled on, if it has: every route
+  // after the first is asked for on its roads.
+  const errandKey = selectedErrand?.id ? String(selectedErrand.id) : null;
+  const chosenMap = chosenMapFor(errandKey);
+
   // Live GIS Driving Route
   const {
     coordinates: routeCoordinates,
@@ -75,12 +114,25 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
     deliveryLegCoordinates,
     distanceMeters,
     durationSeconds,
+    pickupDistanceMeters,
+    pickupDurationSeconds,
+    deliveryDistanceMeters,
+    deliveryDurationSeconds,
+    nextStopRoadMeters,
     degraded: routeDegraded,
-  } = useLiveRoute(
-    riderLocation,
-    customerCoordinate,
-    waypoints
-  );
+    lineEngine: routeLineEngine,
+    unroutable: routeUnroutable,
+  } = useLiveRoute(riderLocation, customerCoordinate, waypoints, {
+    // The route the rider is following, as the server decided it for them
+    // (the fastest of OSRM and Google), reused for this errand so both apps
+    // show the same line on the same map. Before a map is chosen nothing is
+    // named, and the first answer's roads choose it; Google's roads only while
+    // our OpenStreetMap tiles are not loading. After, the chosen map's roads,
+    // and the hook takes no other engine's line for it.
+    choose: 'fastest',
+    errandId: errandKey ?? undefined,
+    provider: chosenMap ? engineForMap(chosenMap) : osmTilesUp ? undefined : 'google',
+  });
 
   // Progress stage
   const stage = selectedErrand
@@ -90,8 +142,23 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
         pinpoints: selectedErrand.pinpoints,
         riderLocation,
         destination: customerCoordinate,
+        nextStopRoadMeters,
       })
     : { index: 0, label: 'Order Received' };
+
+  // The map only once the rider is bringing the order: everything bought, on
+  // the way to the customer. Before that, ETA and distance to the store.
+  const delivering = stage.index >= 3;
+  // The same map as the rider's: the one whose roads their route was drawn on,
+  // chosen once per errand. Null, and no map drawn, until the first route.
+  const mapStyle = useMapChoice(errandKey, {
+    lineEngine: routeLineEngine,
+    routeFailed: routeDegraded,
+    osmTilesUp,
+    // This map's engine could not route at all: move to the other map, once.
+    unroutable: routeUnroutable,
+  });
+  const nextStop = remainingStops.find((p: any) => !p.departedAt) ?? null;
 
   const insets = useSafeAreaInsets();
   const bottomPanelHeight = isCompact
@@ -116,17 +183,9 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
         ]}
       >
         <View style={[styles.emptyContainer, { maxWidth: MAX_CONTENT_WIDTH }]}>
-          <View
-            style={[
-              styles.emptyIconWrapper,
-              { backgroundColor: isDark ? 'rgba(255, 77, 121, 0.1)' : '#FFF0F5' },
-            ]}
-          >
-            <Compass size={40} color={colors.primary} strokeWidth={1.8} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>All Caught Up!</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.25}>
-            You have no active errands in progress. Whenever you request a delivery or shopping errand, live GPS tracking and progress updates will appear right here.
+          <Text style={[styles.emptyTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>All Caught Up!</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+            You have no active errands in progress.
           </Text>
         </View>
       </View>
@@ -137,17 +196,37 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
     <View style={[styles.rootContainer, { backgroundColor: colors.bgApp }]}>
       {/* 1. Top Section: The Single Universal Live Map (Root level View, outside any ScrollView) */}
       <View style={styles.mapSection}>
-        <LiveTrackingMap
-          customerCoordinate={customerCoordinate}
-          riderLocation={riderLocation}
-          pinpoints={pinpoints}
-          routeCoordinates={routeCoordinates}
-          pickupLegCoordinates={pickupLegCoordinates}
-          deliveryLegCoordinates={deliveryLegCoordinates}
-          distanceMeters={distanceMeters}
-          durationSeconds={durationSeconds}
-          degraded={routeDegraded}
-        />
+        {delivering ? (
+          <LiveTrackingMap
+            customerCoordinate={customerCoordinate}
+            riderLocation={riderLocation}
+            pinpoints={pinpoints}
+            routeCoordinates={routeCoordinates}
+            pickupLegCoordinates={pickupLegCoordinates}
+            deliveryLegCoordinates={deliveryLegCoordinates}
+            distanceMeters={distanceMeters}
+            durationSeconds={durationSeconds}
+            pickupDistanceMeters={pickupDistanceMeters}
+            pickupDurationSeconds={pickupDurationSeconds}
+            deliveryDistanceMeters={deliveryDistanceMeters}
+            deliveryDurationSeconds={deliveryDurationSeconds}
+            degraded={routeDegraded}
+            // Only ever the delivery run here: while the rider is shopping this
+            // slot shows RiderToStorePanel instead of a map.
+            phase="delivering"
+            mapStyle={mapStyle}
+            lineEngine={routeLineEngine}
+          />
+        ) : (
+          <RiderToStorePanel
+            storeName={nextStop?.storeName ?? null}
+            storesLeft={remainingStops.length}
+            etaSeconds={pickupDurationSeconds}
+            distanceMeters={pickupDistanceMeters}
+            atStore={Boolean(nextStop?.arrivedAt)}
+            riderLocated={Boolean(riderLocation)}
+          />
+        )}
 
         {/* Multi-Errand Tab Switcher Overlay (shown when > 1 active errand exists) */}
         {count > 1 && (
@@ -177,18 +256,12 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                       Shadows.soft,
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.switcherDot,
-                        { backgroundColor: isSelected ? '#FFFFFF' : colors.primary },
-                      ]}
-                    />
                     <Text
                       style={[
                         styles.switcherText,
                         { color: isSelected ? '#FFFFFF' : colors.textDark },
                       ]}
-                      maxFontSizeMultiplier={1.2}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                     >
                       #{formatErrandId(errand.orderId)}
                       {errand.categories ? ` • ${errand.categories}` : ''}
@@ -215,14 +288,16 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
       >
         <ScrollView
           style={styles.panelScroll}
-          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' }]}
+          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
           {/* Header Row: ID, Category, Status Badge */}
           <View style={styles.cardHeader}>
             <View style={styles.headerLeftCol}>
               <View style={styles.idRow}>
-                <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
+                <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                   #{formatErrandId(selectedErrand.orderId)}
                 </Text>
                 {selectedErrand.categories && (
@@ -237,7 +312,7 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                       style={[styles.categoryText, { color: colors.textMedium }]}
                       numberOfLines={1}
                       ellipsizeMode="tail"
-                      maxFontSizeMultiplier={1.15}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                     >
                       {selectedErrand.categories}
                     </Text>
@@ -265,7 +340,7 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                     styles.liveStatusText,
                     { color: gpsFreshness === 'LIVE' ? colors.success : colors.textGray },
                   ]}
-                  maxFontSizeMultiplier={1.2}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                 >
                   {!riderLocation
                     ? 'Connecting with rider GPS...'
@@ -279,7 +354,7 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
               {routeDegraded && (
                 <View style={styles.liveStatusRow}>
                   <View style={[styles.livePulseDot, { backgroundColor: colors.warning }]} />
-                  <Text style={[styles.liveStatusText, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+                  <Text style={[styles.liveStatusText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                     Showing an approximate route — road directions are unavailable right now
                   </Text>
                 </View>
@@ -313,9 +388,9 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                 <User size={15} color={isDark ? '#93C5FD' : '#2563EB'} strokeWidth={2.2} />
               </View>
               <View style={styles.infoContentCol}>
-                <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={1.2}>Assigned Rider</Text>
+                <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Assigned Rider</Text>
                 <View style={styles.riderNameRow}>
-                  <Text style={[styles.infoValue, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+                  <Text style={[styles.infoValue, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                     {selectedErrand.riderName || 'Assigning nearest rider...'}
                   </Text>
                   {selectedErrand.riderName && (
@@ -337,10 +412,10 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                   <Store size={15} color={isDark ? '#FDBA74' : '#EA580C'} strokeWidth={2.2} />
                 </View>
                 <View style={styles.infoContentCol}>
-                  <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={1.2}>
+                  <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                     Store {pinpoints.length > 1 ? `Stops (${pinpoints.length})` : 'Stop'}
                   </Text>
-                  <Text style={[styles.infoValue, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>
+                  <Text style={[styles.infoValue, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                     {pinpoints.map((p: any) => p.storeName).join(' → ')}
                   </Text>
                 </View>
@@ -358,8 +433,8 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
                 <MapPin size={15} color={colors.primary} strokeWidth={2.2} />
               </View>
               <View style={styles.infoContentCol}>
-                <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={1.2}>Delivery Destination</Text>
-                <Text style={[styles.infoValue, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>
+                <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Delivery Destination</Text>
+                <Text style={[styles.infoValue, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                   {selectedErrand.deliveryAddress || 'Tacurong City'}
                 </Text>
               </View>
@@ -368,8 +443,8 @@ export default function TrackTab({ user, navigation, activeErrands }: TrackTabPr
 
           {/* Financial Certainty Footer */}
           <View style={styles.footerRow}>
-            <Text style={[styles.totalLabel, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>Total Errand Fee</Text>
-            <Text style={[styles.totalAmount, { color: colors.primary }]} maxFontSizeMultiplier={1.25}>
+            <Text style={[styles.totalLabel, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>Total Errand Fee</Text>
+            <Text style={[styles.totalAmount, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
               ₱{Number(selectedErrand.grandTotal ?? selectedErrand.totalCost ?? 0).toFixed(2)}
             </Text>
           </View>
@@ -390,24 +465,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
-  emptyIconWrapper: {
-    width: 76,
-    height: 76,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
   emptyTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.lg, 0.35),
+    fontSize: scaledPortalFontSize(PortalFontSizes.hero),
+    lineHeight: getPortalLineHeight(PortalFontSizes.hero, 'heading'),
     marginBottom: Spacing.xs,
   },
   emptySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
     textAlign: 'center',
-    lineHeight: moderateScale(20, 0.3),
   },
   mapSection: {
     flex: 1,
@@ -428,18 +496,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: BorderRadius.full,
+    paddingVertical: 8,
+    minHeight: PortalTouchTargets.compact,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-  },
-  switcherDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   switcherText: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
   },
   bottomPanel: {
     borderTopLeftRadius: BorderRadius.xl,
@@ -474,7 +539,8 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
     letterSpacing: -0.2,
   },
   categoryPill: {
@@ -489,7 +555,8 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
     textTransform: 'capitalize',
     flexShrink: 1,
   },
@@ -506,7 +573,8 @@ const styles = StyleSheet.create({
   },
   liveStatusText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
   },
   infoSection: {
     borderRadius: BorderRadius.lg,
@@ -519,7 +587,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm + 2,
-    paddingVertical: moderateScale(Spacing.sm, 0.2),
+    paddingVertical: Spacing.sm + 2,
+    minHeight: 48,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.04)',
   },
@@ -535,13 +604,15 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(9, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   infoValue: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
     marginTop: 1,
   },
   riderNameRow: {
@@ -557,10 +628,12 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'label'),
   },
   totalAmount: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.price),
+    lineHeight: getPortalLineHeight(PortalFontSizes.price, 'heading'),
   },
 });

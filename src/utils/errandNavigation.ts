@@ -4,9 +4,5 @@ export function openErrandDestination(navigation: any, user: any, errand: any) {
   if (!errand) return;
   // .orderId/.id are the backend's actual response field names (customerService.ts) — not renamed.
   const errandId = errand.orderId || errand.id;
-  if (errand.status === 'PENDING') {
-    navigation.navigate('WaitingForDispatcher', { user, errandId });
-  } else {
-    navigation.navigate('CustomerChat', { user, errandId });
-  }
+  navigation.navigate('CustomerChat', { user, errandId, initialStatus: errand.status });
 }

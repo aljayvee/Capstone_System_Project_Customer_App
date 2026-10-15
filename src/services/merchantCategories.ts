@@ -29,6 +29,9 @@ export interface BackendMerchantCategory {
   _count?: {
     places?: number;
   };
+  isRecommended?: boolean;
+  orderedBefore?: boolean;
+  orderCount?: number;
 }
 
 /**
@@ -43,28 +46,151 @@ export const FALLBACK_BACKEND_CATEGORIES: BackendMerchantCategory[] = [
     name: 'Fast Food & Restaurant',
     description: 'Fast food chains, diners, carinderias, bakeries, and cafes',
     status: 'Active',
+    isRecommended: true,
+    orderedBefore: false,
+    orderCount: 0,
   },
   {
     id: 2,
     name: 'Pharmacy & Health',
     description: 'Drugstores, medical supply stores, and clinics',
     status: 'Active',
+    isRecommended: true,
+    orderedBefore: false,
+    orderCount: 0,
   },
   {
     id: 3,
     name: 'Supermarket & Grocery',
     description: 'Supermarkets, convenience stores, and public market stalls',
     status: 'Active',
+    isRecommended: true,
+    orderedBefore: false,
+    orderCount: 0,
   },
   {
     id: 4,
     name: 'Retail & General Merchandise',
     description: 'Department stores, hardware, school supplies, and dry goods',
     status: 'Active',
+    isRecommended: true,
+    orderedBefore: false,
+    orderCount: 0,
   },
 ];
 
 export const FALLBACK_PABILI_CATEGORIES = FALLBACK_BACKEND_CATEGORIES.map((c) => c.name);
+
+/**
+ * Category name tokens that identify a non-Pabili service type.
+ *
+ * This is the client-side counterpart of the server's RETIRED_CATEGORY_NAMES /
+ * BLOCKED_CATEGORY_TOKENS lists (server/src/lib/blockedCategoryNames.ts).
+ * The server already filters these out through the seeder and the creation
+ * guard; this list is the defensive second layer — it ensures the CustomerApp's
+ * Find Stores screen never shows these types even if one somehow slips through
+ * as Active in the database.
+ *
+ * Matched as whole words against the lower-cased category name, so "school"
+ * does not trip on "preschool" — but "Motor Parts" WILL be caught because
+ * both "motor" and "parts" are common retail identifiers only in that context.
+ * Keep terms unambiguous: a term that could describe a real Pabili store
+ * (e.g. "bank" alone could match "Bank of Bread") should be a phrase instead.
+ */
+const PABILI_ONLY_DENYLIST_TOKENS: ReadonlyArray<string> = [
+  // Schools / Education
+  'school', 'schools', 'university', 'college', 'institution', 'institutions', 'education', 'educational', 'academy',
+
+  // Banks / Financial
+  'bank', 'banks', 'atm',
+
+  // Padala / Remittance
+  'remittance', 'padala',
+
+  // Motor Trades / Auto Parts
+  'motorparts', 'automotive',
+
+  // Logistics / Freight / Courier / Express
+  'logistics', 'logistic', 'logicstics', 'courier', 'couriers', 'cargo', 'freight', 'shipping', 'forwarder', 'forwarding', 'express', 'xpress',
+
+  // Police Outposts & Law Enforcement
+  'police', 'outpost', 'outposts', 'precinct', 'pnp',
+
+  // Government Offices
+  'government', 'governments', 'govt', 'office', 'offices', 'municipal', 'capitol', 'courthouse', 'embassy', 'lgu',
+
+  // Network / Telecom / ISP
+  'network', 'networks', 'networking', 'telecom', 'telecommunications', 'isp', 'broadband',
+
+  // Internet Cafe / Gaming / Computer Shops
+  'internet', 'cybercafe', 'netcafe', 'icafe', 'pisonet', 'esports',
+
+  // Nightclubs / Bars / KTV
+  'nightclub', 'nightclubs', 'disco', 'discotheque', 'ktv', 'beerhouse', 'restobar', 'pub', 'videoke', 'karaoke', 'casino',
+
+  // Salons / Personal Care
+  'salon', 'salons', 'barbershop', 'barber', 'spa',
+
+  // Carwash
+  'carwash',
+];
+
+const PABILI_ONLY_DENYLIST_PHRASES: ReadonlyArray<string> = [
+  'motor trade', 'motor parts', 'motor accessories',
+  'auto parts', 'motorcycle parts',
+  'money transfer', 'financial service', 'financial services',
+  'pera padala',
+  // Logistics & Express
+  'logistics service', 'logistics services', 'courier service', 'courier services', 'express courier',
+  'cargo forwarder', 'freight forwarder', 'cargo service', 'cargo services',
+  'freight service', 'freight services', 'shipping service', 'shipping services',
+  'j t express', 'lbc express', 'jrs express', 'flash express', '2go express', 'spx express', 'dhl express', 'palawan express', 'ninja van',
+  // Police Outposts & Stations
+  'police outpost', 'police station', 'police stations', 'police precinct',
+  'fire station', 'gas station', 'gasoline station', 'petrol station', 'bus station', 'bus terminal', 'transit station',
+  // Government Offices
+  'government office', 'government offices', 'city hall', 'municipal hall', 'barangay hall', 'provincial capitol', 'post office',
+  // Network / Telecom
+  'cable network', 'radio network', 'tv network', 'internet service', 'telecom service',
+  // Internet Cafe / Computer Shops
+  'internet cafe', 'internet cafes', 'internet shop', 'cyber cafe', 'computer shop', 'computer cafe', 'net cafe', 'piso net', 'gaming cafe',
+  // Nightclubs / Bars
+  'night club', 'night clubs', 'comedy club', 'videoke bar', 'karaoke bar', 'ktv bar', 'sports bar', 'cocktail lounge', 'beer house',
+  // Salons
+  'beauty salon', 'hair salon', 'nail salon', 'barber shop', 'hair and beauty',
+  // Carwash
+  'car wash', 'auto wash', 'car detailing', 'auto detailing',
+];
+
+/**
+ * Returns false for category names that describe a non-Pabili service type
+ * (schools, banks, padala/remittance outlets, motor trades / auto parts).
+ *
+ * The server-side seeder is the primary gate; this is the defensive client
+ * fallback so the Find Stores screen is never polluted even if the DB state
+ * lags behind the latest seed run.
+ */
+export function isPabiliCategory(name: string): boolean {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Phrase check first (most specific match).
+  for (const phrase of PABILI_ONLY_DENYLIST_PHRASES) {
+    if (normalized.includes(phrase)) return false;
+  }
+
+  // Whole-word token check.
+  const wordSet = new Set(normalized.split(' '));
+  for (const token of PABILI_ONLY_DENYLIST_TOKENS) {
+    if (wordSet.has(token)) return false;
+  }
+
+  return true;
+}
+
 
 /**
  * Whether a category should be shown to a customer.
@@ -107,6 +233,9 @@ function normalizeCategoryItem(c: any): BackendMerchantCategory | null {
       status: c.status || 'Active',
       image,
       _count: c._count,
+      isRecommended: Boolean(c.isRecommended),
+      orderedBefore: Boolean(c.orderedBefore),
+      orderCount: typeof c.orderCount === 'number' ? c.orderCount : 0,
     };
   }
   return null;
@@ -141,13 +270,17 @@ export async function fetchBackendMerchantCategories(): Promise<BackendMerchantC
     const response = await apiClient.get('/merchant-categories');
 
     if (Array.isArray(response.data)) {
-      const items = response.data
+      const items: BackendMerchantCategory[] = response.data
         .map(normalizeCategoryItem)
-        .filter((c): c is BackendMerchantCategory => isSelectableCategory(c));
+        .filter((c): c is BackendMerchantCategory => isSelectableCategory(c))
+        .filter((c) => isPabiliCategory(c.name));
 
       // Authoritative, including when it is empty. The cache is overwritten
       // with the empty list too — otherwise the next offline launch would
       // resurrect the categories that were just deactivated.
+      //
+      // The list is already Pabili-filtered above, so a cached read on the
+      // next offline launch also stays clean — no second pass needed there.
       void AsyncStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(items)).catch(() => {});
       return items;
     }
@@ -165,13 +298,15 @@ export async function fetchBackendMerchantCategories(): Promise<BackendMerchantC
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        // Same active-only filter the live path applies. Without it the cache
-        // was a hole in the rule: it stores whatever was active at write time,
-        // so a category deactivated afterwards stayed in this list and was
-        // rendered on the Bento grid on any request that fell back to cache.
-        return parsed
+        // Same active-only AND Pabili-only filters the live path applies.
+        // Without it the cache was a hole in the rule: it stores whatever was
+        // active at write time, so a category deactivated (or retired) after
+        // the last successful fetch would stay in this list and be rendered
+        // on the Bento grid on any request that fell back to cache.
+        return (parsed as Array<BackendMerchantCategory | null>)
           .map(normalizeCategoryItem)
-          .filter((c): c is BackendMerchantCategory => isSelectableCategory(c));
+          .filter((c): c is BackendMerchantCategory => isSelectableCategory(c))
+          .filter((c) => isPabiliCategory(c.name));
       }
     }
   } catch (error) {
@@ -181,8 +316,11 @@ export async function fetchBackendMerchantCategories(): Promise<BackendMerchantC
   // No server, no cache — a first launch with no connectivity. Only here is it
   // right to show the built-in seed: there is genuinely nothing else to show,
   // and an empty grid would look broken rather than intentional.
+  // FALLBACK_BACKEND_CATEGORIES only contains the four Pabili-appropriate
+  // categories, so no further filtering is needed here.
   return FALLBACK_BACKEND_CATEGORIES;
 }
+
 
 /**
  * Fetch active category names string array.
@@ -246,3 +384,124 @@ export async function clearCachedCategoryImage(categoryId: number): Promise<void
     // Best effort only.
   }
 }
+
+export const SEARCH_AFFINITY_STORAGE_KEY = '@sugo_customer_category_affinity';
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'Fast Food & Restaurant': [
+    'food', 'restaurant', 'fastfood', 'fast food', 'burger', 'chicken', 'pizza',
+    'jollibee', 'mcdo', 'mcdonald', 'chowking', 'mang inasal', 'cafe', 'coffee',
+    'dining', 'meals', 'snack', 'diner', 'carinderia',
+  ],
+  'Pharmacy & Health': [
+    'pharmacy', 'medicine', 'drug', 'drugstore', 'health', 'meds', 'clinic',
+    'mercury', 'generika', 'tmg', 'wellness', 'medical', 'vitamins',
+  ],
+  'Supermarket & Grocery': [
+    'supermarket', 'grocery', 'market', 'groceries', 'mart', 'savemore', 'puregold',
+    'primark', 'convenience', 'pantry', 'rice', 'meat', 'vegetables', 'fruits',
+  ],
+  'Bakery & Pastry': [
+    'bakery', 'pastry', 'bread', 'cake', 'bakeshop', 'donuts', 'pandesal', 'goldilocks',
+    'red ribbon', 'pastries', 'cookies',
+  ],
+  'Retail & General Merchandise': [
+    'retail', 'merchandise', 'hardware', 'supplies', 'department', 'clothes',
+    'shoes', 'apparel', 'dry goods', 'school supplies', 'homeware',
+  ],
+};
+
+/**
+ * Record customer search / exploration affinity for a category.
+ * Boosts category position in the "Explore merchants categories" section.
+ */
+export async function recordCategorySearchAffinity(categoryNameOrQuery: string): Promise<void> {
+  if (!categoryNameOrQuery || typeof categoryNameOrQuery !== 'string') return;
+  const clean = categoryNameOrQuery.trim().toLowerCase();
+  if (!clean) return;
+
+  try {
+    const raw = await AsyncStorage.getItem(SEARCH_AFFINITY_STORAGE_KEY);
+    const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+
+    // Match exact category name
+    let matchedCategory: string | null = null;
+    for (const catName of Object.keys(CATEGORY_KEYWORDS)) {
+      if (catName.toLowerCase() === clean) {
+        matchedCategory = catName;
+        break;
+      }
+    }
+
+    // If not exact category name, check keyword hits
+    if (!matchedCategory) {
+      for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+        if (keywords.some((kw) => clean.includes(kw) || kw.includes(clean))) {
+          matchedCategory = catName;
+          break;
+        }
+      }
+    }
+
+    const targetKey = matchedCategory || categoryNameOrQuery.trim();
+    map[targetKey] = (map[targetKey] || 0) + 1;
+    await AsyncStorage.setItem(SEARCH_AFFINITY_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Non-blocking best-effort
+  }
+}
+
+/**
+ * Retrieve cached search affinities.
+ */
+export async function getCategorySearchAffinities(): Promise<Record<string, number>> {
+  try {
+    const raw = await AsyncStorage.getItem(SEARCH_AFFINITY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Prioritizes merchant categories based on:
+ * 1. Past orders (orderedBefore: true, orderCount heavily weighted)
+ * 2. Search / exploration affinity (local customer interaction count)
+ * 3. Server composite score / order (popularity, verified places, base weights)
+ *
+ * Stamped hierarchy invariant:
+ * The first 4 categories in the resulting sorted list are stamped with `isRecommended: true`.
+ * All subsequent categories have `isRecommended: false`.
+ */
+export function prioritizeCategoriesWithAffinity(
+  categories: BackendMerchantCategory[],
+  affinities: Record<string, number> = {}
+): BackendMerchantCategory[] {
+  if (!Array.isArray(categories) || categories.length === 0) return [];
+
+  const sorted = [...categories].sort((a, b) => {
+    // 1. Personal orders from past transactions take primary precedence
+    const aOrders = a.orderCount || (a.orderedBefore ? 1 : 0);
+    const bOrders = b.orderCount || (b.orderedBefore ? 1 : 0);
+    const orderDiff = bOrders - aOrders;
+    if (orderDiff !== 0) return orderDiff;
+
+    // 2. Client-side search & category interaction affinity
+    const aAffinity = affinities[a.name] || 0;
+    const bAffinity = affinities[b.name] || 0;
+    const affinityDiff = bAffinity - aAffinity;
+    if (affinityDiff !== 0) return affinityDiff;
+
+    // 3. Fallback: preserve original server rank (already sorted by platform orders + places + base weights)
+    return 0;
+  });
+
+  // Re-stamp the top 4 as recommended in the final dynamic order
+  return sorted.map((cat, index) => ({
+    ...cat,
+    isRecommended: index < 4,
+  }));
+}
+
