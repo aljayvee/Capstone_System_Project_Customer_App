@@ -43,6 +43,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import NotificationScreen from '../screens/Notification';
 import ErrandDetailsScreen from '../screens/ErrandDetailsScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
+import LegalDocumentScreen from '../screens/LegalDocumentScreen';
 import * as SplashScreen from 'expo-splash-screen';
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import OfflineGate from '../components/OfflineGate';
@@ -332,6 +333,13 @@ function NavigationContent() {
             />
           </>
         )}
+        {/* Outside the split: the onboarding consent line (signed out) and
+            Settings (signed in) both open the Terms and the Privacy Policy. */}
+        <Stack.Screen
+          name="LegalDocument"
+          component={LegalDocumentScreen}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
 

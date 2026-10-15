@@ -82,8 +82,6 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
 
   // Modals
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
 
   // App Update Detection
@@ -640,17 +638,17 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
           <SettingsRow
             icon={FileText}
             label="Terms of Service"
-            subtitle="COD safety & delivery coordination guidelines"
+            subtitle="Fees, payments, cancellations and your responsibilities"
             chevron
-            onPress={() => setShowTermsModal(true)}
+            onPress={() => navigation.navigate('LegalDocument', { doc: 'terms' })}
             testID="row-terms"
           />
           <SettingsRow
             icon={ShieldCheck}
             label="Privacy Policy"
-            subtitle="Location tracking & personal information safety"
+            subtitle="What we collect, who sees it, and your rights"
             chevron
-            onPress={() => setShowPrivacyModal(true)}
+            onPress={() => navigation.navigate('LegalDocument', { doc: 'privacy' })}
             testID="row-privacy"
           />
         </SettingsSection>
@@ -1029,76 +1027,6 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
           )}
         </View>
       </Modal>
-
-      {/* TERMS OF SERVICE MODAL */}
-      <Modal visible={showTermsModal} transparent animationType="fade" onRequestClose={() => setShowTermsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCardLarge, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.liftedUp]}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitleLarge, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>Terms of Service</Text>
-              <TouchableOpacity onPress={() => setShowTermsModal(false)} style={styles.modalCloseBtnInline} hitSlop={PortalTouchTargets.compactHitSlop}>
-                <X size={20} color={colors.textDark} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>1. Sugo Errand Platform in Tacurong</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                Sugo connects customers in Tacurong City with verified operational personnel (dispatchers and riders) for on-demand errands, pabili purchases, and parcel deliveries.
-              </Text>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>2. Cash on Delivery (COD) Invariant</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                Item amounts are fronted by the verified rider or logistics hub upon purchase at local merchants. Customers must pay the agreed item subtotal plus calculated delivery fare in cash upon arrival.
-              </Text>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]}>3. Distance & Multi-Stop Rates</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                Delivery fees are calculated using road-network distances anchored to verified Tacurong store and delivery coordinates, incorporating base allowance and excess kilometre increments.
-              </Text>
-            </ScrollView>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[styles.modalActionBtn, { backgroundColor: colors.primary, marginTop: Spacing.md }]}
-              onPress={() => setShowTermsModal(false)}
-            >
-              <Text style={styles.modalActionBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>I Understand</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* PRIVACY POLICY MODAL */}
-      <Modal visible={showPrivacyModal} transparent animationType="fade" onRequestClose={() => setShowPrivacyModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCardLarge, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.liftedUp]}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitleLarge, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>Privacy Policy</Text>
-              <TouchableOpacity onPress={() => setShowPrivacyModal(false)} style={styles.modalCloseBtnInline} hitSlop={PortalTouchTargets.compactHitSlop}>
-                <X size={20} color={colors.textDark} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>1. Location Telemetry Protection</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                GPS coordinates are used strictly while the application is active to locate nearby merchants in Tacurong and navigate your delivery rider to your pinpointed drop-off destination.
-              </Text>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>2. Secure Account Sessions</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                User authentication is protected by short-lived JWT access tokens and rotating refresh tokens with device binding, preventing unauthorized session hijacking.
-              </Text>
-              <Text style={[styles.policyHeading, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>3. Zero Data Resale</Text>
-              <Text style={[styles.policyText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                Your order items, phone number, and delivery addresses are never shared with third parties or advertisers. They are solely utilized for errand fulfillment.
-              </Text>
-            </ScrollView>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[styles.modalActionBtn, { backgroundColor: colors.primary, marginTop: Spacing.md }]}
-              onPress={() => setShowPrivacyModal(false)}
-            >
-              <Text style={styles.modalActionBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1275,14 +1203,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     position: 'relative',
   },
-  modalCardLarge: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '75%',
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    borderWidth: 1,
-  },
   modalCloseBtn: {
     position: 'absolute',
     top: Spacing.md,
@@ -1332,22 +1252,6 @@ const styles = StyleSheet.create({
     lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
     textAlign: 'center',
     marginBottom: Spacing.lg,
-  },
-  modalBodyScroll: {
-    marginBottom: Spacing.sm,
-  },
-  policyHeading: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
-    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-    marginTop: Spacing.md,
-    marginBottom: 4,
-  },
-  policyText: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
-    marginBottom: Spacing.xs,
   },
   modalActionBtn: {
     width: '100%',

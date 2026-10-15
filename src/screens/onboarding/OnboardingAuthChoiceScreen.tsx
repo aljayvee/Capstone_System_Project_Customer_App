@@ -251,6 +251,35 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
               Log in with your email or username
             </Text>
           </TouchableOpacity>
+
+          {/* Consent. "Continuing" covers all three ways forward above
+              (Google, a new account, logging in); the words are the same
+              ones the Terms use in "About these Terms". */}
+          <Text
+            testID="onboarding-legal-consent"
+            style={[styles.consentText, { color: colors.textGray }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+          >
+            By continuing, you agree to our{' '}
+            <Text
+              testID="onboarding-terms-link"
+              style={[styles.consentLink, { color: colors.textDark }]}
+              onPress={() => navigation.navigate('LegalDocument', { doc: 'terms' })}
+              accessibilityRole="link"
+            >
+              Terms of Service
+            </Text>
+            {' '}and confirm that you have read our{' '}
+            <Text
+              testID="onboarding-privacy-link"
+              style={[styles.consentLink, { color: colors.textDark }]}
+              onPress={() => navigation.navigate('LegalDocument', { doc: 'privacy' })}
+              accessibilityRole="link"
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
         </View>
       </View>
     </SafeAreaView>
@@ -366,5 +395,17 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontSize: 12,
     marginTop: 2,
+  },
+  consentText: {
+    fontFamily: FontFamily.medium,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+  consentLink: {
+    fontFamily: FontFamily.semibold,
+    textDecorationLine: 'underline',
   },
 });

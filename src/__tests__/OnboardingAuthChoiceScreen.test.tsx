@@ -119,6 +119,39 @@ describe('OnboardingAuthChoiceScreen', () => {
     });
   });
 
+  it('states the terms of continuing, covering every way forward', async () => {
+    const res: any = await render(
+      <OnboardingAuthChoiceScreen
+        navigation={navigation}
+        route={{ params: { detectedLocation } }}
+      />
+    );
+
+    const consent = res.getByTestId('onboarding-legal-consent');
+    // Flattened text of the line and its two links.
+    const words = [consent.props.children].flat(Infinity)
+      .map((c: any) => (typeof c === 'string' ? c : c?.props?.children ?? ''))
+      .join('');
+    expect(words).toBe(
+      'By continuing, you agree to our Terms of Service and confirm that you have read our Privacy Policy.'
+    );
+  });
+
+  it('opens the Terms of Service and the Privacy Policy from the consent line', async () => {
+    const res: any = await render(
+      <OnboardingAuthChoiceScreen
+        navigation={navigation}
+        route={{ params: { detectedLocation } }}
+      />
+    );
+
+    fireEvent.press(res.getByTestId('onboarding-terms-link'));
+    expect(navigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'terms' });
+
+    fireEvent.press(res.getByTestId('onboarding-privacy-link'));
+    expect(navigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'privacy' });
+  });
+
   it('does not render top back arrow button on screen', async () => {
     const res: any = await render(
       <OnboardingAuthChoiceScreen

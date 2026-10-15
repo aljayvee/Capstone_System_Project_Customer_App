@@ -168,32 +168,26 @@ describe('SettingsScreen Component', () => {
     });
   });
 
-  it('renders terms and privacy policy modal triggers', async () => {
+  it('opens the full Terms of Service and Privacy Policy screens', async () => {
     const res: any = await render(
       <SettingsScreen navigation={mockNavigation} route={mockRoute} />
     );
 
-    const termsRow = res.getByTestId('row-terms');
-    fireEvent.press(termsRow);
+    // waitFor, not a bare expect: the screen's mount effects are still
+    // settling, and a test that ends inside them overlaps the next test's act().
+    fireEvent.press(res.getByTestId('row-terms'));
     await waitFor(() => {
-      expect(res.getByText('I Understand')).toBeTruthy();
+      expect(mockNavigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'terms' });
     });
 
-    fireEvent.press(res.getByText('I Understand'));
+    fireEvent.press(res.getByTestId('row-privacy'));
     await waitFor(() => {
-      expect(res.queryByText('I Understand')).toBeNull();
+      expect(mockNavigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'privacy' });
     });
 
-    const privacyRow = res.getByTestId('row-privacy');
-    fireEvent.press(privacyRow);
-    await waitFor(() => {
-      expect(res.getByText('1. Location Telemetry Protection')).toBeTruthy();
-    });
-
-    fireEvent.press(res.getByText('Close'));
-    await waitFor(() => {
-      expect(res.queryByText('1. Location Telemetry Protection')).toBeNull();
-    });
+    // The short in-place modals are gone; their text contradicted the policy.
+    expect(res.queryByText('I Understand')).toBeNull();
+    expect(res.queryByText('1. Location Telemetry Protection')).toBeNull();
   });
 
   it('opens sign out modal with inverted hierarchy and handles logout', async () => {

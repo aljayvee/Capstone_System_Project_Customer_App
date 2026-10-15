@@ -3,6 +3,7 @@ import type { PortalTab } from '../components/BottomNav';
 import type { PaymentMethodId } from '../services/paymentMethodStrategy';
 import type { PickedStore } from '../services/pabiliDraft';
 import type { Establishment } from '../services/establishments';
+import type { LegalDocumentId } from '../constants/legalDocuments';
 
 export interface UserData {
   id: string | number;
@@ -152,6 +153,9 @@ export type RootStackParamList = {
   // Home's list, shown at once while the screen reads them again.
   ActiveErrands: { user: UserData; errands?: any[] };
   Feedback: { user?: UserData } | undefined;
+  // The Terms of Service or the Privacy Policy, full screen. Registered outside
+  // the signed-in/signed-out split so onboarding and Settings both reach it.
+  LegalDocument: { doc: LegalDocumentId };
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
