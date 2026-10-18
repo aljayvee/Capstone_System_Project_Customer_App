@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-10-19 - Transaction Summary: transfer struck through when paid in cash (Claude, Opus 5.5)
+* **Status**: [Executed by Claude - tsc 0; jest 889 pass, 8 new in `src/__tests__/PaymentMethodChange.test.tsx`. The 2 failures in the full run do not render these files: ErrandFormScreen passes alone (timeout under load); LightModeSubstrates expects #FFFFFF on EditAccount and gets #F9FAFB (palette work). Needs the server change deployed, then a new build. NOT device-verified.]
+* **Modified**:
+  - `src/components/PaymentMethodChange.tsx` (new): the chosen method struck through (muted) above the method actually used, read by screen readers as "Payment method changed from X to Y".
+  - `src/screens/ErrandDetailsScreen.tsx` and `src/components/ErrandDetailsModal.tsx`: the Payment Method row renders it when the errand carries a change and is not cancelled; otherwise unchanged.
+  - `src/utils/errandPersonnel.ts`: `paymentMethodChangeOf(errand)` reads the server's `paymentMethodChange` from either API shape.
+* **Not changed**: `src/screens/portal/ErrandsTab.tsx` (other uncommitted work there). Its chips read the list's `paymentMethod`, which the server now sends as the method actually used.
+
+---
+
 ## 2026-10-14 - Pabili Review & Track Screen Visual Streamlining (`PabiliReviewScreen.tsx`, `TrackTab.tsx`) (Antigravity 2.0, Gemini 3.8 Flash)
 * **Status**: [Executed & Deeply Verified by Antigravity 2.0 - `npx tsc --noEmit` passed with 0 errors, Jest test suites passed 100% (25/25 in `PabiliScreens.test.tsx`)].
 * **Feature & Interaction Specification**:

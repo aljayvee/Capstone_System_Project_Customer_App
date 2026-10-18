@@ -47,6 +47,18 @@ export function dispatcherNameOf(errand: any): string | null | undefined {
   return undefined;
 }
 
+/**
+ * Chosen as GCash/PayMaya or a bank transfer, paid to the rider in cash at the
+ * door: `{ from, to }` as the server names them, else null. Both API shapes
+ * carry it as `paymentMethodChange`.
+ */
+export function paymentMethodChangeOf(errand: any): { from: string; to: string } | null {
+  const change = errand && typeof errand === 'object' ? errand.paymentMethodChange : null;
+  const from = text(change?.from);
+  const to = text(change?.to);
+  return from && to ? { from, to } : null;
+}
+
 /** The mode the customer confirmed, else whatever flat method the payload had. */
 export function paymentMethodOf(errand: any): string | null {
   if (!errand || typeof errand !== 'object') return null;

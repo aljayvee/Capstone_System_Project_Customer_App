@@ -28,7 +28,8 @@ import { formatPaymentMethod } from '../utils/format';
 import StatusBadge from './StatusBadge';
 import FeeBreakdownCard from './FeeBreakdownCard';
 import ErrandProofStrip from './ErrandProofStrip';
-import { paymentMethodOf, personnelLines } from '../utils/errandPersonnel';
+import { paymentMethodChangeOf, paymentMethodOf, personnelLines } from '../utils/errandPersonnel';
+import { PaymentMethodChange } from './PaymentMethodChange';
 
 export interface ErrandDetailsModalProps {
   visible: boolean;
@@ -59,6 +60,7 @@ export default function ErrandDetailsModal({
   // read: every errand showed "Dispatcher Assigning..." and "Pending Selection".
   const personnel = personnelLines(errand);
   const paymentMethod = paymentMethodOf(errand);
+  const paymentChange = paymentMethodChangeOf(errand);
   const isErrandActive = errand.status !== 'COMPLETED' && errand.status !== 'CANCELLED';
 
   const formattedDate = errand.createdAt
@@ -181,13 +183,21 @@ export default function ErrandDetailsModal({
                   <View style={styles.feeCard}>
                     <View style={styles.feeLine}>
                       <Text style={[styles.feeLabel, { color: colors.textGray }]}>Payment Method</Text>
-                      <Text style={[styles.feeValBold, { color: colors.textDark }]}>
-                        {errand.status === 'CANCELLED'
-                          ? 'Voided (Not Charged)'
-                          : (errand.status === 'PENDING' || errand.status === 'AVAILABLE' || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING')
-                          ? 'Pending Selection'
-                          : formatPaymentMethod(paymentMethod, 'full')}
-                      </Text>
+                      {paymentChange && errand.status !== 'CANCELLED' ? (
+                        <PaymentMethodChange
+                          change={paymentChange}
+                          valueStyle={[styles.feeValBold, { color: colors.textDark }]}
+                          mutedColor={colors.textGray}
+                        />
+                      ) : (
+                        <Text style={[styles.feeValBold, { color: colors.textDark }]}>
+                          {errand.status === 'CANCELLED'
+                            ? 'Voided (Not Charged)'
+                            : (errand.status === 'PENDING' || errand.status === 'AVAILABLE' || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING')
+                            ? 'Pending Selection'
+                            : formatPaymentMethod(paymentMethod, 'full')}
+                        </Text>
+                      )}
                     </View>
 
                     {errand.status === 'CANCELLED' ? (

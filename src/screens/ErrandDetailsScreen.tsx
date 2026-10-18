@@ -40,7 +40,8 @@ import StatusBadge from '../components/StatusBadge';
 import FeeBreakdownCard from '../components/FeeBreakdownCard';
 import ErrandProofStrip from '../components/ErrandProofStrip';
 import { apiClient } from '../services/apiClient';
-import { mergeErrandDetails, paymentMethodOf, personnelLines } from '../utils/errandPersonnel';
+import { mergeErrandDetails, paymentMethodChangeOf, paymentMethodOf, personnelLines } from '../utils/errandPersonnel';
+import { PaymentMethodChange } from '../components/PaymentMethodChange';
 import type { RootStackScreenProps } from '../navigation/types';
 
 export default function ErrandDetailsScreen({
@@ -108,6 +109,7 @@ export default function ErrandDetailsScreen({
   const estimatedCost = Number(errand?.estimatedCost ?? 0).toFixed(2);
   const personnel = personnelLines(errand, checking);
   const paymentMethod = paymentMethodOf(errand);
+  const paymentChange = paymentMethodChangeOf(errand);
   const ACTIVE_STATUSES = ['AVAILABLE', 'PENDING', 'ASSIGNED', 'IN_TRANSIT'];
   const isErrandActive = Boolean(errand?.status && ACTIVE_STATUSES.includes(String(errand.status).toUpperCase()));
   const isCancelled = errand?.status === 'CANCELLED';
@@ -376,16 +378,26 @@ export default function ErrandDetailsScreen({
               >
                 Payment Method
               </Text>
-              <Text
-                style={[styles.feeValBold, { color: colors.textDark }]}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-              >
-                {isCancelled
-                  ? 'Voided (Not Charged)'
-                  : isPendingOrAvailable || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING'
-                  ? 'Pending Selection'
-                  : formatPaymentMethod(paymentMethod, 'full')}
-              </Text>
+              {/* Chose GCash/PayMaya or a transfer, paid the rider cash instead. */}
+              {paymentChange && !isCancelled ? (
+                <PaymentMethodChange
+                  change={paymentChange}
+                  valueStyle={[styles.feeValBold, { color: colors.textDark }]}
+                  mutedColor={colors.textGray}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                />
+              ) : (
+                <Text
+                  style={[styles.feeValBold, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                >
+                  {isCancelled
+                    ? 'Voided (Not Charged)'
+                    : isPendingOrAvailable || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING'
+                    ? 'Pending Selection'
+                    : formatPaymentMethod(paymentMethod, 'full')}
+                </Text>
+              )}
             </View>
 
             {isCancelled ? (
