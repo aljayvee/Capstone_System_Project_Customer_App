@@ -29,6 +29,7 @@ import {
 import StatusBadge from '../../components/StatusBadge';
 import LiveTrackingMap from '../../components/LiveTrackingMap';
 import RiderToStorePanel from '../../components/RiderToStorePanel';
+import DeliveryHoldNote from '../../components/DeliveryHoldNote';
 import { useOsmTilesAvailable } from '../../config/mapTiles';
 import { chosenMapFor, engineForMap, useMapChoice } from '../../config/mapChoice';
 import ErrandProgressStepper from '../../components/ErrandProgressStepper';
@@ -366,6 +367,8 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
 
           {/* Errand Live Stepper & Active Stage Spotlight */}
           <ErrandProgressStepper currentIndex={stage.index} subLabel={stage.subLabel} />
+          {/* Bought, and waiting for this customer's other order: one trip for both. */}
+          <DeliveryHoldNote errand={selectedErrand} />
 
           {/* Structured Details Card (Chunked Information for low cognitive load) */}
           <View

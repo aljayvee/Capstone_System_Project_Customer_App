@@ -12,6 +12,11 @@
 
 ---
 
+## 2026-10-20 - Track tab: an order held for the customer's other one (Claude, Opus 5.5)
+* **Status**: [Executed by Claude - tsc 0; jest 80 suites / 897 pass, 4 new in `src/__tests__/DeliveryHoldNote.test.tsx`. Needs the server's `deliveryHold` field deployed, then a new build. NOT device-verified; uncommitted.]
+* **Modified**: `src/components/DeliveryHoldNote.tsx` (new; `deliveryHoldOf(errand)` reads the server's `deliveryHold`; the note says the rider has this order and is shopping the other one first, both arriving in one trip); `src/screens/portal/TrackTab.tsx` (one import, one line under `ErrandProgressStepper`).
+* **Data**: `deliveryHold` arrives on `/customers/:id/transactions` rows and on the `order:updated` events the server re-sends when a hold begins or ends; the portal's `{ ...e, ...updated }` merge keeps it when an update omits it. New push/notification type `DELIVERY_HELD` needs no client mapping.
+
 ## 2026-10-19 - Transaction Summary: transfer struck through when paid in cash (Claude, Opus 5.5)
 * **Status**: [Executed by Claude - tsc 0; jest 889 pass, 8 new in `src/__tests__/PaymentMethodChange.test.tsx`. The 2 failures in the full run do not render these files: ErrandFormScreen passes alone (timeout under load); LightModeSubstrates expects #FFFFFF on EditAccount and gets #F9FAFB (palette work). Needs the server change deployed, then a new build. NOT device-verified.]
 * **Modified**:
