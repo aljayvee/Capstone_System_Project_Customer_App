@@ -130,7 +130,14 @@ export default function LoginScreen({ navigation }: any) {
     ]).start();
   };
 
+  // One sign-in at a time, whichever button started it. Both `loading` flags
+  // are state, so a second press in the same tick (or the keyboard's Go key,
+  // which no `disabled` prop covers) still saw them false and started a second
+  // account's sign-in alongside the first (2026-10-28).
+  const signingInRef = useRef(false);
+
   const handleLogin = async () => {
+    if (signingInRef.current) return;
     let hasError = false;
     setIdentifierError(null);
     setPasswordError(null);
@@ -154,6 +161,7 @@ export default function LoginScreen({ navigation }: any) {
     if (hasError) return;
 
     Keyboard.dismiss();
+    signingInRef.current = true;
     setLoading(true);
     try {
       const response = await apiClient.post('/customers/login', {
@@ -180,6 +188,7 @@ export default function LoginScreen({ navigation }: any) {
       triggerShake(shakeIdentifier);
       triggerShake(shakePassword);
     } finally {
+      signingInRef.current = false;
       setLoading(false);
     }
   };
@@ -188,6 +197,8 @@ export default function LoginScreen({ navigation }: any) {
   const [googleLoadingText, setGoogleLoadingText] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
+    if (signingInRef.current) return;
+    signingInRef.current = true;
     Keyboard.dismiss();
     setGoogleLoading(true);
     setGoogleLoadingText(null);
@@ -227,6 +238,7 @@ export default function LoginScreen({ navigation }: any) {
         setApiError(toUserMessage(error, 'login'));
       }
     } finally {
+      signingInRef.current = false;
       setGoogleLoading(false);
       setGoogleLoadingText(null);
     }
@@ -457,9 +469,9 @@ export default function LoginScreen({ navigation }: any) {
             {/* SUBMIT */}
             <TouchableOpacity
               testID="login-button"
-              style={[styles.button, { backgroundColor: colors.primary }, Shadows.soft, loading && { opacity: 0.7 }]}
+              style={[styles.button, { backgroundColor: colors.primary }, Shadows.soft, (loading || googleLoading) && { opacity: 0.7 }]}
               onPress={handleLogin}
-              disabled={loading}
+              disabled={loading || googleLoading}
               activeOpacity={0.85}
             >
               {loading ? (
@@ -489,7 +501,7 @@ export default function LoginScreen({ navigation }: any) {
               onPress={handleGoogleLogin}
               loading={googleLoading}
               loadingText={googleLoadingText}
-              disabled={loading}
+              disabled={loading || googleLoading}
               testID="login-google-button"
             />
 

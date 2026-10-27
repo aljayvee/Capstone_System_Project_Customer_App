@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
+import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { resetSocket } from '../services/socketClient';
 import { apiClient } from '../services/apiClient';
 import { endRealtimeSession, settleRealtimeSession } from '../firebase/realtimeSession';
 import { clearCache } from '../services/swrCache';
+import { ANOTHER_ACCOUNT_SIGNED_IN } from '../services/errorMessages';
 import {
   setCustomerToken,
   setCustomerRefreshToken,
@@ -43,6 +45,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+
 const USER_STORAGE_KEY = '@sugo_customer_user';
 const ONBOARDING_COMPLETED_KEY = '@sugo_customer_onboarding_completed';
 
@@ -50,6 +53,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // The account this device is signed in as, or is part-way through signing in
+  // as. A ref, not state: two sign-ins started in the same tick both read the
+  // same stale state, and login() awaits between its writes, so two overlapping
+  // calls used to interleave into one user shown, the other's token in use, and
+  // a third mix stored for the next launch (2026-10-28).
+  const sessionOwnerRef = useRef<string | null>(null);
 
   // Restore persistent session on app launch
   useEffect(() => {
@@ -60,6 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           try {
             const parsedUser = JSON.parse(storedUser) as User;
             if (parsedUser && typeof parsedUser === 'object' && parsedUser.id) {
+              if (sessionOwnerRef.current === null) sessionOwnerRef.current = String(parsedUser.id);
               setUser(parsedUser);
               void AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(() => {});
             }
@@ -100,6 +110,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = useCallback(async (userData: User, token?: string, refreshToken?: string) => {
+    // One account per device. The same account signing in again (the session-
+    // expired sheet, verify-email) replaces its own session; a different one is
+    // refused until the first signs out.
+    const incoming = String(userData?.id ?? '');
+    const owner = sessionOwnerRef.current;
+    if (!incoming || (owner !== null && owner !== incoming)) {
+      // The server already opened a session for the refused account. Close it,
+      // with that account's own tokens: apiClient would attach the signed-in
+      // account's access token, and /auth/logout blocklists whatever it is handed.
+      if (token) {
+        axios
+          .post('/auth/logout', refreshToken ? { refreshToken } : {}, {
+            baseURL: apiClient.defaults.baseURL,
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000,
+          })
+          .catch(() => {});
+      }
+      throw Object.assign(new Error(ANOTHER_ACCOUNT_SIGNED_IN), { code: ANOTHER_ACCOUNT_SIGNED_IN });
+    }
+    sessionOwnerRef.current = incoming;
+
     if (token) {
       setAccessToken(token);
       setCustomerToken(token);
@@ -165,6 +197,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // next account on this phone never opens on this one's.
     await clearCache();
 
+    sessionOwnerRef.current = null;
     setUser(null);
     setAccessToken(null);
     setCustomerToken(null);
@@ -195,6 +228,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // behind, it kept reading the expired account's chats.
       void endRealtimeSession();
       void clearCache();
+      sessionOwnerRef.current = null;
       setUser(null);
       setAccessToken(null);
       resetSocket();

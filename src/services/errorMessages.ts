@@ -28,6 +28,14 @@ export const TIMEOUT_MESSAGE = 'That took longer than usual. Tap to try again.';
 export const GENERIC_MESSAGE = 'Something went wrong. Tap to try again.';
 export const SERVER_MESSAGE = 'Sugo is having trouble right now. Try again in a moment.';
 export const SESSION_ENDED_MESSAGE = "You've been signed out. Sign in again to continue.";
+export const ANOTHER_ACCOUNT_MESSAGE = 'This phone is already signed in to another account. Log out of it first.';
+
+/** Set on the error AuthContext.login throws when this device already holds a different account. */
+export const ANOTHER_ACCOUNT_SIGNED_IN = 'ANOTHER_ACCOUNT_SIGNED_IN';
+
+export function isAnotherAccountSignedIn(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === ANOTHER_ACCOUNT_SIGNED_IN;
+}
 
 function formatWait(seconds: number): string {
   if (seconds <= 90) {
@@ -93,6 +101,8 @@ function unauthorizedMessage(context: ErrorContext): string {
  * to say used to land straight in the login banner. Status codes we do control.
  */
 export function toUserMessage(error: unknown, context: ErrorContext = 'generic'): string {
+  if (isAnotherAccountSignedIn(error)) return ANOTHER_ACCOUNT_MESSAGE;
+
   const apiError = toApiError(error);
 
   if (apiError.isOffline) return OFFLINE_MESSAGE;
