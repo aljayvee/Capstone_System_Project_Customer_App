@@ -11,9 +11,18 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bike } from 'lucide-react-native';
+import { Image as BrandImage } from 'expo-image';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { FontFamily, FontSizes, Spacing, BorderRadius, scaledFontSize, moderateScale } from '../config/theme';
+
+// Same artwork as the launcher icon (export_flat_logo.mjs) and the Blender splash render (artwork/kuya-sugo/splash).
+const APP_LOGO = require('../../assets/mascot/app-icon.png');
+// The splash courier alone on transparency (render_splash_courier.py), cropped to the blush disc's square: the disc
+// spans the full width and starts 7.24% down, so the circle drawn behind him lines up at any size.
+const SPLASH_COURIER = require('../../assets/mascot/kuya-sugo-splash-courier.webp');
+const COURIER_ASPECT = 1050 / 960;
+const DISC_TOP = 0.0724;
+const BADGE_SIZE = moderateScale(108);
 
 interface AnimatedSplashScreenProps {
   /** Triggered once the exit transition finishes to unmount the splash layer */
@@ -50,7 +59,9 @@ export default function AnimatedSplashScreen({
   const pulseWave = useRef(new Animated.Value(0)).current;
   const textFade = useRef(new Animated.Value(0)).current;
   const textTranslateY = useRef(new Animated.Value(14)).current;
-  
+  const courierFade = useRef(new Animated.Value(0)).current;
+  const courierTranslateY = useRef(new Animated.Value(18)).current;
+
   // Exit transition values
   const exitScale = useRef(new Animated.Value(1)).current;
   const exitOpacity = useRef(new Animated.Value(1)).current;
@@ -87,6 +98,24 @@ export default function AnimatedSplashScreen({
           Animated.timing(textTranslateY, {
             toValue: 0,
             duration: 380,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+      // The courier settles in last, after the wordmark
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.parallel([
+          Animated.timing(courierFade, {
+            toValue: 1,
+            duration: 420,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(courierTranslateY, {
+            toValue: 0,
+            duration: 420,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
@@ -177,6 +206,12 @@ export default function AnimatedSplashScreen({
     outputRange: [0.65, 0.35, 0],
   });
 
+  // The courier takes what height is left under the badge and wordmark (about 380dp with the footer), up to 86% width.
+  const courierWidth = Math.max(
+    180,
+    Math.min(screenWidth * 0.86, ((screenHeight - insets.top - insets.bottom - 380) / COURIER_ASPECT))
+  );
+
   return (
     <Animated.View
       style={[
@@ -227,7 +262,12 @@ export default function AnimatedSplashScreen({
             },
           ]}
         >
-          <Bike size={46} color="#FFFFFF" strokeWidth={2.4} />
+          <BrandImage
+            source={APP_LOGO}
+            style={styles.emblemImage}
+            contentFit="cover"
+            accessibilityIgnoresInvertColors
+          />
         </Animated.View>
 
         {/* Brand Wordmark & Humanized Tagline */}
@@ -246,6 +286,33 @@ export default function AnimatedSplashScreen({
           <Text style={[styles.brandTagline, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
             Fast & Reliable Local Errands
           </Text>
+        </Animated.View>
+
+        {/* Kuya Sugo with his thumbs-up, standing on the blush disc from the splash render */}
+        <Animated.View
+          style={[
+            styles.courierStage,
+            {
+              width: courierWidth,
+              height: courierWidth * COURIER_ASPECT,
+              opacity: courierFade,
+              transform: [{ translateY: courierTranslateY }],
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.courierDisc,
+              {
+                top: courierWidth * COURIER_ASPECT * DISC_TOP,
+                width: courierWidth,
+                height: courierWidth,
+                borderRadius: courierWidth / 2,
+                backgroundColor: isDark ? 'rgba(246, 36, 89, 0.14)' : '#FDE8EE',
+              },
+            ]}
+          />
+          <BrandImage source={SPLASH_COURIER} style={StyleSheet.absoluteFill} contentFit="contain" />
         </Animated.View>
       </View>
 
@@ -280,14 +347,15 @@ const styles = StyleSheet.create({
   },
   pulseHalo: {
     position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    top: (BADGE_SIZE - BADGE_SIZE * 1.35) / 2,
+    width: BADGE_SIZE * 1.35,
+    height: BADGE_SIZE * 1.35,
+    borderRadius: (BADGE_SIZE * 1.35) / 2,
     borderWidth: 2,
   },
   emblemBadge: {
-    width: 96,
-    height: 96,
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
@@ -296,6 +364,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 18,
     elevation: 8,
+  },
+  emblemImage: {
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: 28,
+  },
+  courierStage: {
+    marginTop: Spacing.lg,
+  },
+  courierDisc: {
+    position: 'absolute',
+    left: 0,
   },
   textContainer: {
     alignItems: 'center',
