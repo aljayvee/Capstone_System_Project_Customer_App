@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Image,
@@ -33,6 +34,7 @@ import { useThemeColor } from '../hooks/useThemeColor';
 import { MapCoordinate, DEFAULT_CENTER, sanitizeCoordinate } from '../utils/coords';
 import { openErrandDestination } from '../utils/errandNavigation';
 import { useRegisterPushToken, type PushTapPayload } from '../hooks/useRegisterPushToken';
+import { routeForNotification } from '../utils/notificationRoute';
 import Animated, {
   FadeIn,
   Easing,
@@ -55,6 +57,7 @@ import ChatTab from './portal/ChatTab';
 import { StoreSearchView } from './StoreSearchScreen';
 
 export default function CustomerPortalScreen({ route, navigation }: any) {
+  const pageLayout = usePageLayout();
   const { user: authUser, logout } = useAuth();
   const { syncActiveErrands } = useNotifications();
   const insets = useSafeAreaInsets();
@@ -381,6 +384,7 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
   useEffect(() => {
     if (route.params?.initialTab) {
       setActiveTab(route.params.initialTab);
+      navigation.setParams?.({ initialTab: undefined });
     } else if (route.params?.focusedErrandId) {
       setActiveTab('track');
     }
@@ -501,6 +505,13 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
     if (Platform.OS !== 'android') return;
 
     const onBackPress = () => {
+      // Only while the portal is the screen in front (2026-11-06). This
+      // listener stays registered under every screen pushed on top, and the
+      // newest listener is asked first; it becomes the newest whenever its
+      // deps change (a tab switch). Unchecked, Back on a chat opened from a
+      // push only switched the hidden portal's tab and left the chat open.
+      // Returning false lets the navigator pop the screen in front.
+      if (navigation.isFocused && !navigation.isFocused()) return false;
       if (acceptedErrand) {
         dismissAcceptedDialog();
         return true;
@@ -525,7 +536,7 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
 
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [acceptedErrand, isHelpModalOpen, activeTab, dismissAcceptedDialog]);
+  }, [acceptedErrand, isHelpModalOpen, activeTab, dismissAcceptedDialog, navigation]);
 
   /**
    * Push registration, plus what a tapped notification does.
@@ -537,20 +548,18 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
    */
   const handlePushTapped = useCallback(
     (payload: PushTapPayload) => {
-      const type = String(payload?.type || '').toUpperCase();
-      if (type === 'RIDER_NEARBY' || type.includes('NEARBY') || type.includes('PROXIMITY')) {
+      // The same routing as a tap in the notification list (notificationRoute.ts).
+      const route = routeForNotification({
+        type: String(payload?.type || ''),
+        errandId: payload?.errandId ? String(payload.errandId) : undefined,
+      });
+      if (route.kind === 'track') {
         setActiveTab('track');
-        if (payload?.errandId) {
-          navigation.setParams({ focusedErrandId: String(payload.errandId) });
-        }
-        return;
-      }
-
-      if (payload?.errandId) {
-        navigation.navigate('CustomerChat', {
-          user,
-          errandId: String(payload.errandId),
-        });
+        navigation.setParams({ focusedErrandId: route.errandId });
+      } else if (route.kind === 'chat') {
+        navigation.navigate('CustomerChat', { user, errandId: route.errandId });
+      } else if (route.kind === 'details') {
+        navigation.navigate('ErrandDetails', { user, errandId: route.errandId });
       }
     },
     [navigation, user]
@@ -775,8 +784,7 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
             style={[
               styles.animatedHeaderRow,
               { backgroundColor: colors.bgApp, height: TOP_BAR_ROW_HEIGHT },
-              animatedHeaderStyle,
-            ]}
+              animatedHeaderStyle, pageLayout.insetStyle]}
             pointerEvents={headerVisible ? 'auto' : 'none'}
             testID="home-collapsible-header"
           >
@@ -818,11 +826,11 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
                   ) : (
                     <View style={[styles.headerProfileAvatar, { backgroundColor: colors.primary }]}>
                       {userInitials ? (
-                        <Text style={styles.headerProfileInitials} maxFontSizeMultiplier={1}>
+                        <Text style={[styles.headerProfileInitials, { color: colors.onPrimary }]} maxFontSizeMultiplier={1}>
                           {userInitials}
                         </Text>
                       ) : (
-                        <UserIcon size={18} color="#FFFFFF" strokeWidth={2.2} />
+                        <UserIcon size={18} color={colors.onPrimary} strokeWidth={2.2} />
                       )}
                     </View>
                   )}
@@ -875,6 +883,11 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
               activeErrands={trackableErrands}
               focusedErrandId={route.params?.focusedErrandId}
               onScroll={handleTabScroll}
+              // The rating prompt reads delivered errands, which
+              // trackableErrands leaves out, and waits behind any other
+              // screen or dialog (useDeliveryRatingPrompt.ts).
+              allErrands={dbErrands}
+              canPromptRating={isScreenFocused && !acceptedErrand && !isHelpModalOpen}
             />
           )}
           {activeTab === 'chat' && (
@@ -955,9 +968,9 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
               onPress={openAcceptedChat}
               testID="errand-accepted-open-chat"
             >
-              <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.4} />
+              <MessageCircle size={16} color={colors.onPrimary} strokeWidth={2.4} />
               <Text
-                style={styles.acceptedPrimaryText}
+                style={[styles.acceptedPrimaryText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
               >
                 Chat with dispatcher

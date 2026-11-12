@@ -4,6 +4,12 @@ import OnboardingAuthChoiceScreen from '../screens/onboarding/OnboardingAuthChoi
 import { signInWithGoogleNative } from '../services/googleAuth';
 import { apiClient } from '../services/apiClient';
 
+jest.mock('expo-image', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { Image: (props: object) => React.createElement(View, props) };
+});
+
 jest.mock('../services/googleAuth', () => ({
   signInWithGoogleNative: jest.fn(),
 }));
@@ -18,6 +24,14 @@ jest.mock('../context/AuthContext', () => ({
   useAuth: () => ({
     login: jest.fn(() => Promise.resolve()),
   }),
+}));
+
+// The MFA trust token lives in the keystore; none unless a test puts one there.
+const mockSecureGet = jest.fn((_key: string) => Promise.resolve<string | null>(null));
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: (key: string) => mockSecureGet(key),
+  setItemAsync: jest.fn(() => Promise.resolve()),
+  deleteItemAsync: jest.fn(() => Promise.resolve()),
 }));
 
 describe('OnboardingAuthChoiceScreen', () => {
@@ -35,6 +49,56 @@ describe('OnboardingAuthChoiceScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSecureGet.mockResolvedValue(null);
+  });
+
+  it('opens the challenge screen for an existing account on an untrusted device', async () => {
+    mockSecureGet.mockResolvedValue('trust-1');
+    (signInWithGoogleNative as jest.Mock).mockResolvedValueOnce({
+      firebaseIdToken: 'fake-google-token',
+      email: 'test@gmail.com',
+    });
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: {
+        status: 'MFA_REQUIRED',
+        reason: 'TRUST_EXPIRED',
+        factors: ['EMAIL'],
+        challengeToken: 'c1',
+        maskedEmail: 'te****@gmail.com',
+        maskedPhone: null,
+        phoneHint: null,
+        role: 'Customer',
+        expiresInSeconds: 600,
+      },
+    });
+
+    const res: any = await render(
+      <OnboardingAuthChoiceScreen
+        navigation={navigation}
+        route={{ params: { detectedLocation } }}
+      />
+    );
+
+    await fireEvent.press(res.getByTestId('onboarding-google-signup-btn'));
+
+    await waitFor(() =>
+      expect(navigation.navigate).toHaveBeenCalledWith('MfaChallenge', {
+        challenge: {
+          challengeToken: 'c1',
+          factors: ['EMAIL'],
+          maskedEmail: 'te****@gmail.com',
+          maskedPhone: null,
+          phoneHint: null,
+          expiresInSeconds: 600,
+        },
+        onboarding: { detectedLocation },
+      })
+    );
+    expect(apiClient.post).toHaveBeenCalledWith('/customers/google-login', {
+      idToken: 'fake-google-token',
+      mfaTrustToken: 'trust-1',
+    });
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
   it('renders all required authentication options', async () => {
@@ -46,6 +110,7 @@ describe('OnboardingAuthChoiceScreen', () => {
     );
 
     expect(res.getByText('Welcome to Sugo Express')).toBeTruthy();
+    expect(res.getByTestId('kuya-sugo-mascot')).toBeTruthy();
     expect(res.getByTestId('onboarding-google-signup-btn')).toBeTruthy();
     expect(res.getByTestId('onboarding-create-account-btn')).toBeTruthy();
     expect(res.getByTestId('onboarding-login-btn')).toBeTruthy();
@@ -61,7 +126,7 @@ describe('OnboardingAuthChoiceScreen', () => {
       />
     );
 
-    fireEvent.press(res.getByTestId('onboarding-create-account-btn'));
+    await fireEvent.press(res.getByTestId('onboarding-create-account-btn'));
     expect(navigation.navigate).toHaveBeenCalledWith('Register', { detectedLocation });
   });
 
@@ -73,7 +138,7 @@ describe('OnboardingAuthChoiceScreen', () => {
       />
     );
 
-    fireEvent.press(res.getByTestId('onboarding-login-btn'));
+    await fireEvent.press(res.getByTestId('onboarding-login-btn'));
     expect(navigation.navigate).toHaveBeenCalledWith('Login');
   });
 
@@ -104,7 +169,7 @@ describe('OnboardingAuthChoiceScreen', () => {
       />
     );
 
-    fireEvent.press(res.getByTestId('onboarding-google-signup-btn'));
+    await fireEvent.press(res.getByTestId('onboarding-google-signup-btn'));
 
     await waitFor(() => {
       expect(signInWithGoogleNative).toHaveBeenCalled();
@@ -145,10 +210,10 @@ describe('OnboardingAuthChoiceScreen', () => {
       />
     );
 
-    fireEvent.press(res.getByTestId('onboarding-terms-link'));
+    await fireEvent.press(res.getByTestId('onboarding-terms-link'));
     expect(navigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'terms' });
 
-    fireEvent.press(res.getByTestId('onboarding-privacy-link'));
+    await fireEvent.press(res.getByTestId('onboarding-privacy-link'));
     expect(navigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'privacy' });
   });
 

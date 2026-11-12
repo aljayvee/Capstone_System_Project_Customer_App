@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Check, FileCheck, Store, ShoppingBag, Bike, CheckCircle2 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, FontFamily, FontSizes, Spacing, Shadows, scaledFontSize, moderateScale } from '../config/theme';
+import { BorderRadius, FontFamily, Spacing, PortalFontSizes, scaledPortalFontSize } from '../config/theme';
 import { ERRAND_PROGRESS_LABELS } from '../utils/errandProgress';
 
 export interface ErrandProgressStepperProps {
@@ -22,29 +22,21 @@ export default function ErrandProgressStepper({ currentIndex, subLabel }: Errand
   return (
     <View style={styles.container}>
       {/* Active Stage Spotlight Banner */}
-      <View
-        style={[
-          styles.spotlightCard,
-          {
-            backgroundColor: isDark ? 'rgba(255, 77, 121, 0.12)' : '#FFF0F5',
-            borderColor: isDark ? 'rgba(255, 77, 121, 0.25)' : '#FCE7F0',
-          },
-        ]}
-      >
-        <View style={[styles.spotlightIconWrapper, { backgroundColor: colors.primary }]}>
-          <ActiveIcon size={18} color="#FFFFFF" strokeWidth={2.4} />
+      <View style={styles.spotlightCard}>
+        <View style={[styles.spotlightIconWrapper, { backgroundColor: colors.bgGray }]}>
+          <ActiveIcon size={19} color={colors.textGray} strokeWidth={1.8} />
         </View>
         <View style={styles.spotlightTextCol}>
           <Text style={[styles.spotlightTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
             {activeLabel}
           </Text>
           {subLabel ? (
-            <Text style={[styles.spotlightSub, { color: colors.primary }]} maxFontSizeMultiplier={1.15}>
+            <Text style={[styles.spotlightSub, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
               {subLabel}
             </Text>
           ) : (
             <Text style={[styles.spotlightSub, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
-              {currentIndex === 4 ? 'Mission completed successfully' : 'Live progress updating...'}
+              {currentIndex === 4 ? 'Your errand has been delivered.' : `Step ${currentIndex + 1} of ${ERRAND_PROGRESS_LABELS.length}`}
             </Text>
           )}
         </View>
@@ -60,43 +52,39 @@ export default function ErrandProgressStepper({ currentIndex, subLabel }: Errand
           const circleBg = isDone
             ? colors.success
             : isCurrent
-            ? colors.primary
-            : isDark
-            ? 'rgba(255,255,255,0.06)'
-            : '#F3F4F6';
+            ? (isDark ? colors.primary : colors.primaryStrong)
+            : colors.bgGray;
 
-          const iconColor = isDone || isCurrent ? '#FFFFFF' : colors.textLight;
+          const iconColor = isDone ? colors.onSuccess : isCurrent ? colors.onPrimary : colors.textGray;
 
           return (
             <React.Fragment key={index}>
-              <View style={styles.stepNode}>
+              <View
+                style={styles.stepNode}
+                accessible
+                accessibilityLabel={`Step ${index + 1} of ${ERRAND_PROGRESS_LABELS.length}, ${ERRAND_PROGRESS_LABELS[index]}, ${isDone ? 'completed' : isCurrent ? 'current step' : 'upcoming'}`}
+              >
                 <View
                   style={[
                     styles.iconCircle,
                     { backgroundColor: circleBg },
-                    isCurrent && styles.currentGlow,
-                    isCurrent && { borderColor: isDark ? '#FFFFFF' : colors.primaryLight },
                   ]}
                 >
                   {isDone ? (
-                    <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                    <Check size={14} color={iconColor} strokeWidth={3} />
                   ) : (
-                    <StepIcon size={12} color={iconColor} strokeWidth={2.4} />
+                    <StepIcon size={14} color={iconColor} strokeWidth={2.2} />
                   )}
                 </View>
                 <Text
-                  numberOfLines={1}
+                  numberOfLines={2}
                   adjustsFontSizeToFit={true}
                   minimumFontScale={0.85}
                   maxFontSizeMultiplier={1.1}
                   style={[
                     styles.nodeLabel,
                     {
-                      color: isCurrent
-                        ? colors.primary
-                        : isDone
-                        ? colors.textDark
-                        : colors.textLight,
+                      color: isCurrent || isDone ? colors.textDark : colors.textGray,
                       fontFamily: isCurrent ? FontFamily.bold : FontFamily.medium,
                     },
                   ]}
@@ -114,9 +102,7 @@ export default function ErrandProgressStepper({ currentIndex, subLabel }: Errand
                         backgroundColor:
                           index < currentIndex
                             ? colors.success
-                            : isDark
-                            ? 'rgba(255,255,255,0.1)'
-                            : '#E5E7EB',
+                            : colors.border,
                       },
                     ]}
                   />
@@ -138,38 +124,34 @@ const styles = StyleSheet.create({
   spotlightCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
     gap: Spacing.md,
   },
   spotlightIconWrapper: {
     width: 36,
     height: 36,
-    borderRadius: BorderRadius.full,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.soft,
   },
   spotlightTextCol: {
     flex: 1,
   },
   spotlightTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
-    letterSpacing: -0.2,
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: 21,
   },
   spotlightSub: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(10, 0.2),
-    marginTop: 2,
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: 19,
+    marginTop: 4,
   },
   trackContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xs,
   },
   stepNode: {
     alignItems: 'center',
@@ -185,12 +167,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  currentGlow: {
-    borderWidth: 2,
-    transform: [{ scale: 1.12 }],
-  },
   nodeLabel: {
-    fontSize: scaledFontSize(9, 0.2),
+    minHeight: 32,
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: 16,
     textAlign: 'center',
   },
   connectorWrapper: {
@@ -199,7 +180,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 2,
-    marginBottom: 12,
   },
   connectorLine: {
     height: 2.5,

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,11 +9,12 @@ import ChatSearchFilterBar from '../components/ChatSearchFilterBar';
 import Pagination from '../components/Pagination';
 import { useActiveErrands } from '../hooks/useActiveErrands';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontSizes, Spacing, BorderRadius, FontFamily, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, Spacing, BorderRadius, FontFamily, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 
 const PAGE_SIZE = 5;
 
 export default function ActiveChatsScreen({ route, navigation }: RootStackScreenProps<'ActiveChats'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user } = route.params || ({} as any);
   const { errands, loading } = useActiveErrands(user?.id);
   const { colors, isDark } = useThemeColor();
@@ -48,9 +50,9 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.responsiveWrapper}>
+      <View style={[styles.responsiveWrapper, pageLayout.frameStyle]}>
         {/* iOS-STYLE TOP NAV HEADER */}
-        <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }]}>
+        <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -65,7 +67,7 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
 
         <ScrollView
           style={[styles.container, { backgroundColor: colors.bgApp }]}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, pageLayout.gutterStyle]}
           showsVerticalScrollIndicator={false}
           // The search field scrolls with the list, so a drag that reveals the
           // rows hidden under the keyboard also puts the keyboard away, and a
@@ -134,8 +136,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md + 2, 0.35),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     textAlign: 'center',
   },
   navHeaderRightPlaceholder: {
@@ -146,8 +149,9 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl * 2,
   },
   subtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.sm, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginBottom: Spacing.md,
   },
 });

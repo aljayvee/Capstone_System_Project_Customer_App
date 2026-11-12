@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { FontSizes, FontFamily } from '../config/theme';
+import { PortalFontSizeMultipliers, AuthFontSizes, scaledAuthFontSize, getAuthLineHeight, FontFamily } from '../config/theme';
 
 interface InlineFieldErrorProps {
   error?: string | null;
@@ -17,7 +17,7 @@ export const InlineFieldError: React.FC<InlineFieldErrorProps> = ({ error, style
   return (
     <View style={[styles.container, style]}>
       <AlertCircle size={13} color={colors.danger} style={styles.icon} />
-      <Text style={[styles.text, { color: colors.danger }]}>{error}</Text>
+      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.text, { color: colors.danger }]}>{error}</Text>
     </View>
   );
 };
@@ -33,10 +33,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   text: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
     fontFamily: FontFamily.medium,
     flex: 1,
-    lineHeight: 16,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
   },
 });
 

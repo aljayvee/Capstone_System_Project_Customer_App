@@ -1,6 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type NativeEventSubscription } from 'react-native';
 import { parseItemEntry, splitPastedLines, type ParseReason } from '../utils/itemEntryParser';
+import type { DeliveryLocation } from '../hooks/useDefaultDeliveryLocation';
+import { isSameStore } from './establishments';
+import { getStoresAllowed, storeLimitMessage } from './storeLimit';
+
+export interface PabiliSubmission {
+  id: string;
+  payload: Record<string, unknown>;
+  location: DeliveryLocation;
+  confirmedErrandId?: string;
+  postStarted?: boolean;
+}
 
 /**
  * The pabili shopping list while it is being written.
@@ -92,6 +103,8 @@ export interface PabiliDraft {
   updatedAt: number;
   /** Set as Send starts; a draft found with it set may already be an errand. */
   submitStartedAt?: number | null;
+  /** Frozen before the first network request; never expires while unresolved. */
+  submission?: PabiliSubmission;
 }
 
 export interface TidyResult {
@@ -183,6 +196,43 @@ export function withStores(draft: PabiliDraft, picked: PickedStore[]): PabiliDra
     mode: 'location',
     stores: Object.fromEntries(picked.map((s) => [s.key, s])),
   };
+}
+
+/** Browsing adds to the saved list; explicit list actions remove its stores. */
+export function mergeStoreSelection(
+  draft: PabiliDraft,
+  categories: string[],
+  picked?: PickedStore[],
+  maxStores: number = getStoresAllowed()
+): { draft: PabiliDraft; notice?: string } {
+  if (draft.submission) return { draft };
+  const overLimit = `Your list already has stores. ${storeLimitMessage(maxStores)} Choose fewer additional stores.`;
+  const hasStores = draft.categories.length > 0;
+  if (hasStores && Boolean(draft.mode === 'location') !== Boolean(picked)) {
+    return {
+      draft,
+      notice: 'Your shopping list is saved. Finish or clear it before switching between store types and specific stores.',
+    };
+  }
+  let next = draft;
+  if (picked) {
+    const stores = draft.categories.map((key) => draft.stores?.[key]).filter((s): s is PickedStore => Boolean(s));
+    for (const store of picked) {
+      if (stores.some((s) => (s.placeId && s.placeId === store.placeId) || isSameStore(s, store))) continue;
+      const keys = storeKeysFor([...stores.map((s) => s.key), store.name]);
+      stores.push({ ...store, key: keys[keys.length - 1] });
+    }
+    if (stores.length <= maxStores) next = withStores(draft, stores);
+    else return { draft, notice: overLimit };
+  } else {
+    const keys = [...draft.categories];
+    for (const category of categories) {
+      if (!keys.some((key) => sameName(key, category))) keys.push(category);
+    }
+    if (keys.length <= maxStores) next = withCategories(draft, keys);
+    else return { draft, notice: overLimit };
+  }
+  return { draft: next };
 }
 
 /**
@@ -376,7 +426,7 @@ export function allRows(draft: PabiliDraft): LocatedRow[] {
  */
 export function rowsAwaitingTidy(draft: PabiliDraft): LocatedRow[] {
   return allRows(draft)
-    .filter(({ row }) => row.review && (!row.review.tidy || row.review.tidy === 'unread'))
+    .filter(({ row }) => row.name.length <= 500 && row.review && (!row.review.tidy || row.review.tidy === 'unread'))
     .slice(0, MAX_TIDY_LINES);
 }
 
@@ -395,19 +445,27 @@ function mapRow(draft: PabiliDraft, id: string, fn: (rows: DraftRow[], row: Draf
 
 /**
  * The model's readings of the rows that were asked about, applied as they
- * come: "chicken 2, rice 5kg" becomes two rows. Nothing asks the customer;
- * the server already threw away any reading that dropped or invented a word.
- * A row the model could not be asked about goes out as typed.
+ * come: "chicken 2, rice 5kg" becomes two rows. Uncertain readings, conflicting
+ * counts and rows edited while the request was in flight stay as typed.
  */
-export function applyTidy(draft: PabiliDraft, askedIds: string[], available: boolean, results: TidyResult[]): PabiliDraft {
+export function applyTidy(
+  draft: PabiliDraft, askedIds: string[], available: boolean, results: TidyResult[], requestedRows?: DraftRow[]
+): PabiliDraft {
   const byId = new Map(results.map((r) => [r.id, r]));
+  const originals = new Map(requestedRows?.map((r) => [r.id, r]));
   let next = draft;
   for (const id of askedIds) {
     const result = byId.get(id);
     next = mapRow(next, id, (rows, row) => {
       if (!row.review || (row.review.tidy && row.review.tidy !== 'unread')) return rows;
-      if (!available || !result || result.items.length === 0) {
-        const tidy: TidyState = available ? 'kept' : 'unread';
+      const original = originals.get(id);
+      const edited = original && (original.name !== row.name || original.quantity !== row.quantity
+        || original.size !== row.size || original.notes !== row.notes);
+      const conflicting = row.review.reasons.includes('conflicting_counts')
+        || (row.quantity !== 1 && result && (result.items.length !== 1 || result.items[0].quantity !== row.quantity));
+      const combinedNote = [...new Set([row.notes, result?.items[0]?.notes].filter(Boolean))].join('. ');
+      if (!available || !result || !result.confident || result.items.length === 0 || edited || conflicting || combinedNote.length > 200) {
+        const tidy: TidyState = available || edited || conflicting ? 'kept' : 'unread';
         return rows.map((r) => (r.id === id ? { ...r, review: { ...row.review!, tidy } } : r));
       }
       const [first, ...extra] = result.items;
@@ -416,7 +474,7 @@ export function applyTidy(draft: PabiliDraft, askedIds: string[], available: boo
         name: capitalizeItemName(first.name),
         quantity: first.quantity,
         size: first.size,
-        notes: first.notes ?? null,
+        notes: row.notes && row.notes !== first.notes ? combinedNote : first.notes ?? row.notes ?? null,
         source: 'ai',
         review: { reasons: row.review.reasons, tidy: 'applied' },
         ...(row.removedStore ? { removedStore: row.removedStore } : {}),
@@ -521,32 +579,41 @@ export function moveRow(draft: PabiliDraft, from: string, to: string, id: string
 
 const storageKey = (userId: string) => `${STORAGE_PREFIX}${userId}`;
 
-export async function readStoredDraft(userId: string, now: number = Date.now()): Promise<PabiliDraft | null> {
+export async function readStoredDraft(userId: string, now: number = Date.now(), strict = false): Promise<PabiliDraft | null> {
   try {
+    await (storageWrites.get(userId) ?? Promise.resolve()).catch(() => {});
     const raw = await AsyncStorage.getItem(storageKey(userId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PabiliDraft;
     if (parsed?.version !== 1 || !Array.isArray(parsed.categories) || typeof parsed.rowsByCategory !== 'object') {
+      if (strict) throw new Error('Stored shopping list is unreadable');
       return null;
     }
-    if (now - Number(parsed.updatedAt || 0) > DRAFT_TTL_MS) {
+    if (!parsed.submission && now - Number(parsed.updatedAt || 0) > DRAFT_TTL_MS) {
       await AsyncStorage.removeItem(storageKey(userId));
       return null;
     }
     return parsed;
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     // A list we cannot read is one we cannot restore; start clean rather than crash.
     return null;
   }
 }
 
-export async function writeStoredDraft(userId: string, draft: PabiliDraft | null): Promise<void> {
-  try {
-    if (!draft) await AsyncStorage.removeItem(storageKey(userId));
-    else await AsyncStorage.setItem(storageKey(userId), JSON.stringify(draft));
-  } catch {
-    // The list still works in memory; only surviving a restart is lost.
-  }
+const storageWrites = new Map<string, Promise<void>>();
+
+export async function writeStoredDraft(userId: string, draft: PabiliDraft | null, strict = false): Promise<void> {
+  // Serialize even debounced/background saves, so an older draft cannot land
+  // after the frozen submission or resurrect a completed order's shopping list.
+  const serialized = draft ? JSON.stringify(draft) : null;
+  const previous = storageWrites.get(userId) ?? Promise.resolve();
+  const write = previous.catch(() => {}).then(() => serialized === null
+    ? AsyncStorage.removeItem(storageKey(userId))
+    : AsyncStorage.setItem(storageKey(userId), serialized));
+  storageWrites.set(userId, write);
+  try { await write; } catch (error) { if (strict) throw error; }
+  finally { if (storageWrites.get(userId) === write) storageWrites.delete(userId); }
 }
 
 /**
@@ -575,8 +642,20 @@ class PabiliDraftStore {
     return this.userId;
   }
 
+  /** Clear only memory at account boundaries, retaining each account's request. */
+  detach() {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    if (this.userId && this.draft) void writeStoredDraft(this.userId, this.draft);
+    this.userId = null;
+    this.draft = null;
+    this.emit();
+  }
+
+
   /** Makes `draft` the current list for `userId`. */
   begin(userId: string, draft: PabiliDraft) {
+    if (this.userId === userId && this.draft?.submission) return;
     this.userId = userId;
     this.draft = draft;
     this.watchAppState();
@@ -585,7 +664,7 @@ class PabiliDraftStore {
   }
 
   update(fn: (draft: PabiliDraft) => PabiliDraft) {
-    if (!this.draft) return;
+    if (!this.draft || this.draft.submission) return;
     const next = fn(this.draft);
     if (next === this.draft) return;
     this.draft = { ...next, updatedAt: Date.now() };
@@ -595,6 +674,7 @@ class PabiliDraftStore {
 
   /** Forgets the list, here and on the phone. */
   async clear() {
+    if (this.draft?.submission) return;
     const userId = this.userId;
     this.draft = null;
     if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -607,6 +687,56 @@ class PabiliDraftStore {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
     if (this.userId && this.draft) await writeStoredDraft(this.userId, this.draft);
+  }
+
+  /** A failed durable save must prevent the POST, not merely warn. */
+  async freezeSubmission(userId: string, submission: PabiliSubmission): Promise<PabiliDraft> {
+    if (!this.draft || this.userId !== userId) throw new Error('No shopping list for this customer');
+    if (this.draft.submission) return this.draft;
+    const before = this.draft;
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    const frozen = JSON.parse(JSON.stringify({ ...before, submission, submitStartedAt: Date.now() })) as PabiliDraft;
+    this.draft = frozen;
+    this.emit();
+    try { await writeStoredDraft(userId, frozen, true); }
+    catch (error) {
+      if (this.draft === frozen) { this.draft = before; this.emit(); }
+      throw error;
+    }
+    return frozen;
+  }
+
+  async rejectSubmission(userId: string, id: string) {
+    if (this.userId !== userId || this.draft?.submission?.id !== id) return;
+    const { submission: _submission, ...draft } = this.draft;
+    const editable = { ...draft, submitStartedAt: null };
+    await writeStoredDraft(userId, editable, true);
+    if (this.userId !== userId || this.draft?.submission?.id !== id) return;
+    this.draft = editable;
+    this.emit();
+  }
+
+  async markSubmissionSent(userId: string, id: string): Promise<PabiliDraft> {
+    if (this.userId !== userId || this.draft?.submission?.id !== id) throw new Error('Submission changed');
+    const sent = { ...this.draft, submission: { ...this.draft.submission, postStarted: true } };
+    await writeStoredDraft(userId, sent, true);
+    if (this.userId !== userId || this.draft?.submission?.id !== id) throw new Error('Customer changed');
+    this.draft = sent;
+    this.emit();
+    return sent;
+  }
+
+  async confirmSubmission(userId: string, id: string, errandId: string) {
+    if (this.userId !== userId || this.draft?.submission?.id !== id) return;
+    const completed = { ...this.draft, submission: { ...this.draft.submission, confirmedErrandId: errandId } };
+    // If persistence fails, the original identity remains durable and lookup
+    // recovers the same order on restart. Never treat this as a failed send.
+    await writeStoredDraft(userId, completed).catch(() => {});
+    if (this.userId !== userId || this.draft?.submission?.id !== id) return;
+    this.draft = null;
+    this.emit();
+    await writeStoredDraft(userId, null);
   }
 
   private scheduleSave() {

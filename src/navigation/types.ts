@@ -4,6 +4,7 @@ import type { PaymentMethodId } from '../services/paymentMethodStrategy';
 import type { PickedStore } from '../services/pabiliDraft';
 import type { Establishment } from '../services/establishments';
 import type { LegalDocumentId } from '../constants/legalDocuments';
+import type { LoginChallenge } from '../services/mfaTrust';
 
 export interface UserData {
   id: string | number;
@@ -64,6 +65,15 @@ export type RootStackParamList = {
     detectedLocation?: { latitude: number; longitude: number; address?: string | null };
   } | undefined;
   ForgotPassword: undefined;
+  // The second sign-in factor, after a password or Google sign-in the server
+  // answered with a challenge. `onboarding` is set when it started on the
+  // onboarding screen, whose first-run location setup then follows.
+  MfaChallenge: {
+    challenge: LoginChallenge;
+    onboarding?: {
+      detectedLocation?: { latitude: number; longitude: number; address?: string | null };
+    };
+  };
   GooglePhoneSetup: {
     googleIdToken: string;
     email: string;

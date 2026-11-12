@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Clock, ShieldAlert } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { AuthFontSizes, scaledAuthFontSize, getAuthLineHeight, FontFamily, Spacing } from '../config/theme';
 
 interface RateLimitCountdownProps {
   seconds: number;
@@ -105,7 +105,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   badgeText: {
-    fontSize: 10,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
     fontFamily: FontFamily.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -119,13 +120,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   timerText: {
-    fontSize: FontSizes.xs,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     fontFamily: FontFamily.bold,
   },
   message: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     fontFamily: FontFamily.regular,
-    lineHeight: 16,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
   },
 });
 

@@ -1,0 +1,28 @@
+FAIL src/__tests__/MerchantCategoryStoresScreen.test.tsx (103.489 s)
+  ● MerchantCategoryStoresScreen › renders Popular Stores (up to 10) with ratings, Nearby Stores sorted by distance, and All Category Stores in the unified unboxed StoreCard template with green distance highlights
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 160
+
+      176 |     const { StyleSheet } = require('react-native');
+      177 |     const widthOf = (id: string) => StyleSheet.flatten(res.getByTestId(id).props.style).width;
+    > 178 |     expect(widthOf('category-popular-store-google:pop1')).toBe(200);
+          |                                                           ^
+      179 |     expect(widthOf('category-nearby-store-catalogue:c2')).toBe(200);
+      180 |     for (const [prefix, key, name, height] of [
+      181 |       ['category-popular-store', 'google:pop1', 'Popular Pharmacy 1', 150],
+
+      at Object.toBe (src/__tests__/MerchantCategoryStoresScreen.test.tsx:178:59)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+PASS src/__tests__/CustomerChatScreen.test.tsx (49.39 s)
+
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       1 failed, 20 passed, 21 total
+Snapshots:   0 total
+Time:        160.902 s
+Test results written to: scratch\page-width-20261104\baseline-results.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

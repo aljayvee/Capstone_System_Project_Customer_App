@@ -1,3 +1,5 @@
+import { MobileLight, MobileDark } from "./palette";
+
 /**
  * Theme constants for the Customer App.
  * Colors previously duplicated inline across screens (PINK, PINK_DARK,
@@ -5,111 +7,17 @@
  */
 
 export const FontFamily = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
+  regular: 'Urbanist_400Regular',
+  medium: 'Urbanist_500Medium',
+  semibold: 'Urbanist_600SemiBold',
+  bold: 'Urbanist_700Bold',
   mono: 'JetBrainsMono_500Medium',
   monoBold: 'JetBrainsMono_700Bold',
 } as const;
 
-export const LightColors = {
-  // Primary (brand pink)
-  primary: "#F62459",
-  primaryDark: "#C41B47",
-  primaryLight: "#FFEEF3",
+export const LightColors = MobileLight;
 
-  // Navy (chat, dispatcher accents)
-  navy: "#1E3A5F",
-  navyDark: "#162D4A",
-  navyLight: "#93C5FD",
-
-  // Text
-  textDark: "#1F2937",
-  textMedium: "#374151",
-  textGray: "#6B7280",
-  // Raised from #9CA3AF, which reached only 2.39:1 on bgApp while being the
-  // colour used for timestamps and hints. Now 4.5:1 or better everywhere.
-  textLight: "#646B76",
-  textWhite: "#FFFFFF",
-
-  // Backgrounds. The page is a soft grey and the cards white on it, as
-  // foodpanda and Grab do (2026-10-11; the page was #FFFFFF, so cards had no
-  // ground to stand on).
-  bgApp: "#F6F7F8",
-  // The page behind a see-through strip (Home's search bar, the Proceed bar).
-  bgAppTranslucent: "rgba(246, 247, 248, 0.95)",
-  bgWhite: "#FFFFFF",
-  bgGray: "#F9FAFB",
-  bgDark: "#1F2937",
-  card: "#FFFFFF",
-
-  // Borders
-  border: "#E5E7EB",
-  borderLight: "#F3F4F6",
-
-  // Status
-  success: "#065F46",
-  successBg: "#D1FAE5",
-  warning: "#92400E",
-  warningBg: "#FEF3C7",
-  // #DC2626 reached only 3.95:1 on dangerBg. It survives as a fill elsewhere,
-  // where white on it passes at 4.83:1; as an ink it has to be darker.
-  danger: "#B91C1C",
-  dangerBg: "#FEE2E2",
-  info: "#1E40AF",
-  infoBg: "#DBEAFE",
-
-  // Overlay
-  overlay: "rgba(0,0,0,0.5)",
-} as const;
-
-export const DarkColors = {
-  // Primary (brand pink adjusted for dark mode contrast)
-  primary: "#FF4D79",
-  primaryDark: "#F62459",
-  primaryLight: "#3D1420",
-
-  // Navy
-  navy: "#60A5FA",
-  navyDark: "#3B82F6",
-  navyLight: "#1E3A5F",
-
-  // Text
-  textDark: "#F9FAFB",
-  textMedium: "#E5E7EB",
-  // Both were too dim against a dark ground: textLight reached 2.13:1 on
-  // bgGray. Matched to the Rider App so the two agree.
-  textGray: "#C3C9D4",
-  textLight: "#A9B0BD",
-  textWhite: "#FFFFFF",
-
-  // Backgrounds. A soft charcoal, not pure black, with cards a step lighter,
-  // as foodpanda and Grab do (2026-10-11; the page was #000000).
-  bgApp: "#121212",
-  bgAppTranslucent: "rgba(18, 18, 18, 0.95)",
-  bgWhite: "#1E1E1E",
-  bgGray: "#2A2A2A",
-  bgDark: "#121212",
-  card: "#1E1E1E",
-
-  // Borders
-  border: "#333333",
-  borderLight: "#262626",
-
-  // Status
-  success: "#34D399",
-  successBg: "#064E3B",
-  warning: "#FBBF24",
-  warningBg: "#78350F",
-  danger: "#FCA5A5",
-  dangerBg: "#7F1D1D",
-  info: "#93C5FD",
-  infoBg: "#1E3A8A",
-
-  // Overlay
-  overlay: "rgba(0,0,0,0.75)",
-} as const;
+export const DarkColors = MobileDark;
 
 // Backward-compatible static Colors (defaults to Light mode)
 export const Colors = LightColors;

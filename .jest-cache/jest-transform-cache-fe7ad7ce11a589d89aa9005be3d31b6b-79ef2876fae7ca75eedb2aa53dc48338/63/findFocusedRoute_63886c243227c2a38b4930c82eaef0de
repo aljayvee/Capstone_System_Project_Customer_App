@@ -1,0 +1,16 @@
+3ff2716ccd40fcb063f3dbf1cdd3fecc
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.findFocusedRoute = findFocusedRoute;
+function findFocusedRoute(state) {
+  var current = state;
+  while (current?.routes[current.index ?? current.routes.length - 1]?.state != null) {
+    current = current.routes[current.index ?? current.routes.length - 1]?.state;
+  }
+  var route = current?.routes[current?.index ?? current.routes.length - 1];
+  return route;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJmaW5kRm9jdXNlZFJvdXRlIiwic3RhdGUiLCJjdXJyZW50Iiwicm91dGVzIiwiaW5kZXgiLCJsZW5ndGgiLCJyb3V0ZSJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9maW5kRm9jdXNlZFJvdXRlLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7O0FBV08sU0FBU0EsZ0JBQWdCQSxDQUFDQyxLQUFtQixFQUFVO0VBQzVELElBQUlDLE9BQWlDLEdBQUdELEtBQUs7RUFFN0MsT0FDRUMsT0FBTyxFQUFFQyxNQUFNLENBQUNELE9BQU8sQ0FBQ0UsS0FBSyxJQUFJRixPQUFPLENBQUNDLE1BQU0sQ0FBQ0UsTUFBTSxHQUFHLENBQUMsQ0FBQyxFQUFFSixLQUFLLElBQUksSUFBSSxFQUMxRTtJQUNBQyxPQUFPLEdBQUdBLE9BQU8sQ0FBQ0MsTUFBTSxDQUFDRCxPQUFPLENBQUNFLEtBQUssSUFBSUYsT0FBTyxDQUFDQyxNQUFNLENBQUNFLE1BQU0sR0FBRyxDQUFDLENBQUMsRUFBRUosS0FBSztFQUM3RTtFQUVBLElBQU1LLEtBQUssR0FBR0osT0FBTyxFQUFFQyxNQUFNLENBQUNELE9BQU8sRUFBRUUsS0FBSyxJQUFJRixPQUFPLENBQUNDLE1BQU0sQ0FBQ0UsTUFBTSxHQUFHLENBQUMsQ0FBQztFQUUxRSxPQUFPQyxLQUFLO0FBQ2QiLCJpZ25vcmVMaXN0IjpbXX0=

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -12,6 +13,7 @@ import {
   Platform,
   Easing,
   Keyboard,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -34,13 +36,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import {
   FontFamily,
-  FontSizes,
   Spacing,
   BorderRadius,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   moderateScale,
   AuthFontSizes,
   scaledAuthFontSize,
@@ -51,6 +51,7 @@ import {
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useAuthHeroGradient } from '../hooks/useAuthHeroGradient';
 import AuthHeroPattern from '../components/AuthHeroPattern';
+import { saveMfaTrustToken } from '../services/mfaTrust';
 
 // Matches LoginScreen: the white sheet is pulled up over the hero's bottom edge
 // by this much, and the hero pads the same amount back so nothing hides under it.
@@ -64,6 +65,7 @@ const RESEND_COOLDOWN_FALLBACK_SECONDS = 60;
 type VerificationChannel = 'EMAIL' | 'PHONE';
 
 export default function RegisterScreen({ navigation, route }: any) {
+  const pageLayout = usePageLayout();
   const { login } = useAuth();
   const { colors, isDark } = useThemeColor();
   const heroGradient = useAuthHeroGradient();
@@ -406,6 +408,9 @@ export default function RegisterScreen({ navigation, route }: any) {
             );
           } catch {}
         }
+        // Sign-up already proved the email or phone, so the server trusts this
+        // device for MFA; keep that so the next sign-in here is not asked again.
+        await saveMfaTrustToken(data.mfaTrustToken);
         await login(userPayload, data.token, data.refreshToken);
         navigation.replace('CustomerPortal', {
           user: userPayload,
@@ -434,6 +439,32 @@ export default function RegisterScreen({ navigation, route }: any) {
     }
   };
 
+  const handleGoToLogin = () => {
+    const routes = typeof navigation.getState === 'function' ? navigation.getState()?.routes : undefined;
+    const prevRoute = routes && routes.length >= 2 ? routes[routes.length - 2]?.name : null;
+    if (prevRoute === 'Login') {
+      navigation.goBack();
+    } else if (typeof navigation.canGoBack === 'function' ? navigation.canGoBack() : true) {
+      navigation.goBack();
+    } else {
+      navigation.replace('Login');
+    }
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (currentStep > 1) {
+        setGlobalError(null);
+        setErrors({});
+        goToStep(currentStep - 1, 'backward');
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [currentStep]);
+
   // Each step's question now lives in the gradient hero instead of the scrolling
   // body, so every step reads the same way: the colour band asks, the white
   // sheet takes the answer.
@@ -450,7 +481,7 @@ export default function RegisterScreen({ navigation, route }: any) {
         {verificationChannel === 'EMAIL'
           ? 'We sent a verification code to '
           : 'We sent an SMS verification code to '}
-        <Text style={styles.heroSubtitleStrong}>
+        <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={styles.heroSubtitleStrong}>
           {verificationChannel === 'EMAIL' ? email : phone}
         </Text>
         .
@@ -503,8 +534,7 @@ export default function RegisterScreen({ navigation, route }: any) {
               end={{ x: 1, y: 1 }}
               style={[
                 styles.hero,
-                { minHeight: heroHeight, paddingTop: insets.top + Spacing.md },
-              ]}
+                { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }, pageLayout.insetStyle]}
             >
               <AuthHeroPattern width={screenWidth} height={heroHeight} />
 
@@ -555,8 +585,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                 paddingBottom: insets.bottom + Spacing.xl,
                 opacity: introFade,
                 transform: [{ translateY: sheetRise }],
-              },
-            ]}
+              }, pageLayout.gutterStyle, pageLayout.frameStyle]}
           >
             <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
               {/* GLOBAL API ERROR BANNER */}
@@ -579,7 +608,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                 {/* STEP 1: PERSONAL INFORMATION */}
                 {/* ========================================================================= */}
                 {currentStep === 1 && (
-                  <View style={styles.stepContent}>
+                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
                     {/* FIRST NAME */}
                     <View style={styles.labelHeaderRow}>
                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>FIRST NAME *</Text>
@@ -668,8 +697,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                       onPress={handleStep1Next}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Continue</Text>
-                      <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
+                      <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Continue</Text>
+                      <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.5} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -678,7 +707,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                 {/* STEP 2: CONTACT & VERIFICATION METHOD CHOICE */}
                 {/* ========================================================================= */}
                 {currentStep === 2 && (
-                  <View style={styles.stepContent}>
+                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
                     {/* EMAIL ADDRESS */}
                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.md }]}>
                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
@@ -687,7 +716,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                       {errors.email ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.email}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.email}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -724,7 +753,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                       {errors.phone ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.phone}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.phone}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -813,17 +842,17 @@ export default function RegisterScreen({ navigation, route }: any) {
                       activeOpacity={0.85}
                     >
                       {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
+                        <ActivityIndicator color={colors.onPrimary} />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
+                          <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                             {verificationChannel === 'PHONE'
                               ? 'Verify Phone via SMS'
                               : otpSentTo === email.trim().toLowerCase() && cooldown > 0
                                 ? 'Back to Code'
                                 : 'Send Code via Email'}
                           </Text>
-                          <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
+                          <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.5} />
                         </>
                       )}
                     </TouchableOpacity>
@@ -834,14 +863,14 @@ export default function RegisterScreen({ navigation, route }: any) {
                 {/* STEP 3: OTP VERIFICATION */}
                 {/* ========================================================================= */}
                 {currentStep === 3 && (
-                  <View style={styles.stepContent}>
+                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
                     {/* OTP INPUT */}
                     <View style={styles.labelHeaderRow}>
                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>VERIFICATION CODE *</Text>
                       {errors.otp ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.otp}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.otp}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -876,11 +905,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                       activeOpacity={0.85}
                     >
                       {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
+                        <ActivityIndicator color={colors.onPrimary} />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify & Proceed</Text>
-                          <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
+                          <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify & Proceed</Text>
+                          <CheckCircle2 size={18} color={colors.onPrimary} strokeWidth={2.5} />
                         </>
                       )}
                     </TouchableOpacity>
@@ -903,7 +932,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                 {/* STEP 4: USERNAME & PASSWORD CREATION */}
                 {/* ========================================================================= */}
                 {currentStep === 4 && (
-                  <View style={styles.stepContent}>
+                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
                     {phoneVerified ? (
                       <View
                         style={[
@@ -933,7 +962,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                       {errors.username ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.username}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.username}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -967,7 +996,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                       {errors.password ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.password}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.password}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -1014,7 +1043,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                       {errors.confirmPassword ? (
                         <View style={[styles.shoutBadgeTop, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}>
                           <AlertCircle size={12} color={colors.danger} strokeWidth={2.2} />
-                          <Text style={[styles.shoutText, { color: colors.danger }]}>{errors.confirmPassword}</Text>
+                          <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.shoutText, { color: colors.danger }]}>{errors.confirmPassword}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -1057,11 +1086,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                       activeOpacity={0.85}
                     >
                       {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
+                        <ActivityIndicator color={colors.onPrimary} />
                       ) : (
                         <>
-                          <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Complete Account Creation</Text>
-                          <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
+                          <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Complete Account Creation</Text>
+                          <CheckCircle2 size={18} color={colors.onPrimary} strokeWidth={2.5} />
                         </>
                       )}
                     </TouchableOpacity>
@@ -1071,7 +1100,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 
               {/* FOOTER SIGN IN LINK */}
               <TouchableOpacity
-                onPress={() => navigation.navigate('Login')}
+                onPress={handleGoToLogin}
                 style={styles.footerLink}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -1344,8 +1373,9 @@ const styles = StyleSheet.create({
     height: 1,
   },
   dividerText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     letterSpacing: 0.8,
   },
 });

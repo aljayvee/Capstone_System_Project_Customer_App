@@ -78,9 +78,9 @@ export default function SavedLocationCard({ location, onSetDefault, onEdit, onDe
             </Text>
             {location.isDefault && (
               <View style={[styles.defaultBadge, { backgroundColor: colors.primary }]} testID={`saved-location-default-badge-${location.id}`}>
-                <Star size={10} color="#FFFFFF" fill="#FFFFFF" />
+                <Star size={10} color={colors.onPrimary} fill="#FFFFFF" />
                 <Text
-                  style={styles.defaultBadgeText}
+                  style={[styles.defaultBadgeText, { color: colors.onPrimary }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                 >
                   Default

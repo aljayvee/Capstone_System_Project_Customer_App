@@ -1,4 +1,5 @@
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSetThemeMode = jest.fn();
@@ -90,8 +91,9 @@ describe('SettingsScreen Component', () => {
     },
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    await AsyncStorage.clear();
   });
 
   it('renders top navigation header and navigates back when pressed', async () => {
@@ -101,18 +103,20 @@ describe('SettingsScreen Component', () => {
 
     expect(res.getByText('App Settings')).toBeTruthy();
     const backBtn = res.getByTestId('back-button');
-    fireEvent.press(backBtn);
+    await fireEvent.press(backBtn);
     expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
   });
 
-  it('renders 3-card appearance selector and handles theme switching', async () => {
+  it('uses accessible appearance rows and switches all three themes', async () => {
     const res: any = await render(
       <SettingsScreen navigation={mockNavigation} route={mockRoute} />
     );
 
-    const darkCard = res.getByTestId('theme-card-dark');
-    fireEvent.press(darkCard);
-    expect(mockSetThemeMode).toHaveBeenCalledWith('dark');
+    expect(res.getByRole('radio', { name: 'Light theme' }).props.accessibilityState.checked).toBe(true);
+    for (const mode of ['light', 'dark', 'system']) {
+      await fireEvent.press(res.getByTestId('theme-option-' + mode));
+      expect(mockSetThemeMode).toHaveBeenLastCalledWith(mode);
+    }
   });
 
   it('renders notification toggles', async () => {
@@ -133,39 +137,31 @@ describe('SettingsScreen Component', () => {
       <SettingsScreen navigation={mockNavigation} route={mockRoute} />
     );
 
-    expect(res.getByText('Location Access')).toBeTruthy();
-    expect(res.getByText('While In Use')).toBeTruthy();
-    expect(res.getByText('Active Device Session')).toBeTruthy();
+    expect(res.queryByText('Location Access')).toBeNull();
+    expect(res.queryByText('While In Use')).toBeNull();
+    expect(res.queryByText('Active Device Session')).toBeNull();
     expect(res.queryByText('Biometric App Lock')).toBeNull();
     expect(res.queryByText('Deactivate Account')).toBeNull();
 
     const changePasswordRow = res.getByTestId('row-change-password');
-    fireEvent.press(changePasswordRow);
+    await fireEvent.press(changePasswordRow);
 
     await waitFor(() => {
       expect(res.getByText('Reset Password')).toBeTruthy();
     });
 
-    fireEvent.press(res.getByText('Cancel'));
+    await fireEvent.press(res.getByText('Cancel'));
     await waitFor(() => {
       expect(res.queryByText('Reset Password')).toBeNull();
     });
   });
 
-  it('renders storage footprint card and allows clearing cache', async () => {
-    const res: any = await render(
-      <SettingsScreen navigation={mockNavigation} route={mockRoute} />
-    );
-
-    expect(res.getByText('Local Storage Footprint')).toBeTruthy();
-    const clearBtn = res.getByTestId('clear-cache-button');
-    expect(clearBtn).toBeTruthy();
-
-    fireEvent.press(clearBtn);
-
-    await waitFor(() => {
-      expect(res.getByText('Cache is Clean (0.0 MB)')).toBeTruthy();
-    });
+  it('omits placeholder storage and operations controls', async () => {
+    const res = await render(<SettingsScreen navigation={mockNavigation} route={mockRoute} />);
+    expect(res.queryByText('Local Storage Footprint')).toBeNull();
+    expect(res.queryByTestId('clear-cache-button')).toBeNull();
+    expect(res.queryByText('Tacurong Operations Hub')).toBeNull();
+    expect(res.queryByText('Operational')).toBeNull();
   });
 
   it('opens the full Terms of Service and Privacy Policy screens', async () => {
@@ -175,12 +171,12 @@ describe('SettingsScreen Component', () => {
 
     // waitFor, not a bare expect: the screen's mount effects are still
     // settling, and a test that ends inside them overlaps the next test's act().
-    fireEvent.press(res.getByTestId('row-terms'));
+    await fireEvent.press(res.getByTestId('row-terms'));
     await waitFor(() => {
       expect(mockNavigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'terms' });
     });
 
-    fireEvent.press(res.getByTestId('row-privacy'));
+    await fireEvent.press(res.getByTestId('row-privacy'));
     await waitFor(() => {
       expect(mockNavigation.navigate).toHaveBeenCalledWith('LegalDocument', { doc: 'privacy' });
     });
@@ -190,22 +186,33 @@ describe('SettingsScreen Component', () => {
     expect(res.queryByText('1. Location Telemetry Protection')).toBeNull();
   });
 
-  it('opens sign out modal with inverted hierarchy and handles logout', async () => {
-    const res: any = await render(
-      <SettingsScreen navigation={mockNavigation} route={mockRoute} />
-    );
+  it('keeps sign out in Account and opens real support and update actions', async () => {
+    const res = await render(<SettingsScreen navigation={mockNavigation} route={mockRoute} />);
+    expect(res.queryByTestId('row-sign-out')).toBeNull();
+    expect(res.queryByText('Sign Out')).toBeNull();
+    await fireEvent.press(res.getByTestId('row-app-version'));
+    expect(await res.findByText('Application Updates')).toBeTruthy();
+    await fireEvent.press(res.getByLabelText('Close Updates'));
+    await fireEvent.press(res.getByTestId('row-feedback'));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Feedback', { user: mockRoute.params.user });
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
 
-    const signOutRow = await res.findByTestId('row-sign-out');
-    fireEvent.press(signOutRow);
-
-    await waitFor(() => {
-      expect(res.getByText('Stay Signed In')).toBeTruthy();
-      expect(res.getByText('Yes, Sign Out')).toBeTruthy();
-    });
-
-    const confirmSignOut = res.getByTestId('confirm-modal-submit');
-    fireEvent.press(confirmSignOut);
-
-    expect(mockLogout).toHaveBeenCalledTimes(1);
+  it('restores saved notification choices and persists changes', async () => {
+    await AsyncStorage.setItem('@sugo_customer_errand_alerts_enabled', 'false');
+    await AsyncStorage.setItem('@sugo_customer_chat_alerts_enabled', 'false');
+    await AsyncStorage.setItem('@sugo_customer_sounds_enabled', 'false');
+    const res = await render(<SettingsScreen navigation={mockNavigation} route={mockRoute} />);
+    for (const [id, key] of [
+      ['errand-alerts', '@sugo_customer_errand_alerts_enabled'],
+      ['chat-alerts', '@sugo_customer_chat_alerts_enabled'],
+      ['sound-effects', '@sugo_customer_sounds_enabled'],
+    ]) {
+      const toggle = res.getByTestId('switch-' + id);
+      await waitFor(() => expect(toggle.props.value).toBe(false));
+      await fireEvent(toggle, 'valueChange', true);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(key, 'true');
+      await waitFor(() => expect(res.getByTestId('switch-' + id).props.value).toBe(true));
+    }
   });
 });

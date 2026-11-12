@@ -1,0 +1,9 @@
+PASS src/__tests__/LiveTrackingMapModes.test.tsx (39.309 s)
+PASS src/__tests__/LegalDocumentScreen.test.tsx (16.213 s)
+
+Test Suites: 2 passed, 2 total
+Tests:       36 passed, 36 total
+Snapshots:   0 total
+Time:        59.399 s
+Test results written to: scratch\page-width-20261104\final-layout-results.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

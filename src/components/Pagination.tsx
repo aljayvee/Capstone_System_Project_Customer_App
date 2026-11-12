@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { FontSizes, FontWeights, Spacing, BorderRadius } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 
 export interface PaginationProps {
@@ -33,7 +33,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
         <ChevronLeft size={18} color={currentPage === 1 ? colors.textLight : colors.primary} strokeWidth={2.4} />
       </TouchableOpacity>
 
-      <Text style={[styles.pageText, { color: colors.textMedium }]}>
+      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pageText, { color: colors.textMedium }]}>
         Page {currentPage} of {totalPages}
       </Text>
 
@@ -63,5 +63,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pageText: { fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  pageText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.bold },
 });

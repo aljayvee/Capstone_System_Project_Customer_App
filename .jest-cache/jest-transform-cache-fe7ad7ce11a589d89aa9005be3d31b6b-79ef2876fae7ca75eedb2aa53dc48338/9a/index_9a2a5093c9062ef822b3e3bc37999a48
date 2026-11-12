@@ -1,0 +1,161 @@
+1fee89fbb8eea50c56704f821d9bdd56
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+var _exportNames = {
+  createStandardNavigationFactories: true,
+  createStaticNavigation: true,
+  Link: true,
+  LinkingContext: true,
+  LocaleDirContext: true,
+  NavigationContainer: true,
+  ServerContainer: true,
+  DarkTheme: true,
+  DefaultTheme: true,
+  UNSTABLE_UnhandledLinkingContext: true,
+  useLinkBuilder: true,
+  useLinkProps: true,
+  useLinkTo: true,
+  useLocale: true,
+  useRoutePath: true,
+  useScrollToTop: true
+};
+Object.defineProperty(exports, "DarkTheme", {
+  enumerable: true,
+  get: function () {
+    return _DarkTheme.DarkTheme;
+  }
+});
+Object.defineProperty(exports, "DefaultTheme", {
+  enumerable: true,
+  get: function () {
+    return _DefaultTheme.DefaultTheme;
+  }
+});
+Object.defineProperty(exports, "Link", {
+  enumerable: true,
+  get: function () {
+    return _Link.Link;
+  }
+});
+Object.defineProperty(exports, "LinkingContext", {
+  enumerable: true,
+  get: function () {
+    return _LinkingContext.LinkingContext;
+  }
+});
+Object.defineProperty(exports, "LocaleDirContext", {
+  enumerable: true,
+  get: function () {
+    return _LocaleDirContext.LocaleDirContext;
+  }
+});
+Object.defineProperty(exports, "NavigationContainer", {
+  enumerable: true,
+  get: function () {
+    return _NavigationContainer.NavigationContainer;
+  }
+});
+Object.defineProperty(exports, "ServerContainer", {
+  enumerable: true,
+  get: function () {
+    return _ServerContainer.ServerContainer;
+  }
+});
+Object.defineProperty(exports, "UNSTABLE_UnhandledLinkingContext", {
+  enumerable: true,
+  get: function () {
+    return _UnhandledLinkingContext.UnhandledLinkingContext;
+  }
+});
+Object.defineProperty(exports, "createStandardNavigationFactories", {
+  enumerable: true,
+  get: function () {
+    return _createStandardNavigationFactories.createStandardNavigationFactories;
+  }
+});
+Object.defineProperty(exports, "createStaticNavigation", {
+  enumerable: true,
+  get: function () {
+    return _createStaticNavigation.createStaticNavigation;
+  }
+});
+Object.defineProperty(exports, "useLinkBuilder", {
+  enumerable: true,
+  get: function () {
+    return _useLinkBuilder.useLinkBuilder;
+  }
+});
+Object.defineProperty(exports, "useLinkProps", {
+  enumerable: true,
+  get: function () {
+    return _useLinkProps.useLinkProps;
+  }
+});
+Object.defineProperty(exports, "useLinkTo", {
+  enumerable: true,
+  get: function () {
+    return _useLinkTo.useLinkTo;
+  }
+});
+Object.defineProperty(exports, "useLocale", {
+  enumerable: true,
+  get: function () {
+    return _useLocale.useLocale;
+  }
+});
+Object.defineProperty(exports, "useRoutePath", {
+  enumerable: true,
+  get: function () {
+    return _useRoutePath.useRoutePath;
+  }
+});
+Object.defineProperty(exports, "useScrollToTop", {
+  enumerable: true,
+  get: function () {
+    return _useScrollToTop.useScrollToTop;
+  }
+});
+var _createStandardNavigationFactories = require("./createStandardNavigationFactories.js");
+var _createStaticNavigation = require("./createStaticNavigation.js");
+var _Link = require("./Link.js");
+var _LinkingContext = require("./LinkingContext.js");
+var _LocaleDirContext = require("./LocaleDirContext.js");
+var _NavigationContainer = require("./NavigationContainer.js");
+var _ServerContainer = require("./ServerContainer.js");
+var _DarkTheme = require("./theming/DarkTheme.js");
+var _DefaultTheme = require("./theming/DefaultTheme.js");
+var _types = require("./types.js");
+Object.keys(_types).forEach(function (key) {
+  if (key === "default" || key === "__esModule") return;
+  if (Object.prototype.hasOwnProperty.call(_exportNames, key)) return;
+  if (key in exports && exports[key] === _types[key]) return;
+  Object.defineProperty(exports, key, {
+    enumerable: true,
+    get: function () {
+      return _types[key];
+    }
+  });
+});
+var _UnhandledLinkingContext = require("./UnhandledLinkingContext.js");
+var _useLinkBuilder = require("./useLinkBuilder.js");
+var _useLinkProps = require("./useLinkProps.js");
+var _useLinkTo = require("./useLinkTo.js");
+var _useLocale = require("./useLocale.js");
+var _useRoutePath = require("./useRoutePath.js");
+var _useScrollToTop = require("./useScrollToTop.js");
+var _core = require("@react-navigation/core");
+Object.keys(_core).forEach(function (key) {
+  if (key === "default" || key === "__esModule") return;
+  if (Object.prototype.hasOwnProperty.call(_exportNames, key)) return;
+  if (key in exports && exports[key] === _core[key]) return;
+  Object.defineProperty(exports, key, {
+    enumerable: true,
+    get: function () {
+      return _core[key];
+    }
+  });
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlU3RhbmRhcmROYXZpZ2F0aW9uRmFjdG9yaWVzIiwicmVxdWlyZSIsIl9jcmVhdGVTdGF0aWNOYXZpZ2F0aW9uIiwiX0xpbmsiLCJfTGlua2luZ0NvbnRleHQiLCJfTG9jYWxlRGlyQ29udGV4dCIsIl9OYXZpZ2F0aW9uQ29udGFpbmVyIiwiX1NlcnZlckNvbnRhaW5lciIsIl9EYXJrVGhlbWUiLCJfRGVmYXVsdFRoZW1lIiwiX3R5cGVzIiwiT2JqZWN0Iiwia2V5cyIsImZvckVhY2giLCJrZXkiLCJwcm90b3R5cGUiLCJoYXNPd25Qcm9wZXJ0eSIsImNhbGwiLCJfZXhwb3J0TmFtZXMiLCJleHBvcnRzIiwiZGVmaW5lUHJvcGVydHkiLCJlbnVtZXJhYmxlIiwiZ2V0IiwiX1VuaGFuZGxlZExpbmtpbmdDb250ZXh0IiwiX3VzZUxpbmtCdWlsZGVyIiwiX3VzZUxpbmtQcm9wcyIsIl91c2VMaW5rVG8iLCJfdXNlTG9jYWxlIiwiX3VzZVJvdXRlUGF0aCIsIl91c2VTY3JvbGxUb1RvcCIsIl9jb3JlIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL2luZGV4LnRzeCJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSxJQUFBQSxrQ0FBQSxHQUFBQyxPQUFBO0FBS0EsSUFBQUMsdUJBQUEsR0FBQUQsT0FBQTtBQUNBLElBQUFFLEtBQUEsR0FBQUYsT0FBQTtBQUNBLElBQUFHLGVBQUEsR0FBQUgsT0FBQTtBQUNBLElBQUFJLGlCQUFBLEdBQUFKLE9BQUE7QUFDQSxJQUFBSyxvQkFBQSxHQUFBTCxPQUFBO0FBQ0EsSUFBQU0sZ0JBQUEsR0FBQU4sT0FBQTtBQUNBLElBQUFPLFVBQUEsR0FBQVAsT0FBQTtBQUNBLElBQUFRLGFBQUEsR0FBQVIsT0FBQTtBQUNBLElBQUFTLE1BQUEsR0FBQVQsT0FBQTtBQUFBVSxNQUFBLENBQUFDLElBQUEsQ0FBQUYsTUFBQSxFQUFBRyxPQUFBLFdBQUFDLEdBQUE7RUFBQSxJQUFBQSxHQUFBLGtCQUFBQSxHQUFBO0VBQUEsSUFBQUgsTUFBQSxDQUFBSSxTQUFBLENBQUFDLGNBQUEsQ0FBQUMsSUFBQSxDQUFBQyxZQUFBLEVBQUFKLEdBQUE7RUFBQSxJQUFBQSxHQUFBLElBQUFLLE9BQUEsSUFBQUEsT0FBQSxDQUFBTCxHQUFBLE1BQUFKLE1BQUEsQ0FBQUksR0FBQTtFQUFBSCxNQUFBLENBQUFTLGNBQUEsQ0FBQUQsT0FBQSxFQUFBTCxHQUFBO0lBQUFPLFVBQUE7SUFBQUMsR0FBQSxXQUFBQSxDQUFBO01BQUEsT0FBQVosTUFBQSxDQUFBSSxHQUFBO0lBQUE7RUFBQTtBQUFBO0FBQ0EsSUFBQVMsd0JBQUEsR0FBQXRCLE9BQUE7QUFDQSxJQUFBdUIsZUFBQSxHQUFBdkIsT0FBQTtBQUNBLElBQUF3QixhQUFBLEdBQUF4QixPQUFBO0FBQ0EsSUFBQXlCLFVBQUEsR0FBQXpCLE9BQUE7QUFDQSxJQUFBMEIsVUFBQSxHQUFBMUIsT0FBQTtBQUNBLElBQUEyQixhQUFBLEdBQUEzQixPQUFBO0FBQ0EsSUFBQTRCLGVBQUEsR0FBQTVCLE9BQUE7QUFDQSxJQUFBNkIsS0FBQSxHQUFBN0IsT0FBQTtBQUFBVSxNQUFBLENBQUFDLElBQUEsQ0FBQWtCLEtBQUEsRUFBQWpCLE9BQUEsV0FBQUMsR0FBQTtFQUFBLElBQUFBLEdBQUEsa0JBQUFBLEdBQUE7RUFBQSxJQUFBSCxNQUFBLENBQUFJLFNBQUEsQ0FBQUMsY0FBQSxDQUFBQyxJQUFBLENBQUFDLFlBQUEsRUFBQUosR0FBQTtFQUFBLElBQUFBLEdBQUEsSUFBQUssT0FBQSxJQUFBQSxPQUFBLENBQUFMLEdBQUEsTUFBQWdCLEtBQUEsQ0FBQWhCLEdBQUE7RUFBQUgsTUFBQSxDQUFBUyxjQUFBLENBQUFELE9BQUEsRUFBQUwsR0FBQTtJQUFBTyxVQUFBO0lBQUFDLEdBQUEsV0FBQUEsQ0FBQTtNQUFBLE9BQUFRLEtBQUEsQ0FBQWhCLEdBQUE7SUFBQTtFQUFBO0FBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

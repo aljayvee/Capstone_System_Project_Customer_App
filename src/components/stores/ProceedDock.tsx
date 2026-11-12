@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ export function proceedLabel(count: number): string {
 }
 
 /**
- * The bar along the bottom of the two screens where up to 3 stores are picked,
+ * The bar along the bottom of the two screens where stores are picked, up to the store limit,
  * Find stores and Popular Stores (2026-10-10): nothing until a store is picked,
  * then one button that goes on to the Shopping list with them.
  *
@@ -45,6 +46,7 @@ export function ProceedDock({
    */
   bottomPadding?: number;
 }) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
   if (count <= 0) return null;
@@ -58,8 +60,7 @@ export function ProceedDock({
           backgroundColor: colors.bgAppTranslucent,
           borderTopColor: colors.border,
           paddingBottom: bottomPadding ?? (insets.bottom > 0 ? insets.bottom : Spacing.md),
-        },
-      ]}
+        }, pageLayout.gutterStyle]}
     >
       <TouchableOpacity
         activeOpacity={0.85}
@@ -68,10 +69,10 @@ export function ProceedDock({
         accessibilityRole="button"
         testID={testID}
       >
-        <Text style={styles.buttonText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+        <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
           {proceedLabel(count)}
         </Text>
-        <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />
+        <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.4} />
       </TouchableOpacity>
     </View>
   );

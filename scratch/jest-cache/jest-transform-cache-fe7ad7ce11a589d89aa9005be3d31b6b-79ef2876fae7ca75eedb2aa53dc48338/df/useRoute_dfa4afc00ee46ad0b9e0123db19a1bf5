@@ -1,0 +1,18 @@
+58161c579189274f041632eee872c3de
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useRoute = useRoute;
+var React = _interopRequireWildcard(require("react"));
+var _NavigationProvider = require("./NavigationProvider.js");
+function useRoute() {
+  var route = React.useContext(_NavigationProvider.NavigationRouteContext);
+  if (route === undefined) {
+    throw new Error("Couldn't find a route object. Is your component inside a screen in a navigator?");
+  }
+  return route;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIl9OYXZpZ2F0aW9uUHJvdmlkZXIiLCJ1c2VSb3V0ZSIsInJvdXRlIiwidXNlQ29udGV4dCIsIk5hdmlnYXRpb25Sb3V0ZUNvbnRleHQiLCJ1bmRlZmluZWQiLCJFcnJvciJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy91c2VSb3V0ZS50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFDQSxJQUFBQSxLQUFBLEdBQUFDLHVCQUFBLENBQUFDLE9BQUE7QUFFQSxJQUFBQyxtQkFBQSxHQUFBRCxPQUFBO0FBUU8sU0FBU0UsUUFBUUEsQ0FBQSxFQUEwQztFQUNoRSxJQUFNQyxLQUFLLEdBQUdMLEtBQUssQ0FBQ00sVUFBVSxDQUFDQywwQ0FBc0IsQ0FBQztFQUV0RCxJQUFJRixLQUFLLEtBQUtHLFNBQVMsRUFBRTtJQUN2QixNQUFNLElBQUlDLEtBQUssQ0FDYixpRkFDRixDQUFDO0VBQ0g7RUFFQSxPQUFPSixLQUFLO0FBQ2QiLCJpZ25vcmVMaXN0IjpbXX0=

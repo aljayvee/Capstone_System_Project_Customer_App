@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pink Express - 3D Athletic Delivery Rider</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            user-select: none;
+        }
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            height: 6px;
+            border-radius: 999px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ec4899;
+            border: 2px solid #ffffff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(236, 72, 153, 0.8);
+            transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        .mode-btn.active {
+            background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+            color: white;
+            border-color: #f472b6;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.45);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Viewport Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Header Overlay -->
+    <div class="fixed top-4 left-4 right-4 md:left-6 md:right-6 z-10 flex flex-wrap items-center justify-between gap-4 pointer-events-none">
+        <div class="glass-panel px-5 py-3.5 rounded-2xl pointer-events-auto flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-base md:text-lg font-extrabold tracking-tight text-white">PINK EXPRESS</h1>
+                    <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">3D Sculpt</span>
+                </div>
+                <p class="text-xs text-slate-300">Faceted Pure-White &bull; V-Taper Athletic Rig &bull; Procedural Kinematics</p>
+            </div>
+        </div>
+
+        <!-- Quick Camera Angle Presets -->
+        <div class="glass-panel p-1.5 rounded-2xl pointer-events-auto flex items-center gap-1">
+            <button data-cam="three-quarter" class="cam-btn mode-btn active text-xs font-semibold px-3 py-2 rounded-xl border border-transparent transition-all">3/4 Hero</button>
+            <button data-cam="front" class="cam-btn mode-btn text-xs font-semibold px-3 py-2 rounded-xl border border-transparent text-slate-300 hover:text-white transition-all">Front</button>
+            <button data-cam="side" class="cam-btn mode-btn text-xs font-semibold px-3 py-2 rounded-xl border border-transparent text-slate-300 hover:text-white transition-all">Profile Stride</button>
+            <button data-cam="head" class="cam-btn mode-btn text-xs font-semibold px-3 py-2 rounded-xl border border-transparent text-slate-300 hover:text-white transition-all">Faceted Head</button>
+        </div>
+    </div>
+
+    <!-- Interactive Control Panel -->
+    <div class="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 md:w-88 z-10 pointer-events-none">
+        <div class="glass-panel p-5 rounded-3xl pointer-events-auto space-y-4 max-w-md mx-auto">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-pink-400">Kinematics &amp; Carry Controls</span>
+                <span id="status-badge" class="text-[11px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">Active Stride</span>
+            </div>
+
+            <!-- Carrying Style Selector -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 block">Delivery Box Carrying Style</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                    <button data-carry="front" class="carry-btn mode-btn active text-xs font-semibold py-2 px-2 rounded-xl border border-white/10 text-center transition-all">
+                        Front Hold
+                    </button>
+                    <button data-carry="shoulder" class="carry-btn mode-btn text-xs font-semibold py-2 px-2 rounded-xl border border-white/10 text-slate-300 hover:text-white text-center transition-all">
+                        Hip / Side
+                    </button>
+                    <button data-carry="dual" class="carry-btn mode-btn text-xs font-semibold py-2 px-2 rounded-xl border border-white/10 text-slate-300 hover:text-white text-center transition-all">
+                        Pack + Box
+                    </button>
+                </div>
+            </div>
+
+            <!-- Walk Speed Slider -->
+            <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                    <span class="font-medium text-slate-300">Walk Speed &amp; Cadence</span>
+                    <span id="speed-val" class="font-bold text-pink-400">1.15x</span>
+                </div>
+                <input id="speed-slider" type="range" min="0" max="2.4" step="0.05" value="1.15" class="w-full">
+            </div>
+
+            <!-- Athletic Stride / Bounce Intensity -->
+            <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                    <span class="font-medium text-slate-300">Physique Swagger &amp; Stride</span>
+                    <span id="swagger-val" class="font-bold text-pink-400">100%</span>
+                </div>
+                <input id="swagger-slider" type="range" min="40" max="160" step="5" value="100" class="w-full">
+            </div>
+
+            <!-- Faceted Lighting Depth -->
+            <div class="space-y-1">
+                <div class="flex justify-between text-xs">
+                    <span class="font-medium text-slate-300">Sharp Facet Contrast</span>
+                    <span id="contrast-val" class="font-bold text-pink-400">High Depth</span>
+                </div>
+                <input id="contrast-slider" type="range" min="0.5" max="2.2" step="0.1" value="1.4" class="w-full">
+            </div>
+
+            <!-- Interactive Hint -->
+            <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Drag to orbit 360&deg; &bull; Scroll to zoom</span>
+                <button id="toggle-turntable" class="text-pink-400 hover:text-pink-300 font-semibold underline">Auto-Orbit: OFF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            const container = document.getElementById('canvas-container');
+
+            // --- 1. SCENE, CAMERA & RENDERER ---
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b1120);
+            scene.fog = new THREE.FogExp2(0x0b1120, 0.032);
+
+            const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // --- 2. DRAMATIC STUDIO LIGHTING FOR PURE-WHITE SHARP PLANES ---
+            const ambientLight = new THREE.HemisphereLight(0xf8fafc, 0x1e293b, 0.65);
+            scene.add(ambientLight);
+
+            // Key Light for strong geometric plane contrast on the pure-white faceless head & arms
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+            keyLight.position.set(5, 9, 6);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 2048;
+            keyLight.shadow.mapSize.height = 2048;
+            keyLight.shadow.camera.near = 1;
+            keyLight.shadow.camera.far = 25;
+            const d = 5;
+            keyLight.shadow.camera.left = -d;
+            keyLight.shadow.camera.right = d;
+            keyLight.shadow.camera.top = d;
+            keyLight.shadow.camera.bottom = -d;
+            keyLight.shadow.bias = -0.0005;
+            scene.add(keyLight);
+
+            // Cool Slate Rim Light to carve out jaw/cheekbone edges
+            const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.95);
+            rimLight.position.set(-6, 5, -5);
+            scene.add(rimLight);
+
+            // Subtle Pink Bounce Light from below/side
+            const pinkBounceLight = new THREE.PointLight(0xf472b6, 0.6, 12);
+            pinkBounceLight.position.set(-2.5, 2.2, 3);
+            scene.add(pinkBounceLight);
+
+            // --- 3. MATERIALS (FLAT SHADED PURE-WHITE SKIN + FITTED UNIFORM) ---
+            const materials = {
+                // Pure-white sharp geometric planes with crisp depth
+                whiteSharpSkin: new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    roughness: 0.28,
+                    metalness: 0.06,
+                    flatShading: true
+                }),
+                // Vibrant fitted pink delivery shirt & cap
+                pinkShirt: new THREE.MeshStandardMaterial({
+                    color: 0xec4899,
+                    roughness: 0.42,
+                    metalness: 0.08,
+                    flatShading: true
+                }),
+                // Deep rose-pink trim/collar/seams for athletic contour
+                pinkTrim: new THREE.MeshStandardMaterial({
+                    color: 0xbe185d,
+                    roughness: 0.35,
+                    metalness: 0.1,
+                    flatShading: true
+                }),
+                // Soft pastel pink accent for cap logo & stripes
+                pinkLight: new THREE.MeshStandardMaterial({
+                    color: 0xfbcfe8,
+                    roughness: 0.3,
+                    metalness: 0.05,
+                    flatShading: true
+                }),
+                // Dark-blue tailored cargo/athletic pants
+                darkBluePants: new THREE.MeshStandardMaterial({
+                    color: 0x172554,
+                    roughness: 0.55,
+                    metalness: 0.08,
+                    flatShading: true
+                }),
+                // Sleek black athletic delivery shoes
+                blackShoes: new THREE.MeshStandardMaterial({
+                    color: 0x111827,
+                    roughness: 0.25,
+                    metalness: 0.22,
+                    flatShading: true
+                }),
+                shoeSole: new THREE.MeshStandardMaterial({
+                    color: 0x1f2937,
+                    roughness: 0.5,
+                    flatShading: true
+                }),
+                // Delivery Box Materials
+                cardboardBox: new THREE.MeshStandardMaterial({
+                    color: 0xd99b66,
+                    roughness: 0.65,
+                    metalness: 0.05,
+                    flatShading: true
+                }),
+                boxTape: new THREE.MeshStandardMaterial({
+                    color: 0xf472b6,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    flatShading: true
+                }),
+                boxLabel: new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    roughness: 0.2,
+                    flatShading: true
+                })
+            };
+
+            // Helper to create faceted meshes with shadow support
+            function createPart(geometry, material, parent, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(...pos);
+                mesh.rotation.set(...rot);
+                mesh.scale.set(...scale);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                if (parent) parent.add(mesh);
+                return mesh;
+            }
+
+            // Custom Sculpted Faceless Head Geometry with Sharp Architectural Planes
+            function createSculptedFacetedHeadGeometry() {
+                // Start with a segmented sphere and sculpt vertices into a chiseled masculine faceless head
+                const geo = new THREE.IcosahedronGeometry(0.32, 1);
+                const pos = geo.attributes.position;
+                const v = new THREE.Vector3();
+
+                for (let i = 0; i < pos.count; i++) {
+                    v.fromBufferAttribute(pos, i);
+
+                    // Elongate vertical proportion
+                    v.y *= 1.28;
+                    // Narrow temples slightly
+                    v.x *= 0.88;
+
+                    // Chiseled jawline & sharp chin taper in lower front
+                    if (v.y < 0) {
+                        const jawFactor = 1.0 + (v.y * 0.55);
+                        v.x *= Math.max(0.52, jawFactor);
+                        if (v.z > 0.05) {
+                            // Project sharp chin forward slightly
+                            v.z += 0.05 * (1 + v.y);
+                        }
+                    }
+
+                    // Flat, sharp facial shield plane in front (faceless planar look)
+                    if (v.z > 0.12) {
+                        // Create a subtle angular brow ridge and center facial ridge
+                        const centerRidge = Math.max(0, 0.16 - Math.abs(v.x)) * 0.35;
+                        v.z = 0.26 + centerRidge + (v.y > 0.05 ? 0.03 : -0.02);
+                    }
+
+                    // Flatten back of skull slightly
+                    if (v.z < -0.15) {
+                        v.z *= 0.92;
+                    }
+
+                    pos.setXYZ(i, v.x, v.y, v.z);
+                }
+                geo.computeVertexNormals();
+                return geo;
+            }
+
+            // --- 4. BUILD THE ATHLETIC MALE DELIVERY RIDER HIERARCHY ---
+            const riderRoot = new THREE.Group();
+            scene.add(riderRoot);
+
+            // Pelvis / Hips (Root of lower & upper body)
+            const pelvisGroup = new THREE.Group();
+            pelvisGroup.position.set(0, 2.08, 0);
+            riderRoot.add(pelvisGroup);
+
+            // Sculpted Pelvis / Belt area (Dark-blue pants top)
+            const pelvisGeo = new THREE.CylinderGeometry(0.33, 0.30, 0.28, 8);
+            pelvisGeo.scale(1.15, 1, 0.78);
+            createPart(pelvisGeo, materials.darkBluePants, pelvisGroup, [0, 0, 0]);
+
+            // Belt with Pink Express Buckle
+            const beltGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.07, 8);
+            beltGeo.scale(1.16, 1, 0.8);
+            createPart(beltGeo, materials.blackShoes, pelvisGroup, [0, 0.12, 0]);
+            createPart(new THREE.BoxGeometry(0.14, 0.09, 0.06), materials.pinkShirt, pelvisGroup, [0, 0.12, 0.26]);
+
+            // Spine / Lower Torso Joint (Athletic Narrow Waist)
+            const spineGroup = new THREE.Group();
+            spineGroup.position.set(0, 0.14, 0);
+            pelvisGroup.add(spineGroup);
+
+            // Tapered Lower Torso (Fitted Pink Shirt)
+            const abdomenGeo = new THREE.CylinderGeometry(0.41, 0.32, 0.48, 8);
+            abdomenGeo.scale(1.15, 1, 0.74);
+            createPart(abdomenGeo, materials.pinkShirt, spineGroup, [0, 0.22, 0]);
+
+            // Upper Chest Group (Broad Masculine V-Taper Shoulders & Pectorals)
+            const chestGroup = new THREE.Group();
+            chestGroup.position.set(0, 0.44, 0);
+            spineGroup.add(chestGroup);
+
+            // Broad Upper Torso / Ribcage
+            const chestGeo = new THREE.CylinderGeometry(0.54, 0.40, 0.56, 8);
+            chestGeo.scale(1.22, 1, 0.78);
+            createPart(chestGeo, materials.pinkShirt, chestGroup, [0, 0.26, 0]);
+
+            // Sculpted Geometric Pectoral Planes (Fitted Pink Shirt over muscular chest)
+            const pecGeo = new THREE.BoxGeometry(0.30, 0.26, 0.16);
+            createPart(pecGeo, materials.pinkShirt, chestGroup, [-0.17, 0.33, 0.29], [0.12, 0.12, -0.06]);
+            createPart(pecGeo, materials.pinkShirt, chestGroup, [0.17, 0.33, 0.29], [0.12, -0.12, 0.06]);
+
+            // Athletic Trapezius Slope & Collar
+            const trapsGeo = new THREE.CylinderGeometry(0.24, 0.52, 0.18, 8);
+            trapsGeo.scale(1.15, 1, 0.72);
+            createPart(trapsGeo, materials.pinkShirt, chestGroup, [0, 0.58, -0.01]);
+
+            // V-Neck Open Collar showing pure-white sculpted clavicle/neck
+            const collarGeo = new THREE.CylinderGeometry(0.22, 0.25, 0.12, 6);
+            createPart(collarGeo, materials.pinkTrim, chestGroup, [0, 0.62, 0]);
+            const vNeckSkinGeo = new THREE.ConeGeometry(0.14, 0.24, 4);
+            createPart(vNeckSkinGeo, materials.whiteSharpSkin, chestGroup, [0, 0.52, 0.28], [Math.PI, Math.PI / 4, 0]);
+
+            // Vertical Racing/Delivery Stripe on Shirt Back & Chest
+            createPart(new THREE.BoxGeometry(0.08, 0.52, 0.03), materials.pinkLight, chestGroup, [0, 0.27, -0.32]);
+
+            // Optional Thermal Backpack (Visible in "Pack + Box" mode)
+            const backpackGroup = new THREE.Group();
+            backpackGroup.position.set(0, 0.32, -0.48);
+            backpackGroup.visible = false;
+            chestGroup.add(backpackGroup);
+            createPart(new THREE.BoxGeometry(0.68, 0.78, 0.42), materials.pinkTrim, backpackGroup, [0, 0, 0]);
+            createPart(new THREE.BoxGeometry(0.62, 0.68, 0.06), materials.pinkShirt, backpackGroup, [0, 0, -0.22]);
+            createPart(new THREE.BoxGeometry(0.45, 0.14, 0.07), materials.pinkLight, backpackGroup, [0, 0.18, -0.24]);
+
+            // --- 5. NECK, PURE-WHITE SCULPTED FACELESS HEAD & PINK HAT ---
+            const neckGroup = new THREE.Group();
+            neckGroup.position.set(0, 0.64, 0.02);
+            chestGroup.add(neckGroup);
+
+            // Muscular Faceted Pure-White Neck
+            const neckGeo = new THREE.CylinderGeometry(0.145, 0.175, 0.24, 6);
+            createPart(neckGeo, materials.whiteSharpSkin, neckGroup, [0, 0.08, 0]);
+
+            // Head Pivot
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 0.22, 0.02);
+            neckGroup.add(headGroup);
+
+            // Main Faceless Pure-White Sculpted Head
+            const headMesh = createPart(createSculptedFacetedHeadGeometry(), materials.whiteSharpSkin, headGroup, [0, 0.16, 0]);
+
+            // Additional Sharp Geometric Cheekbone & Jaw Planes for Deep Architectural Shading
+            const cheekGeo = new THREE.OctahedronGeometry(0.13, 0);
+            createPart(cheekGeo, materials.whiteSharpSkin, headGroup, [-0.15, 0.14, 0.14], [0.2, 0.4, -0.2], [0.75, 1.35, 1.1]);
+            createPart(cheekGeo, materials.whiteSharpSkin, headGroup, [0.15, 0.14, 0.14], [0.2, -0.4, 0.2], [0.75, 1.35, 1.1]);
+
+            // Sharp Center Nose/Brow Bridge Plane (No eyes/mouth—pure sculptural planes)
+            const browPlaneGeo = new THREE.BoxGeometry(0.28, 0.07, 0.12);
+            createPart(browPlaneGeo, materials.whiteSharpSkin, headGroup, [0, 0.26, 0.22], [0.25, 0, 0]);
+
+            // Geometric Ears
+            const earGeo = new THREE.OctahedronGeometry(0.07, 0);
+            createPart(earGeo, materials.whiteSharpSkin, headGroup, [-0.27, 0.16, -0.02], [0, 0, -0.2], [0.45, 1.2, 0.7]);
+            createPart(earGeo, materials.whiteSharpSkin, headGroup, [0.27, 0.16, -0.02], [0, 0, 0.2], [0.45, 1.2, 0.7]);
+
+            // Pink Delivery Cap / Hat
+            const hatGroup = new THREE.Group();
+            hatGroup.position.set(0, 0.34, 0.01);
+            hatGroup.rotation.set(-0.08, 0, 0);
+            headGroup.add(hatGroup);
+
+            // Faceted Cap Crown
+            const capCrownGeo = new THREE.CylinderGeometry(0.26, 0.305, 0.22, 8);
+            capCrownGeo.scale(0.95, 1, 1.08);
+            createPart(capCrownGeo, materials.pinkShirt, hatGroup, [0, 0.06, -0.01]);
+
+            const capTopGeo = new THREE.OctahedronGeometry(0.28, 1);
+            capTopGeo.scale(0.92, 0.48, 1.05);
+            createPart(capTopGeo, materials.pinkShirt, hatGroup, [0, 0.16, -0.01]);
+
+            // Cap Button & Front Emblem
+            createPart(new THREE.OctahedronGeometry(0.04, 0), materials.pinkTrim, hatGroup, [0, 0.29, -0.01]);
+            createPart(new THREE.BoxGeometry(0.18, 0.09, 0.03), materials.pinkLight, hatGroup, [0, 0.09, 0.30], [-0.15, 0, 0]);
+
+            // Curved Geometric Cap Visor / Brim
+            const brimGroup = new THREE.Group();
+            brimGroup.position.set(0, -0.02, 0.26);
+            brimGroup.rotation.set(0.16, 0, 0);
+            hatGroup.add(brimGroup);
+
+            createPart(new THREE.BoxGeometry(0.32, 0.035, 0.28), materials.pinkTrim, brimGroup, [0, 0, 0.08]);
+            createPart(new THREE.BoxGeometry(0.14, 0.032, 0.26), materials.pinkTrim, brimGroup, [-0.18, -0.02, 0.07], [0, 0.15, -0.22]);
+            createPart(new THREE.BoxGeometry(0.14, 0.032, 0.26), materials.pinkTrim, brimGroup, [0.18, -0.02, 0.07], [0, -0.15, 0.22]);
+
+            // --- 6. MUSCULAR ARMS (SHORT PINK SLEEVES + PURE-WHITE SCULPTED ARMS) ---
+            function createAthleticArm(isLeft) {
+                const side = isLeft ? -1 : 1;
+                const shoulderGroup = new THREE.Group();
+                shoulderGroup.position.set(side * 0.66, 0.48, 0);
+                chestGroup.add(shoulderGroup);
+
+                // Fitted Pink Short Sleeve Cap over Broad Deltoid
+                const deltoidSleeveGeo = new THREE.DodecahedronGeometry(0.20, 0);
+                deltoidSleeveGeo.scale(0.95, 1.15, 0.95);
+                createPart(deltoidSleeveGeo, materials.pinkShirt, shoulderGroup, [side * 0.04, -0.04, 0]);
+
+                // Sleeve Cuff Trim
+                const cuffGeo = new THREE.CylinderGeometry(0.155, 0.145, 0.08, 7);
+                createPart(cuffGeo, materials.pinkTrim, shoulderGroup, [side * 0.05, -0.22, 0], [0, 0, side * -0.08]);
+
+                // Pure-White Sculpted Bicep & Tricep (Faceted Muscular Definition)
+                const bicepGeo = new THREE.CylinderGeometry(0.14, 0.125, 0.34, 7);
+                createPart(bicepGeo, materials.whiteSharpSkin, shoulderGroup, [side * 0.06, -0.34, 0]);
+
+                // Bicep Peak Plane
+                const bicepPeakGeo = new THREE.OctahedronGeometry(0.11, 0);
+                createPart(bicepPeakGeo, materials.whiteSharpSkin, shoulderGroup, [side * 0.06, -0.32, 0.05], [0, 0, 0], [0.85, 1.4, 0.9]);
+
+                // Elbow Joint
+                const elbowGroup = new THREE.Group();
+                elbowGroup.position.set(side * 0.06, -0.52, 0);
+                shoulderGroup.add(elbowGroup);
+
+                // Elbow Joint Sphere
+                createPart(new THREE.OctahedronGeometry(0.115, 0), materials.whiteSharpSkin, elbowGroup, [0, 0, 0]);
+
+                // Sculpted Forearm (Tapered Pure-White Sharp Planes)
+                const forearmGeo = new THREE.CylinderGeometry(0.125, 0.085, 0.46, 6);
+                createPart(forearmGeo, materials.whiteSharpSkin, elbowGroup, [0, -0.23, 0]);
+
+                // Wristband (Pink Athletic Sweatband on Right Wrist)
+                if (!isLeft) {
+                    createPart(new THREE.CylinderGeometry(0.095, 0.092, 0.08, 6), materials.pinkShirt, elbowGroup, [0, -0.40, 0]);
+                }
+
+                // Hand Group
+                const handGroup = new THREE.Group();
+                handGroup.position.set(0, -0.48, 0);
+                elbowGroup.add(handGroup);
+
+                const palmGeo = new THREE.BoxGeometry(0.10, 0.15, 0.13);
+                createPart(palmGeo, materials.whiteSharpSkin, handGroup, [0, -0.05, 0.01]);
+
+                return { shoulderGroup, elbowGroup, handGroup };
+            }
+
+            const leftArm = createAthleticArm(true);
+            const rightArm = createAthleticArm(false);
+
+            // --- 7. ATHLETIC LEGS (DARK-BLUE PANTS & BLACK SHOES) ---
+            function createAthleticLeg(isLeft) {
+                const side = isLeft ? -1 : 1;
+                const hipGroup = new THREE.Group();
+                hipGroup.position.set(side * 0.24, -0.08, 0);
+                pelvisGroup.add(hipGroup);
+
+                // Powerful Quad / Thigh (Dark-Blue Pants)
+                const thighGeo = new THREE.CylinderGeometry(0.215, 0.16, 0.86, 8);
+                thighGeo.scale(1.04, 1, 1.08);
+                createPart(thighGeo, materials.darkBluePants, hipGroup, [0, -0.42, 0]);
+
+                // Side Cargo Pocket Detail on Pants
+                createPart(new THREE.BoxGeometry(0.06, 0.26, 0.20), materials.darkBluePants, hipGroup, [side * 0.19, -0.42, 0.02]);
+
+                // Knee Joint Group
+                const kneeGroup = new THREE.Group();
+                kneeGroup.position.set(0, -0.86, 0);
+                hipGroup.add(kneeGroup);
+
+                // Knee Articulation Cap
+                createPart(new THREE.OctahedronGeometry(0.155, 1), materials.darkBluePants, kneeGroup, [0, 0, 0.02]);
+
+                // Defined Calf / Lower Leg (Dark-Blue Tapered Pants)
+                const calfGeo = new THREE.CylinderGeometry(0.165, 0.115, 0.84, 8);
+                createPart(calfGeo, materials.darkBluePants, kneeGroup, [0, -0.42, -0.01]);
+
+                // Pant Cuff
+                createPart(new THREE.CylinderGeometry(0.128, 0.125, 0.08, 8), materials.darkBluePants, kneeGroup, [0, -0.80, 0]);
+
+                // Ankle & Black Athletic Delivery Shoe
+                const ankleGroup = new THREE.Group();
+                ankleGroup.position.set(0, -0.86, 0);
+                kneeGroup.add(ankleGroup);
+
+                // Pure-White Sculpted Ankle Glimpse
+                createPart(new THREE.CylinderGeometry(0.095, 0.095, 0.08, 6), materials.whiteSharpSkin, ankleGroup, [0, 0.01, 0]);
+
+                // Black Shoe Upper (Faceted Sneaker Design)
+                const shoeHeelGeo = new THREE.BoxGeometry(0.22, 0.16, 0.28);
+                createPart(shoeHeelGeo, materials.blackShoes, ankleGroup, [0, -0.07, 0.02]);
+
+                const shoeToeGeo = new THREE.CylinderGeometry(0.09, 0.13, 0.28, 6);
+                shoeToeGeo.rotateX(Math.PI / 2);
+                createPart(shoeToeGeo, materials.blackShoes, ankleGroup, [0, -0.09, 0.22], [0.15, 0, 0]);
+
+                // Thick Sculpted Outsole
+                const soleGeo = new THREE.BoxGeometry(0.24, 0.05, 0.50);
+                createPart(soleGeo, materials.shoeSole, ankleGroup, [0, -0.16, 0.11]);
+
+                // Subtle Pink Heel Tab on Black Shoe
+                createPart(new THREE.BoxGeometry(0.06, 0.08, 0.03), materials.pinkShirt, ankleGroup, [0, -0.04, -0.12]);
+
+                return { hipGroup, kneeGroup, ankleGroup };
+            }
+
+            const leftLeg = createAthleticLeg(true);
+            const rightLeg = createAthleticLeg(false);
+
+            // --- 8. DELIVERY BOX (HELD IN HANDS / HIP / DUAL) ---
+            const deliveryBoxGroup = new THREE.Group();
+            chestGroup.add(deliveryBoxGroup);
+
+            // Main Corrugated Parcel Box
+            const boxWidth = 0.68, boxHeight = 0.46, boxDepth = 0.50;
+            createPart(new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth), materials.cardboardBox, deliveryBoxGroup, [0, 0, 0]);
+
+            // Pink Express Branding Tape & Shipping Label
+            createPart(new THREE.BoxGeometry(boxWidth + 0.01, 0.06, boxDepth + 0.01), materials.boxTape, deliveryBoxGroup, [0, 0.02, 0]);
+            createPart(new THREE.BoxGeometry(0.10, boxHeight + 0.01, boxDepth + 0.01), materials.boxTape, deliveryBoxGroup, [0, 0, 0]);
+            createPart(new THREE.BoxGeometry(0.22, 0.14, 0.02), materials.boxLabel, deliveryBoxGroup, [0.16, 0.08, boxDepth / 2 + 0.005]);
+            createPart(new THREE.BoxGeometry(0.16, 0.03, 0.025), materials.pinkShirt, deliveryBoxGroup, [0.16, 0.11, boxDepth / 2 + 0.006]);
+
+            // --- 9. MOVING TREADMILL STREET ENVIRONMENT ---
+            const envGroup = new THREE.Group();
+            scene.add(envGroup);
+
+            // Sleek Dark Asphalt Runway
+            const roadGeo = new THREE.PlaneGeometry(18, 40);
+            const roadMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                roughness: 0.85,
+                metalness: 0.1
+            });
+            const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+            roadMesh.rotation.x = -Math.PI / 2;
+            roadMesh.receiveShadow = true;
+            envGroup.add(roadMesh);
+
+            // Glowing Sidewalk Curbs & Moving Center Dashes
+            const dashes = [];
+            const dashGeo = new THREE.BoxGeometry(0.16, 0.02, 1.3);
+            const dashMat = new THREE.MeshStandardMaterial({
+                color: 0xf472b6,
+                emissive: 0xbe185d,
+                emissiveIntensity: 0.45,
+                roughness: 0.3
+            });
+
+            for (let i = 0; i < 12; i++) {
+                const dash = new THREE.Mesh(dashGeo, dashMat);
+                dash.position.set(0, 0.01, -18 + i * 3.2);
+                dash.receiveShadow = true;
+                envGroup.add(dash);
+                dashes.push(dash);
+            }
+
+            // Passing Stylized Low-Poly Street Pillars / Neon Bollards
+            const bollards = [];
+            const bollardGeo = new THREE.CylinderGeometry(0.08, 0.10, 0.9, 6);
+            const bollardTopGeo = new THREE.OctahedronGeometry(0.11, 0);
+
+            for (let i = 0; i < 8; i++) {
+                const bGroup = new THREE.Group();
+                const side = i % 2 === 0 ? -2.6 : 2.6;
+                const zPos = -14 + Math.floor(i / 2) * 7.5;
+                bGroup.position.set(side, 0, zPos);
+
+                createPart(bollardGeo, materials.shoeSole, bGroup, [0, 0.45, 0]);
+                const glowCap = createPart(bollardTopGeo, dashMat, bGroup, [0, 0.98, 0]);
+                envGroup.add(bGroup);
+                bollards.push(bGroup);
+            }
+
+            // --- 10. INTERACTIVE CAMERA ORBIT & PRESETS ---
+            let camState = {
+                theta: 0.52,       // Horizontal orbit angle (radians)
+                phi: 1.32,         // Vertical polar angle
+                radius: 6.2,
+                targetY: 2.35,
+                autoOrbit: false
+            };
+            let desiredCam = { ...camState };
+
+            let isDragging = false;
+            let prevPointer = { x: 0, y: 0 };
+
+            container.addEventListener('pointerdown', (e) => {
+                isDragging = true;
+                prevPointer.x = e.clientX;
+                prevPointer.y = e.clientY;
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!isDragging) return;
+                const dx = e.clientX - prevPointer.x;
+                const dy = e.clientY - prevPointer.y;
+                prevPointer.x = e.clientX;
+                prevPointer.y = e.clientY;
+
+                desiredCam.theta -= dx * 0.008;
+                desiredCam.phi = Math.max(0.45, Math.min(1.68, desiredCam.phi - dy * 0.006));
+            });
+
+            window.addEventListener('pointerup', () => {
+                isDragging = false;
+            });
+
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                desiredCam.radius = Math.max(2.6, Math.min(10.5, desiredCam.radius + e.deltaY * 0.004));
+            }, { passive: false });
+
+            // Camera Preset Buttons
+            document.querySelectorAll('.cam-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const preset = btn.getAttribute('data-cam');
+                    if (preset === 'three-quarter') {
+                        desiredCam.theta = 0.52;
+                        desiredCam.phi = 1.32;
+                        desiredCam.radius = 6.2;
+                        desiredCam.targetY = 2.35;
+                    } else if (preset === 'front') {
+                        desiredCam.theta = 0.0;
+                        desiredCam.phi = 1.35;
+                        desiredCam.radius = 6.0;
+                        desiredCam.targetY = 2.35;
+                    } else if (preset === 'side') {
+                        desiredCam.theta = Math.PI / 2;
+                        desiredCam.phi = 1.38;
+                        desiredCam.radius = 6.6;
+                        desiredCam.targetY = 2.25;
+                    } else if (preset === 'head') {
+                        desiredCam.theta = 0.35;
+                        desiredCam.phi = 1.28;
+                        desiredCam.radius = 2.85;
+                        desiredCam.targetY = 3.45;
+                    }
+                });
+            });
+
+            // --- 11. ANIMATION STATE & UI CONTROLS ---
+            let animConfig = {
+                walkSpeed: 1.15,
+                swagger: 1.0,
+                carryMode: 'front' // 'front' | 'shoulder' | 'dual'
+            };
+
+            const speedSlider = document.getElementById('speed-slider');
+            const speedVal = document.getElementById('speed-val');
+            const statusBadge = document.getElementById('status-badge');
+
+            speedSlider.addEventListener('input', (e) => {
+                animConfig.walkSpeed = parseFloat(e.target.value);
+                speedVal.textContent = animConfig.walkSpeed.toFixed(2) + 'x';
+                if (animConfig.walkSpeed === 0) {
+                    statusBadge.textContent = 'Idle Pose';
+                    statusBadge.className = 'text-[11px] font-medium text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full';
+                } else if (animConfig.walkSpeed > 1.7) {
+                    statusBadge.textContent = 'Power Stride';
+                    statusBadge.className = 'text-[11px] font-medium text-pink-300 bg-pink-500/20 border border-pink-500/40 px-2.5 py-0.5 rounded-full';
+                } else {
+                    statusBadge.textContent = 'Active Stride';
+                    statusBadge.className = 'text-[11px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full';
+                }
+            });
+
+            const swaggerSlider = document.getElementById('swagger-slider');
+            const swaggerVal = document.getElementById('swagger-val');
+            swaggerSlider.addEventListener('input', (e) => {
+                const pct = parseInt(e.target.value, 10);
+                animConfig.swagger = pct / 100;
+                swaggerVal.textContent = pct + '%';
+            });
+
+            const contrastSlider = document.getElementById('contrast-slider');
+            const contrastVal = document.getElementById('contrast-val');
+            contrastSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                keyLight.intensity = val;
+                contrastVal.textContent = val > 1.6 ? 'Ultra Sharp' : val > 1.1 ? 'High Depth' : 'Soft';
+            });
+
+            document.querySelectorAll('.carry-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.carry-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    animConfig.carryMode = btn.getAttribute('data-carry');
+                    backpackGroup.visible = (animConfig.carryMode === 'dual');
+                });
+            });
+
+            const turntableBtn = document.getElementById('toggle-turntable');
+            turntableBtn.addEventListener('click', () => {
+                camState.autoOrbit = !camState.autoOrbit;
+                turntableBtn.textContent = `Auto-Orbit: ${camState.autoOrbit ? 'ON' : 'OFF'}`;
+            });
+
+            // --- 12. PROCEDURAL KINEMATICS & SMOOTH WALK CYCLE ---
+            const clock = new THREE.Clock();
+            let walkPhase = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const dt = Math.min(clock.getDelta(), 0.1);
+                const speed = animConfig.walkSpeed;
+                const swag = animConfig.swagger;
+
+                // Advance procedural walk cycle phase
+                walkPhase += dt * speed * 5.2;
+
+                // Smoothly interpolate intensity when transitioning between walk and idle
+                const moveFactor = Math.min(1.0, speed / 0.5);
+                const breathePhase = clock.getElapsedTime() * 2.2;
+
+                // 1. LOWER BODY STRIDE (Hips, Knees, Ankles & Pelvis Sway)
+                const strideAngle = 0.62 * swag * moveFactor;
+                const leftSin = Math.sin(walkPhase);
+                const rightSin = Math.sin(walkPhase + Math.PI);
+
+                // Hip flexion/extension + athletic slight outward stance
+                leftLeg.hipGroup.rotation.x = leftSin * strideAngle;
+                rightLeg.hipGroup.rotation.x = rightSin * strideAngle;
+                leftLeg.hipGroup.rotation.z = -0.035;
+                rightLeg.hipGroup.rotation.z = 0.035;
+
+                // Knee articulation (bends during swing-through and cushions on heel strike)
+                const leftKneeBend = Math.max(0, -Math.cos(walkPhase + 0.25)) * 1.05 * swag * moveFactor + 0.06;
+                const rightKneeBend = Math.max(0, -Math.cos(walkPhase + Math.PI + 0.25)) * 1.05 * swag * moveFactor + 0.06;
+                leftLeg.kneeGroup.rotation.x = leftKneeBend;
+                rightLeg.kneeGroup.rotation.x = rightKneeBend;
+
+                // Ankle dorsiflexion / plantarflexion for natural heel-to-toe roll
+                leftLeg.ankleGroup.rotation.x = Math.sin(walkPhase - 0.6) * 0.28 * moveFactor - leftKneeBend * 0.35;
+                rightLeg.ankleGroup.rotation.x = Math.sin(walkPhase + Math.PI - 0.6) * 0.28 * moveFactor - rightKneeBend * 0.35;
+
+                // Pelvis vertical double-bounce, lateral hip shift, and counter-rotation
+                const verticalBounce = Math.abs(Math.cos(walkPhase)) * 0.095 * swag * moveFactor;
+                pelvisGroup.position.y = 2.08 + verticalBounce - (0.04 * moveFactor);
+                pelvisGroup.position.x = Math.cos(walkPhase) * 0.045 * swag * moveFactor;
+                pelvisGroup.rotation.y = -leftSin * 0.14 * swag * moveFactor;
+                pelvisGroup.rotation.z = Math.cos(walkPhase) * 0.055 * swag * moveFactor;
+
+                // 2. ATHLETIC V-TAPER TORSO SWAY & COUNTER-BALANCE
+                spineGroup.rotation.y = leftSin * 0.12 * swag * moveFactor;
+                spineGroup.rotation.z = -Math.cos(walkPhase) * 0.04 * swag * moveFactor;
+                spineGroup.rotation.x = 0.05 * moveFactor + Math.sin(breathePhase) * 0.015;
+
+                chestGroup.rotation.y = leftSin * 0.16 * swag * moveFactor;
+                chestGroup.rotation.x = 0.04 * moveFactor + Math.cos(walkPhase * 2) * 0.025 * moveFactor;
+
+                // 3. HEAD STABILIZATION & SUBTLE CONFIDENT NOD
+                headGroup.rotation.y = -chestGroup.rotation.y * 0.65;
+                headGroup.rotation.x = -0.04 + Math.sin(walkPhase * 2 - 0.4) * 0.045 * moveFactor + Math.sin(breathePhase) * 0.02;
+                headGroup.rotation.z = -pelvisGroup.rotation.z * 0.5;
+
+                // 4. ARM & DELIVERY BOX CARRYING MODES
+                const boxBob = Math.sin(walkPhase * 2 - 0.5) * 0.03 * swag * moveFactor;
+
+                if (animConfig.carryMode === 'front') {
+                    // Two-Handed Front Carry showing flexed forearms & biceps
+                    deliveryBoxGroup.position.set(0, 0.02 + boxBob, 0.58);
+                    deliveryBoxGroup.rotation.set(-0.08 + boxBob * 0.8, -chestGroup.rotation.y * 0.25, 0);
+                    deliveryBoxGroup.scale.set(1, 1, 1);
+
+                    leftArm.shoulderGroup.rotation.set(-0.62 + boxBob * 0.5, 0.34, 0.14);
+                    leftArm.elbowGroup.rotation.set(-1.12 - boxBob * 0.5, 0.22, 0);
+
+                    rightArm.shoulderGroup.rotation.set(-0.62 + boxBob * 0.5, -0.34, -0.14);
+                    rightArm.elbowGroup.rotation.set(-1.12 - boxBob * 0.5, -0.22, 0);
+
+                } else if (animConfig.carryMode === 'shoulder') {
+                    // One-Arm Hip/Side Carry (Left arm holds box on hip, Right muscular arm swings freely)
+                    deliveryBoxGroup.position.set(-0.56, 0.06 + boxBob, 0.22);
+                    deliveryBoxGroup.rotation.set(0.05, 0.28, 0.18);
+                    deliveryBoxGroup.scale.set(0.9, 0.9, 0.9);
+
+                    // Left arm cradles parcel at side/hip
+                    leftArm.shoulderGroup.rotation.set(-0.22 + boxBob * 0.4, 0.15, -0.28);
+                    leftArm.elbowGroup.rotation.set(-1.18, 0.38, 0);
+
+                    // Right arm performs natural athletic counterbalance swing
+                    const rightArmSwing = leftSin * 0.52 * swag * moveFactor;
+                    rightArm.shoulderGroup.rotation.set(rightArmSwing, 0, -0.12);
+                    rightArm.elbowGroup.rotation.set(-0.35 - Math.max(0, -rightArmSwing) * 0.5, 0, 0);
+
+                } else if (animConfig.carryMode === 'dual') {
+                    // Thermal Backpack + Express Hand Parcel in Right Hand
+                    deliveryBoxGroup.position.set(0.55, 0.04 + boxBob, 0.24);
+                    deliveryBoxGroup.rotation.set(0.04, -0.25, -0.16);
+                    deliveryBoxGroup.scale.set(0.85, 0.85, 0.85);
+
+                    // Left arm swings dynamically
+                    const leftArmSwing = rightSin * 0.55 * swag * moveFactor;
+                    leftArm.shoulderGroup.rotation.set(leftArmSwing, 0, 0.12);
+                    leftArm.elbowGroup.rotation.set(-0.38 - Math.max(0, -leftArmSwing) * 0.5, 0, 0);
+
+                    // Right arm holds compact express box
+                    rightArm.shoulderGroup.rotation.set(-0.26 + boxBob * 0.4, -0.15, 0.26);
+                    rightArm.elbowGroup.rotation.set(-1.15, -0.35, 0);
+                }
+
+                // 5. SCROLLING ROAD ENVIRONMENT SYNCED TO WALK SPEED
+                const groundMove = dt * speed * 3.1;
+                dashes.forEach(dash => {
+                    dash.position.z -= groundMove;
+                    if (dash.position.z < -18) {
+                        dash.position.z += 12 * 3.2;
+                    }
+                });
+
+                bollards.forEach(b => {
+                    b.position.z -= groundMove;
+                    if (b.position.z < -14) {
+                        b.position.z += 4 * 7.5;
+                    }
+                });
+
+                // 6. SMOOTH CAMERA DAMPING
+                if (camState.autoOrbit && !isDragging) {
+                    desiredCam.theta += dt * 0.35;
+                }
+
+                camState.theta += (desiredCam.theta - camState.theta) * 0.1;
+                camState.phi += (desiredCam.phi - camState.phi) * 0.1;
+                camState.radius += (desiredCam.radius - camState.radius) * 0.1;
+                camState.targetY += (desiredCam.targetY - camState.targetY) * 0.1;
+
+                camera.position.x = camState.radius * Math.sin(camState.phi) * Math.sin(camState.theta);
+                camera.position.y = camState.targetY + camState.radius * Math.cos(camState.phi);
+                camera.position.z = camState.radius * Math.sin(camState.phi) * Math.cos(camState.theta);
+                camera.lookAt(0, camState.targetY, 0);
+
+                renderer.render(scene, camera);
+            }
+
+            // Responsive Resize Handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Start Animation Loop
+            animate();
+        };
+    </script>
+</body>
+</html>

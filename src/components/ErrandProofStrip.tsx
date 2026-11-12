@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing } from '../config/theme';
 import { formatPeso } from '../utils/format';
 import { apiClient } from '../services/apiClient';
 
@@ -151,7 +151,7 @@ export default function ErrandProofStrip({ errandId }: { errandId: string }) {
 
   return (
     <View style={styles.wrapper} testID="errand-proof-strip">
-      <Text style={[styles.heading, { color: colors.textDark }]}>Photos from your rider</Text>
+      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heading, { color: colors.textDark }]}>Photos from your rider</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {proofs.map((proof) => {
@@ -165,26 +165,26 @@ export default function ErrandProofStrip({ errandId }: { errandId: string }) {
               style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}
               testID={`proof-${proof.id}`}
             >
-              <Text style={[styles.kind, { color: colors.textDark }]}>{LABELS[proof.kind]}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.kind, { color: colors.textDark }]}>{LABELS[proof.kind]}</Text>
 
               {amount !== null && (
-                <Text style={[styles.amount, { color: colors.textDark }]}>{formatPeso(amount)}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.amount, { color: colors.textDark }]}>{formatPeso(amount)}</Text>
               )}
 
               {/* Said plainly. A customer paying for goods bought somewhere that
                   prints no receipt should know which purchase that was — the
                   same reason the fee breakdown itemises rather than totalling. */}
               {unverified && (
-                <Text style={[styles.unverified, { color: colors.warning }]} testID={`proof-${proof.id}-unverified`}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.unverified, { color: colors.warning }]} testID={`proof-${proof.id}-unverified`}>
                   Amount stated by the rider
                 </Text>
               )}
 
-              <Text style={[styles.time, { color: colors.textLight }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.time, { color: colors.textLight }]}>
                 {new Date(proof.capturedAt).toLocaleString()}
               </Text>
 
-              <Text style={[styles.view, { color: colors.primary }]}>Tap to view</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.view, { color: colors.primary }]}>Tap to view</Text>
             </Pressable>
           );
         })}
@@ -199,20 +199,20 @@ export default function ErrandProofStrip({ errandId }: { errandId: string }) {
           {loadingImage ? (
             <View style={styles.centered}>
               <ActivityIndicator color="#FFFFFF" size="large" />
-              <Text style={styles.backdropText}>Loading photo</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.backdropText}>Loading photo</Text>
             </View>
           ) : imageError ? (
             <View style={styles.centered} testID="proof-image-error">
-              <Text style={styles.errorText}>{imageError}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.errorText}>{imageError}</Text>
               <Pressable
                 onPress={() => openId !== null && load(openId)}
                 style={[styles.retry, { backgroundColor: colors.primary }]}
                 testID="proof-image-retry"
               >
-                <Text style={styles.retryLabel}>Try again</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.retryLabel, { color: colors.onPrimary }]}>Try again</Text>
               </Pressable>
               <Pressable onPress={close} style={styles.dismiss}>
-                <Text style={styles.backdropText}>Close</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.backdropText}>Close</Text>
               </Pressable>
             </View>
           ) : openImage ? (
@@ -236,7 +236,7 @@ export default function ErrandProofStrip({ errandId }: { errandId: string }) {
 
 const styles = StyleSheet.create({
   wrapper: { marginTop: Spacing.md, gap: Spacing.sm },
-  heading: { fontFamily: FontFamily.semibold, fontSize: FontSizes.sm },
+  heading: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) },
   row: { gap: Spacing.sm, paddingRight: Spacing.sm },
   card: {
     minWidth: 150,
@@ -245,11 +245,11 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     gap: 2,
   },
-  kind: { fontFamily: FontFamily.semibold, fontSize: FontSizes.xs },
-  amount: { fontFamily: FontFamily.bold, fontSize: FontSizes.md },
-  unverified: { fontFamily: FontFamily.semibold, fontSize: 10 },
-  time: { fontFamily: FontFamily.regular, fontSize: 10 },
-  view: { fontFamily: FontFamily.semibold, fontSize: 10, marginTop: 2 },
+  kind: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+  amount: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.price), 'price'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.price) },
+  unverified: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+  time: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+  view: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.micro), marginTop: 2 },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.9)',
@@ -260,18 +260,20 @@ const styles = StyleSheet.create({
   full: { width: '100%', height: '80%' },
   centered: { alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg },
   backdropText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     textAlign: 'center',
   },
   errorText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     textAlign: 'center',
   },
   retry: { borderRadius: 10, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
-  retryLabel: { color: '#FFFFFF', fontFamily: FontFamily.semibold, fontSize: FontSizes.sm },
+  retryLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), color: '#FFFFFF', fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
   dismiss: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
 });

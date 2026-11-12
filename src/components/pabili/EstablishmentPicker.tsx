@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { AlertCircle, Bike, MapPin, RotateCw, Search, X } from 'lucide-react-native';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { searchFieldStyles, getSearchFieldSurface } from '../../config/searchField';
 import { useDefaultDeliveryLocation } from '../../hooks/useDefaultDeliveryLocation';
 import { useEstablishmentSearch, MIN_QUERY_LENGTH } from '../../hooks/useEstablishmentSearch';
 import { useFindStoresPages } from '../../hooks/useNearbyStoresPages';
@@ -40,9 +41,9 @@ import {
  * merchant category's stores, up to 20, and a typed search stays inside it; the
  * category shows as a chip the customer can clear to search every store.
  *
- * Each store is a photo card, as on the Popular Stores screen (2026-10-10; icon
- * rows before), so the list asks for photo addresses. A card picks or unpicks
- * its store; the card's tick and red border show which are picked.
+ * Each store matches the Popular Stores photo cards: name over a shaded
+ * photo, category and distance below, and no street address. A card picks or
+ * unpicks its store; the card's tick shows which are picked.
  */
 export default function EstablishmentPicker({
   userId,
@@ -139,6 +140,7 @@ export default function EstablishmentPicker({
       testIDPrefix="establishment"
       selectable
       selected={isSelected}
+      presentation="photo-overlay"
     />
   );
 
@@ -158,18 +160,15 @@ export default function EstablishmentPicker({
     <View testID="establishment-picker">
       <View
         style={[
+          searchFieldStyles.surface,
           styles.searchBar,
-          {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
-            borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
-          },
+          getSearchFieldSurface(isDark),
         ]}
         testID="establishment-search-bar"
       >
         <Search size={16} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.2} />
         <TextInput
-          style={[styles.searchInput, { color: colors.textDark }]}
+          style={[searchFieldStyles.input, { color: colors.textDark }]}
           placeholder={category ? `Search ${category.name} stores` : 'Search a store, e.g. Mercury Drug'}
           placeholderTextColor={colors.textLight}
           value={query}
@@ -251,8 +250,7 @@ export default function EstablishmentPicker({
             <View key={i} style={styles.shimmerCard}>
               <ShimmerWave width="100%" height={CARD_IMAGE_HEIGHT} borderRadius={BorderRadius.lg} />
               <View style={styles.shimmerBody}>
-                <ShimmerWave height={14} width="65%" borderRadius={BorderRadius.sm} />
-                <ShimmerWave height={12} width="40%" borderRadius={BorderRadius.sm} />
+                <ShimmerWave height={12} width="65%" borderRadius={BorderRadius.sm} />
               </View>
             </View>
           ))}
@@ -363,30 +361,12 @@ export default function EstablishmentPicker({
 }
 
 /** A card's photo: tall enough to read the shop front, as on the Popular Stores screen. */
-const CARD_IMAGE_HEIGHT = 140;
+const CARD_IMAGE_HEIGHT = 180;
 const NO_IMAGES: Record<number, string> = {};
 
 const styles = StyleSheet.create({
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1.2,
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    minHeight: 48,
     marginBottom: Spacing.sm,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: FontFamily.medium,
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    paddingVertical: 10,
   },
   chipRow: {
     flexDirection: 'row',

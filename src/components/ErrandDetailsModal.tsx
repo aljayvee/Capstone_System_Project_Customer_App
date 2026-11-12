@@ -22,7 +22,7 @@ import {
   Headphones,
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontSizes, Spacing, BorderRadius, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, Spacing, BorderRadius, FontFamily, Shadows, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 import { formatErrandId } from '../utils/formatErrandId';
 import { formatPaymentMethod } from '../utils/format';
 import StatusBadge from './StatusBadge';
@@ -50,7 +50,7 @@ export default function ErrandDetailsModal({
 
   if (!errand) return null;
 
-  const errandId = formatErrandId(errand.orderId || errand.id);
+  const errandId = formatErrandId(errand.orderId || errand.id, errand.referenceNo);
   const rawId = String(errand.orderId || errand.id);
   const grandTotal = Number(errand.grandTotal ?? errand.totalCost ?? 0).toFixed(2);
   const deliveryFee = Number(errand.deliveryFee ?? 0).toFixed(2);
@@ -93,8 +93,8 @@ export default function ErrandDetailsModal({
               {/* HEADER */}
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
-                  <Text style={[styles.headerTitle, { color: colors.textDark }]}>Errand {errandId}</Text>
-                  <Text style={[styles.headerSub, { color: colors.textGray }]}>Transaction Summary</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headerTitle, { color: colors.textDark }]}>Errand {errandId}</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headerSub, { color: colors.textGray }]}>Transaction Summary</Text>
                 </View>
                 <TouchableOpacity
                   onPress={onClose}
@@ -117,13 +117,13 @@ export default function ErrandDetailsModal({
                   ]}
                 >
                   <View style={styles.statusRow}>
-                    <Text style={[styles.sectionLabel, { color: colors.textGray }]}>Current Status</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionLabel, { color: colors.textGray }]}>Current Status</Text>
                     <StatusBadge status={errand.status} />
                   </View>
 
                   <View style={styles.dateRow}>
                     <Clock size={13} color={colors.textLight} />
-                    <Text style={[styles.dateText, { color: colors.textLight }]}>{formattedDate}</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.dateText, { color: colors.textLight }]}>{formattedDate}</Text>
                   </View>
                 </View>
 
@@ -131,10 +131,10 @@ export default function ErrandDetailsModal({
                 <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <ShoppingBag size={15} color={colors.primary} />
-                    <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Items Requested</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Items Requested</Text>
                   </View>
                   <View style={styles.infoBox}>
-                    <Text style={[styles.infoText, { color: colors.textDark }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoText, { color: colors.textDark }]}>
                       {errand.categories || 'Pabili Shopping Request'}
                     </Text>
                   </View>
@@ -144,10 +144,10 @@ export default function ErrandDetailsModal({
                 <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <MapPin size={15} color={colors.primary} />
-                    <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Delivery Destination</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Delivery Destination</Text>
                   </View>
                   <View style={styles.infoBox}>
-                    <Text style={[styles.infoText, { color: colors.textMedium }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoText, { color: colors.textMedium }]}>
                       {errand.deliveryAddress || 'Tacurong City, Sultan Kudarat'}
                     </Text>
                   </View>
@@ -157,7 +157,7 @@ export default function ErrandDetailsModal({
                 <View style={[styles.detailSection, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
                   <View style={styles.sectionTitleRow}>
                     <User size={15} color={colors.primary} />
-                    <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Assigned Personnel</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Assigned Personnel</Text>
                   </View>
                   <View style={[styles.infoBox, styles.personnelList]}>
                     {([
@@ -166,7 +166,7 @@ export default function ErrandDetailsModal({
                     ] as const).map(({ key, label, Icon, line }) => (
                       <View key={key} style={styles.personnelRow} testID={`modal-personnel-${key}`}>
                         <Icon size={13} color={line.name ? colors.primary : colors.textLight} strokeWidth={2.2} />
-                        <Text style={[styles.infoText, { color: line.name ? colors.textDark : colors.textLight }]}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoText, { color: line.name ? colors.textDark : colors.textLight }]}>
                           {label}: {line.name ?? line.waiting}
                         </Text>
                       </View>
@@ -178,11 +178,11 @@ export default function ErrandDetailsModal({
                 <View style={styles.detailSection}>
                   <View style={styles.sectionTitleRow}>
                     <CreditCard size={15} color={colors.primary} />
-                    <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Payment & Fees</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Payment & Fees</Text>
                   </View>
                   <View style={styles.feeCard}>
                     <View style={styles.feeLine}>
-                      <Text style={[styles.feeLabel, { color: colors.textGray }]}>Payment Method</Text>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeLabel, { color: colors.textGray }]}>Payment Method</Text>
                       {paymentChange && errand.status !== 'CANCELLED' ? (
                         <PaymentMethodChange
                           change={paymentChange}
@@ -190,7 +190,7 @@ export default function ErrandDetailsModal({
                           mutedColor={colors.textGray}
                         />
                       ) : (
-                        <Text style={[styles.feeValBold, { color: colors.textDark }]}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeValBold, { color: colors.textDark }]}>
                           {errand.status === 'CANCELLED'
                             ? 'Voided (Not Charged)'
                             : (errand.status === 'PENDING' || errand.status === 'AVAILABLE' || !paymentMethod || paymentMethod.toUpperCase() === 'PENDING')
@@ -202,19 +202,19 @@ export default function ErrandDetailsModal({
 
                     {errand.status === 'CANCELLED' ? (
                       <View style={{ paddingVertical: 8 }}>
-                        <Text style={{ fontSize: 12, color: '#DC2626', fontStyle: 'italic' }}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), color: '#DC2626', fontStyle: 'italic' }}>
                           This errand was cancelled. No delivery fees or item charges were collected.
                         </Text>
                       </View>
                     ) : (errand.status === 'PENDING' || errand.status === 'AVAILABLE') ? (
                       <View style={{ paddingVertical: 8, gap: 6 }}>
                         <View style={styles.feeLine}>
-                          <Text style={[styles.feeLabel, { color: colors.textGray }]}>Base Delivery Fare</Text>
-                          <Text style={{ color: '#D97706', fontSize: 12, fontFamily: FontFamily.semibold }}>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeLabel, { color: colors.textGray }]}>Base Delivery Fare</Text>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), color: '#D97706', fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.semibold }}>
                             Pending Completion
                           </Text>
                         </View>
-                        <Text style={{ fontSize: 11, color: colors.textLight, fontStyle: 'italic' }}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), color: colors.textLight, fontStyle: 'italic' }}>
                           Note: The base delivery fare is finalized and applied once a rider accepts the errand and completes delivery.
                         </Text>
                       </View>
@@ -235,23 +235,23 @@ export default function ErrandDetailsModal({
                           <>
                             {Number(estimatedCost) > 0 && (
                               <View style={styles.feeLine}>
-                                <Text style={[styles.feeLabel, { color: colors.textGray }]}>Estimated Items</Text>
-                                <Text style={[styles.feeVal, { color: colors.textMedium }]}>₱{estimatedCost}</Text>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeLabel, { color: colors.textGray }]}>Estimated Items</Text>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeVal, { color: colors.textMedium }]}>₱{estimatedCost}</Text>
                               </View>
                             )}
 
                             {Number(deliveryFee) > 0 && (
                               <View style={styles.feeLine}>
-                                <Text style={[styles.feeLabel, { color: colors.textGray }]}>Delivery Fee</Text>
-                                <Text style={[styles.feeVal, { color: colors.textMedium }]}>₱{deliveryFee}</Text>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeLabel, { color: colors.textGray }]}>Delivery Fee</Text>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.feeVal, { color: colors.textMedium }]}>₱{deliveryFee}</Text>
                               </View>
                             )}
 
                             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                             <View style={styles.totalLine}>
-                              <Text style={[styles.totalLabel, { color: colors.textDark }]}>Total Fee(s)</Text>
-                              <Text style={[styles.totalAmount, { color: colors.primary }]}>₱{grandTotal}</Text>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.totalLabel, { color: colors.textDark }]}>Total Fee(s)</Text>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.totalAmount, { color: colors.primary }]}>₱{grandTotal}</Text>
                             </View>
                           </>
                         )}
@@ -275,8 +275,8 @@ export default function ErrandDetailsModal({
                     style={[styles.chatActionBtn, { backgroundColor: colors.primary }]}
                     onPress={handleOpenChat}
                   >
-                    <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.2} />
-                    <Text style={styles.chatActionBtnText}>Open Live Chat</Text>
+                    <MessageCircle size={16} color={colors.onPrimary} strokeWidth={2.2} />
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.chatActionBtnText, { color: colors.onPrimary }]}>Open Live Chat</Text>
                   </TouchableOpacity>
                 )}
 
@@ -291,7 +291,7 @@ export default function ErrandDetailsModal({
                   ]}
                   onPress={onClose}
                 >
-                  <Text style={[styles.closeActionBtnText, { color: colors.textDark }]}>Close</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.closeActionBtnText, { color: colors.textDark }]}>Close</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -328,12 +328,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md + 1, 0.35),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   headerSub: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   closeBtn: {
     width: 32,
@@ -357,8 +359,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   dateRow: {
     flexDirection: 'row',
@@ -366,8 +369,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dateText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   detailSection: {
     paddingBottom: Spacing.sm,
@@ -381,8 +385,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   infoBox: {
     paddingVertical: 2,
@@ -397,8 +402,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: 16,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   feeCard: {
     paddingVertical: 2,
@@ -410,16 +415,19 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   feeLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   feeVal: {
-    fontFamily: FontFamily.mono,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   feeValBold: {
-    fontFamily: FontFamily.monoBold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   divider: {
     height: 1,
@@ -431,12 +439,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   totalLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   totalAmount: {
-    fontFamily: FontFamily.monoBold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.price), 'price'),
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.price),
   },
   footerRow: {
     flexDirection: 'row',
@@ -453,9 +463,10 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   chatActionBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   closeActionBtn: {
     paddingVertical: 10,
@@ -464,7 +475,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeActionBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Platform, Vibration } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,9 @@ import { useNetworkStatus } from './NetworkContext';
 import { getSocket } from '../services/socketClient';
 import { getActiveChatErrandId } from '../utils/activeChatTracker';
 
+/** What a customer notification is about (server notificationCatalog.ts CUSTOMER_NOTIFICATIONS). */
+export type NotificationCategory = 'ORDER' | 'DELIVERY' | 'PAYMENT' | 'CHAT';
+
 export interface CustomerNotification {
   id: number;
   type: string;
@@ -19,12 +22,20 @@ export interface CustomerNotification {
   createdAt: string;
   customerId?: number;
   errandId?: string;
+  /** Sent by the server since 2026-10-21; derived from `type` for older rows (notificationCategory.ts). */
+  category?: NotificationCategory;
+  /** Waits on the customer while unread. */
+  needsYou?: boolean;
+  /** `errand:<id>`: the errand the row opens. */
+  refKey?: string | null;
 }
 
 export interface NotificationContextValue {
   notifications: CustomerNotification[];
   unreadCount: number;
   loading: boolean;
+  /** The last fetch failed. The list on screen is the last good one, kept rather than emptied. */
+  error: boolean;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refreshNotifications: (isPullRefresh?: boolean) => Promise<void>;
@@ -39,8 +50,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const { isConnected, reconnectCount } = useNetworkStatus();
   const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
+  // Derived, never counted by hand: a repeated or bumped event cannot inflate it,
+  // and it always agrees with the list on screen.
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<boolean>(false);
 
   // In-memory set of errand IDs that have already fired a proximity alert locally to prevent duplicate alerts
   const alertedProximityErrandIdsRef = useRef<Set<string>>(new Set());
@@ -66,7 +80,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     alertedProximityErrandIdsRef.current.clear();
     setMonitoredErrandIds([]);
     setNotifications([]);
-    setUnreadCount(0);
   }, [user?.id]);
 
   /** Only this customer's own errands: an event about anyone else's is dropped. */
@@ -90,7 +103,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     async (isPullRefresh = false) => {
       if (!user?.id) {
         setNotifications([]);
-        setUnreadCount(0);
         return;
       }
 
@@ -100,10 +112,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const res = await apiClient.get<CustomerNotification[]>('/notifications');
         const list = res.data ?? [];
         setNotifications(list);
-        const count = list.filter((n) => !n.isRead).length;
-        setUnreadCount(count);
+        setError(false);
       } catch (err) {
-        // Silently swallow background poll errors
+        // The list keeps what it had; the screen says the refresh failed.
+        setError(true);
       } finally {
         setLoading(false);
       }
@@ -131,7 +143,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
 
     try {
       await apiClient.patch(`/notifications/${id}/read`);
@@ -144,7 +155,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const markAllAsRead = useCallback(async () => {
     // Instant UI update: zeroes the badge count immediately so returning to Home has 0 lag
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
 
     try {
       await apiClient.patch('/notifications/read-all');
@@ -161,20 +171,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const onNotificationNew = async (newNotif: any) => {
       if (!newNotif) return;
 
-      setUnreadCount((prev) => prev + 1);
-      setNotifications((prev) => {
-        if (newNotif.id && prev.some((n) => n.id === newNotif.id)) return prev;
+      // A reminder with no saved row (the ETA push) rings but is never listed:
+      // it has no id to mark read, and the next fetch would drop it anyway.
+      const listable = !newNotif.ephemeral && Number.isFinite(Number(newNotif.id)) && Number(newNotif.id) > 0;
+      if (listable) {
         const normalized: CustomerNotification = {
-          id: newNotif.id || Date.now(),
+          id: Number(newNotif.id),
           type: newNotif.type || 'SYSTEM',
           title: newNotif.title || 'New Notification',
           body: newNotif.body || '',
           isRead: false,
           createdAt: newNotif.createdAt || new Date().toISOString(),
           errandId: newNotif.errandId,
+          category: newNotif.category,
+          needsYou: newNotif.needsYou,
+          refKey: newNotif.refKey,
         };
-        return [normalized, ...prev];
-      });
+        // A known id (a chat row bumped with its newest line, or a repeated
+        // event) replaces its row and moves to the top: still one row.
+        setNotifications((prev) => [normalized, ...prev.filter((n) => n.id !== normalized.id)]);
+      }
 
       // Deduplicate against Firebase RTDB listener
       const notifType = String(newNotif.type || '').toUpperCase();
@@ -251,7 +267,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       try {
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Rider is Arriving Soon! 🛵',
+            title: 'Your rider is almost there',
             body: payload?.body || 'Your rider is within 500m of your delivery address. Please prepare your payment (COD)!',
             data: { errandId, type: 'RIDER_NEARBY' },
             sound: soundsEnabled ? 'default' : undefined,
@@ -392,11 +408,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const notifBody =
             msg.text ||
             (msg.type === 'pinpoints'
-              ? '📍 Updated store locations for your order'
+              ? 'Updated the store locations for your order'
               : msg.type === 'revision'
-              ? '📋 Sent an order breakdown for your review'
+              ? 'Sent an order breakdown for your review'
               : msg.type === 'payment_enabled'
-              ? '💳 Enabled online payment for your errand'
+              ? 'Enabled online payment for your errand'
               : 'Sent an update on your errand');
 
           try {
@@ -447,6 +463,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         notifications,
         unreadCount,
         loading,
+        error,
         markAsRead,
         markAllAsRead,
         refreshNotifications: fetchNotifications,

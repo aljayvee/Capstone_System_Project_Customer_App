@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
-import { FontSizes, FontFamily, Spacing, BorderRadius, scaledFontSize } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { RETRY_LABEL } from '../services/errorMessages';
 
@@ -80,8 +80,8 @@ const CrashFallback: React.FC<FallbackProps> = ({ title, description, incidentId
           accessibilityLabel={RETRY_LABEL}
           testID="crash-retry"
         >
-          <RefreshCw size={16} color="#FFFFFF" />
-          <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>
+          <RefreshCw size={16} color={colors.onPrimary} />
+          <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.15}>
             {RETRY_LABEL}
           </Text>
         </TouchableOpacity>
@@ -161,15 +161,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   title: {
-    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
   },
   description: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   incidentRow: {
     flexDirection: 'row',
@@ -181,11 +182,13 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.xs,
   },
   incidentLabel: {
-    fontSize: 11,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.medium,
   },
   incidentCode: {
-    fontSize: 11,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.monoBold,
   },
   button: {
@@ -199,8 +202,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   buttonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
-    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.semibold,
   },
 });

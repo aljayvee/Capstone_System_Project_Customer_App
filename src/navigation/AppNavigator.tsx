@@ -12,6 +12,7 @@ import { RootStackParamList } from './types';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { useThemeColor } from '../hooks/useThemeColor';
+import { FontFamily, PortalFontSizes, scaledPortalFontSize } from '../config/theme';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingLocationScreen from '../screens/onboarding/OnboardingLocationScreen';
@@ -19,6 +20,7 @@ import OnboardingAuthChoiceScreen from '../screens/onboarding/OnboardingAuthChoi
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import MfaChallengeScreen from '../screens/MfaChallengeScreen';
 import GooglePhoneSetupScreen from '../screens/GooglePhoneSetupScreen';
 import VerifyEmailScreen from '../screens/VerifyEmailScreen';
 import CustomerPortalScreen from '../screens/CustomerPortalScreen';
@@ -53,6 +55,7 @@ import { navigationRef } from './navigationRef';
 import MobileErrorBoundary from '../components/MobileErrorBoundary';
 import { NetworkProvider } from '../context/NetworkContext';
 import { NotificationProvider } from '../context/NotificationContext';
+import { pabiliSubmissionStore } from '../services/pabiliSubmission';
 
 const hideSystemSplash = () => {
   SplashScreen.hideAsync().catch(() => {});
@@ -62,6 +65,11 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function NavigationContent() {
   const { user, isLoading } = useAuth();
+  React.useEffect(() => {
+    if (isLoading) return;
+    if (user?.id) void pabiliSubmissionStore.activate(String(user.id));
+    else pabiliSubmissionStore.deactivate();
+  }, [user?.id, isLoading]);
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
   const [isSplashComplete, setIsSplashComplete] = React.useState(false);
@@ -141,7 +149,7 @@ function NavigationContent() {
           screenOptions={{
             headerStyle: { backgroundColor: '#F62459' },
             headerTintColor: '#FFFFFF',
-            headerTitleStyle: { fontWeight: 'bold' },
+            headerTitleStyle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) },
             animation: 'slide_from_right',
             animationDuration: 280,
             gestureEnabled: true,
@@ -165,6 +173,11 @@ function NavigationContent() {
               <Stack.Screen
                 name="ForgotPassword"
                 component={ForgotPasswordScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="MfaChallenge"
+                component={MfaChallengeScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen
@@ -203,6 +216,11 @@ function NavigationContent() {
               <Stack.Screen
                 name="ForgotPassword"
                 component={ForgotPasswordScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="MfaChallenge"
+                component={MfaChallengeScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

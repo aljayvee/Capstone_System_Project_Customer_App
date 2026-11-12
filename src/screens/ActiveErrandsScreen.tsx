@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,8 +42,10 @@ const errandIdOf = (errand: any): string => String(errand?.orderId || errand?.id
  * that finished meanwhile drops off.
  */
 export default function ActiveErrandsScreen({ route, navigation }: RootStackScreenProps<'ActiveErrands'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user, errands: fromHome } = route.params || ({} as any);
   const { colors, isDark } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
   const insets = useSafeAreaInsets();
   const { baseFee } = useRateConfig();
   const backdropRef = useRef<View>(null);
@@ -129,14 +132,14 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
       {/* What the glass refracts: the page and two soft brand-coloured glows. */}
       <BlurTargetView ref={backdropRef} style={[StyleSheet.absoluteFill, { backgroundColor: colors.bgApp }]} pointerEvents="none">
         <View style={[styles.glow, styles.glowTop, { backgroundColor: colors.primary, opacity: isDark ? 0.22 : 0.16 }]} />
         <View style={[styles.glow, styles.glowBottom, { backgroundColor: isDark ? '#3B82F6' : '#0B132B', opacity: isDark ? 0.16 : 0.1 }]} />
       </BlurTargetView>
 
-      <View style={styles.navHeaderRow}>
+      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -154,7 +157,7 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Spacing.xl + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Spacing.xl + insets.bottom }, pageLayout.gutterStyle]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
         testID="active-errands-screen"
@@ -188,7 +191,7 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
           <View style={styles.list} testID="active-errands-list">
             {errands.map((errand) => {
               const id = errandIdOf(errand);
-              const shownId = formatErrandId(id);
+              const shownId = formatErrandId(id, errand.referenceNo);
               const fee = pesos(estimatedFeeOf(errand, baseFee));
               return (
                 <TouchableOpacity
@@ -224,15 +227,15 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
                       style={[
                         styles.openBtn,
                         {
-                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.10)' : '#F1F5F9',
-                          borderColor: isDark ? 'rgba(255, 255, 255, 0.16)' : '#E2E8F0',
+                          backgroundColor: brandColor,
+                          borderColor: brandColor,
                         },
                       ]}
                       accessibilityRole="button"
                       accessibilityLabel={`View errand ${shownId} details`}
                       testID={`active-errand-open-${id}`}
                     >
-                      <ChevronRight size={20} color={colors.textDark} strokeWidth={2.4} />
+                      <ChevronRight size={20} color={colors.onPrimary} strokeWidth={2.4} />
                     </TouchableOpacity>
                   </LiquidGlass>
                 </TouchableOpacity>
@@ -282,8 +285,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: PortalTouchTargets.compact,

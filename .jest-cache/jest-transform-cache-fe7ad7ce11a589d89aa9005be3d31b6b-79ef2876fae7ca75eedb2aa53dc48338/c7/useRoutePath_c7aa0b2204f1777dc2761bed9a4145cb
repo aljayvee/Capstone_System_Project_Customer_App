@@ -1,0 +1,29 @@
+1c1c7efccebfe23d2066aa4181658c57
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useRoutePath = useRoutePath;
+var _core = require("@react-navigation/core");
+var React = _interopRequireWildcard(require("react"));
+var _LinkingContext = require("./LinkingContext.js");
+function useRoutePath() {
+  var _React$useContext = React.useContext(_LinkingContext.LinkingContext),
+    options = _React$useContext.options;
+  var state = (0, _core.useStateForPath)();
+  if (state === undefined) {
+    throw new Error("Couldn't find a state for the route object. Is your component inside a screen in a navigator?");
+  }
+  var getPathFromStateHelper = options?.getPathFromState ?? _core.getPathFromState;
+  var path = React.useMemo(() => {
+    if (options?.enabled === false) {
+      return undefined;
+    }
+    var path = getPathFromStateHelper(state, options?.config);
+    return path;
+  }, [options?.enabled, options?.config, state, getPathFromStateHelper]);
+  return path;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY29yZSIsInJlcXVpcmUiLCJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwiX0xpbmtpbmdDb250ZXh0IiwidXNlUm91dGVQYXRoIiwiX1JlYWN0JHVzZUNvbnRleHQiLCJ1c2VDb250ZXh0IiwiTGlua2luZ0NvbnRleHQiLCJvcHRpb25zIiwic3RhdGUiLCJ1c2VTdGF0ZUZvclBhdGgiLCJ1bmRlZmluZWQiLCJFcnJvciIsImdldFBhdGhGcm9tU3RhdGVIZWxwZXIiLCJnZXRQYXRoRnJvbVN0YXRlIiwicGF0aCIsInVzZU1lbW8iLCJlbmFibGVkIiwiY29uZmlnIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL3VzZVJvdXRlUGF0aC50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFBQSxJQUFBQSxLQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxLQUFBLEdBQUFDLHVCQUFBLENBQUFGLE9BQUE7QUFFQSxJQUFBRyxlQUFBLEdBQUFILE9BQUE7QUFPTyxTQUFTSSxZQUFZQSxDQUFBLEVBQUc7RUFDN0IsSUFBQUMsaUJBQUEsR0FBb0JKLEtBQUssQ0FBQ0ssVUFBVSxDQUFDQyw4QkFBYyxDQUFDO0lBQTVDQyxPQUFBLEdBQUFILGlCQUFBLENBQUFHLE9BQUE7RUFDUixJQUFNQyxLQUFLLEdBQUcsSUFBQUMscUJBQWUsRUFBQyxDQUFDO0VBRS9CLElBQUlELEtBQUssS0FBS0UsU0FBUyxFQUFFO0lBQ3ZCLE1BQU0sSUFBSUMsS0FBSyxDQUNiLCtGQUNGLENBQUM7RUFDSDtFQUVBLElBQU1DLHNCQUFzQixHQUFHTCxPQUFPLEVBQUVNLGdCQUFnQixJQUFJQSxzQkFBZ0I7RUFFNUUsSUFBTUMsSUFBSSxHQUFHZCxLQUFLLENBQUNlLE9BQU8sQ0FBQyxNQUFNO0lBQy9CLElBQUlSLE9BQU8sRUFBRVMsT0FBTyxLQUFLLEtBQUssRUFBRTtNQUM5QixPQUFPTixTQUFTO0lBQ2xCO0lBRUEsSUFBTUksSUFBSSxHQUFHRixzQkFBc0IsQ0FBQ0osS0FBSyxFQUFFRCxPQUFPLEVBQUVVLE1BQU0sQ0FBQztJQUUzRCxPQUFPSCxJQUFJO0VBQ2IsQ0FBQyxFQUFFLENBQUNQLE9BQU8sRUFBRVMsT0FBTyxFQUFFVCxPQUFPLEVBQUVVLE1BQU0sRUFBRVQsS0FBSyxFQUFFSSxzQkFBc0IsQ0FBQyxDQUFDO0VBRXRFLE9BQU9FLElBQUk7QUFDYiIsImlnbm9yZUxpc3QiOltdfQ==

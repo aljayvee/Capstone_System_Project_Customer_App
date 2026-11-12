@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, FontFamily, FontSizes, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, BorderRadius, FontFamily, Spacing } from '../config/theme';
 
 // Only statuses useActiveErrands can actually return (COMPLETED is excluded
 // there — a settled errand has nothing left to chat about).
@@ -33,6 +33,7 @@ export default function ChatSearchFilterBar({
       >
         <Search size={16} color={colors.textGray} />
         <TextInput
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.input}
           style={[styles.searchInput, { color: colors.textDark }]}
           placeholder="Search by errand ID or category..."
           placeholderTextColor={colors.textLight}
@@ -58,7 +59,7 @@ export default function ChatSearchFilterBar({
               onPress={() => onStatusFilterChange(status)}
               testID={`chat-filter-${status}`}
             >
-              <Text style={[styles.filterChipText, { color: isActive ? '#FFFFFF' : colors.textMedium }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.filterChipText, { color: isActive ? '#FFFFFF' : colors.textMedium }]}>
                 {status === 'ALL' ? 'All' : status}
               </Text>
             </TouchableOpacity>
@@ -79,9 +80,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   searchInput: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     flex: 1,
     paddingVertical: Spacing.sm + 2,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
   },
   filterRow: { gap: Spacing.xs },
@@ -90,5 +92,5 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
   },
-  filterChipText: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs },
+  filterChipText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
 });

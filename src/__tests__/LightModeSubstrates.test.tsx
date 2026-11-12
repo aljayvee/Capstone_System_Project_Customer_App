@@ -158,7 +158,7 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
     jest.clearAllMocks();
   });
 
-  it('renders HomeTab sticky search bar and action button with crisp white background and neutral borders in Light Mode', async () => {
+  it('renders HomeTab search with the Find Stores field design in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(
       <HomeTab
@@ -173,18 +173,16 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
     const stickyWrapper = res.getByTestId('home-sticky-search');
     const flattenedWrapperStyle = StyleSheet.flatten(stickyWrapper.props.style);
     // The page is a soft grey since 2026-10-11 (theme bgAppTranslucent), as foodpanda and Grab use.
-    expect(flattenedWrapperStyle.backgroundColor).toBe('rgba(246, 247, 248, 0.95)');
+    expect(flattenedWrapperStyle.backgroundColor).toBe(require('../config/theme').LightColors.bgAppTranslucent);
 
     const searchBar = res.getByTestId('home-store-search');
     const flattenedBarStyle = StyleSheet.flatten(searchBar.props.style);
+    expect(flattenedBarStyle.elevation).toBe(3);
+    expect(flattenedBarStyle.shadowOpacity).toBe(0.08);
     expect(flattenedBarStyle.backgroundColor).toBe('#FFFFFF');
     expect(flattenedBarStyle.borderColor).toBe('#E2E8F0');
-    expect(flattenedBarStyle.borderTopColor).toBe('#FFFFFF');
-
-    const searchAction = res.getByTestId('home-store-search-action');
-    const flattenedActionStyle = StyleSheet.flatten(searchAction.props.style);
-    expect(flattenedActionStyle.backgroundColor).toBe('#F1F5F9');
-    expect(flattenedActionStyle.borderColor).toBe('#E2E8F0');
+    expect(flattenedBarStyle.borderRadius).toBe(24);
+    expect(res.queryByTestId('home-store-search-action')).toBeNull();
   });
 
   it('renders EstablishmentPicker search bar with crisp white and neutral border in Light Mode', async () => {
@@ -205,18 +203,20 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
     expect(flattened.borderTopColor).toBe('#FFFFFF');
   });
 
-  it('renders ChatTab search bar with crisp white and neutral border in Light Mode', async () => {
+  it('renders ChatTab search bar with the Home glass finish in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(<ChatTab user={mockUser} navigation={mockNavigation} />);
 
     const searchBar = res.getByTestId('chat-search-bar');
     const flattened = StyleSheet.flatten(searchBar.props.style);
+    expect(flattened.elevation).toBe(3);
+    expect(flattened.shadowOpacity).toBe(0.08);
     expect(flattened.backgroundColor).toBe('#FFFFFF');
-    expect(flattened.borderColor).toBe('#E2E8F0');
     expect(flattened.borderTopColor).toBe('#FFFFFF');
+    expect(flattened.borderRadius).toBe(24);
   });
 
-  it('renders ErrandsTab search bar with crisp white and neutral border in Light Mode', async () => {
+  it('renders ErrandsTab search bar with the Home glass finish in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(
       <ErrandsTab
@@ -231,9 +231,11 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
 
     const searchBar = res.getByTestId('errands-search-bar');
     const flattened = StyleSheet.flatten(searchBar.props.style);
+    expect(flattened.elevation).toBe(3);
+    expect(flattened.shadowOpacity).toBe(0.08);
     expect(flattened.backgroundColor).toBe('#FFFFFF');
-    expect(flattened.borderColor).toBe('#E2E8F0');
     expect(flattened.borderTopColor).toBe('#FFFFFF');
+    expect(flattened.borderRadius).toBe(24);
   });
 
   it('renders ErrandItems composeInput and stepper with crisp white and neutral border in Light Mode', async () => {
@@ -260,7 +262,7 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
     expect(flattenedStepper.borderTopColor).toBe('#FFFFFF');
   });
 
-  it('renders EditAccount inputWrapper, phonePrefixBox, and phoneFieldWrapper with crisp white and neutral border in Light Mode', async () => {
+  it('renders EditAccount fields with flat theme surfaces and neutral borders in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(
       <NavigationContainer>
@@ -273,24 +275,24 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
 
     const firstNameWrapper = res.getByTestId('edit-first-name-wrapper');
     const flattenedFirstName = StyleSheet.flatten(firstNameWrapper.props.style);
-    expect(flattenedFirstName.backgroundColor).toBe('#FFFFFF');
+    expect(flattenedFirstName.backgroundColor).toBe(require('../config/theme').LightColors.bgGray);
     expect(flattenedFirstName.borderColor).toBe('#E2E8F0');
-    expect(flattenedFirstName.borderTopColor).toBe('#FFFFFF');
+    expect(flattenedFirstName.elevation).toBe(0);
 
     const prefixBox = res.getByTestId('phone-prefix-box');
     const flattenedPrefix = StyleSheet.flatten(prefixBox.props.style);
-    expect(flattenedPrefix.backgroundColor).toBe('#FFFFFF');
+    expect(flattenedPrefix.backgroundColor).toBe(require('../config/theme').LightColors.bgGray);
     expect(flattenedPrefix.borderColor).toBe('#E2E8F0');
-    expect(flattenedPrefix.borderTopColor).toBe('#FFFFFF');
+    expect(flattenedPrefix.elevation).toBe(0);
 
     const phoneWrapper = res.getByTestId('phone-field-wrapper');
     const flattenedPhone = StyleSheet.flatten(phoneWrapper.props.style);
-    expect(flattenedPhone.backgroundColor).toBe('#FFFFFF');
+    expect(flattenedPhone.backgroundColor).toBe(require('../config/theme').LightColors.bgGray);
     expect(flattenedPhone.borderColor).toBe('#E2E8F0');
-    expect(flattenedPhone.borderTopColor).toBe('#FFFFFF');
+    expect(flattenedPhone.elevation).toBe(0);
   });
 
-  it('renders ActiveErrands openBtn with crisp slate button and neutral border in Light Mode', async () => {
+  it('renders ActiveErrands openBtn with the Customer pink brand in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(
       <ActiveErrandsScreen
@@ -311,11 +313,11 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
 
     const openBtn = await res.findByTestId('active-errand-open-err-1');
     const flattenedOpenBtn = StyleSheet.flatten(openBtn.props.style);
-    expect(flattenedOpenBtn.backgroundColor).toBe('#F1F5F9');
-    expect(flattenedOpenBtn.borderColor).toBe('#E2E8F0');
+    expect(flattenedOpenBtn.backgroundColor).toBe(require('../config/theme').LightColors.primaryStrong);
+    expect(flattenedOpenBtn.borderColor).toBe(require('../config/theme').LightColors.primaryStrong);
   });
 
-  it('renders CustomerChat inputWrapperPill with crisp white and neutral border in Light Mode', async () => {
+  it('renders the CustomerChat composer with a flat neutral surface in Light Mode', async () => {
     mockIsDark = false;
     const res: any = await render(
       <NavigationContainer>
@@ -332,8 +334,8 @@ describe('Light Mode Crisp White Backgrounds & Neutral Slate Borders', () => {
 
     const inputPill = res.getByTestId('chat-input-wrapper-pill');
     const flattenedPill = StyleSheet.flatten(inputPill.props.style);
-    expect(flattenedPill.backgroundColor).toBe('#FFFFFF');
-    expect(flattenedPill.borderColor).toBe('#E2E8F0');
-    expect(flattenedPill.borderTopColor).toBe('#FFFFFF');
+    expect(flattenedPill.backgroundColor).toBe(require('../config/theme').LightColors.bgGray);
+    expect(flattenedPill.elevation).toBe(0);
+    expect(flattenedPill.shadowOpacity).toBe(0);
   });
 });

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -62,6 +63,7 @@ export default function WizardStepDetails({
   isEditing,
   onSave,
 }: WizardStepDetailsProps) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
   const labelInputRef = useRef<TextInput>(null);
@@ -94,7 +96,7 @@ export default function WizardStepDetails({
   return (
     <View style={styles.flex}>
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
         bottomOffset={footerHeight + FOCUSED_FIELD_GAP}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -259,7 +261,7 @@ export default function WizardStepDetails({
           rather than float above it. */}
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
         <View
-          style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.bgApp }]}
+          style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}
           onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
         >
           <TouchableOpacity
@@ -271,10 +273,10 @@ export default function WizardStepDetails({
             testID="location-save-button"
           >
             {saving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={colors.onPrimary} size="small" />
             ) : (
               <Text
-                style={styles.saveBtnText}
+                style={[styles.saveBtnText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
               >
                 {isEditing ? 'Update Location' : 'Save Location'}

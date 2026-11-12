@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -17,8 +18,6 @@ import { formatErrandId } from '../utils/formatErrandId';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
   FontFamily,
-  FontSizes,
-  FontWeights,
   Spacing,
   BorderRadius,
   Shadows,
@@ -43,6 +42,7 @@ export default function ErrandConfirmationScreen({
   route,
   navigation,
 }: RootStackScreenProps<'ErrandConfirmation'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const { user, finalErrand } = route.params || {
     user: { id: 'test-user', username: 'testuser', firstName: 'Test', lastName: 'User' },
     finalErrand: {
@@ -93,8 +93,7 @@ export default function ErrandConfirmationScreen({
       <View
         style={[
           styles.navHeaderRow,
-          { borderBottomColor: colors.border, backgroundColor: colors.bgApp },
-        ]}
+          { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}
       >
         <TouchableOpacity
           onPress={() =>
@@ -112,7 +111,7 @@ export default function ErrandConfirmationScreen({
         <View style={styles.navRightPlaceholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]} showsVerticalScrollIndicator={false}>
 
         {/* SUCCESS BANNER */}
         <View style={[styles.successCard, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5', borderColor: isDark ? '#059669' : '#A7F3D0' }]}>
@@ -211,7 +210,7 @@ export default function ErrandConfirmationScreen({
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]} testID="tracking-stepper">
           <View style={styles.cardTitleRow}>
             <Bike size={17} color={colors.primary} strokeWidth={2.2} />
-            <Text style={[styles.cardTitle, { color: colors.textDark }]}>Errand Tracking Status</Text>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cardTitle, { color: colors.textDark }]}>Errand Tracking Status</Text>
           </View>
 
           <View style={styles.stepperContainer}>
@@ -279,7 +278,7 @@ export default function ErrandConfirmationScreen({
             })
           }
         >
-          <Text style={styles.homeBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Back to Dashboard</Text>
+          <Text style={[styles.homeBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Back to Dashboard</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -305,8 +304,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     textAlign: 'center',
   },
   navRightPlaceholder: {

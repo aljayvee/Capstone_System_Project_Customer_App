@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -22,15 +23,11 @@ import {
   ShieldCheck,
   Bell,
   MessageSquare,
-  Trash2,
   Check,
   Smartphone,
-  MapPin,
   Lock,
   Volume2,
-  Activity,
   FileText,
-  LogOut,
   X,
   Mail,
   Eye,
@@ -45,13 +42,12 @@ import { RootStackScreenProps } from '../navigation/types';
 import { apiClient } from '../services/apiClient';
 import { toUserMessage } from '../services/errorMessages';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { useAuth } from '../context/AuthContext';
 import {
   FontFamily,
-  FontSizes,
   Spacing,
   BorderRadius,
   Shadows,
+  MAX_CONTENT_WIDTH,
   PortalFontSizes,
   scaledPortalFontSize,
   getPortalLineHeight,
@@ -60,7 +56,6 @@ import {
 } from '../config/theme';
 import SettingsRow from '../components/SettingsRow';
 import SettingsSection from '../components/SettingsSection';
-import ConfirmModal from '../components/ConfirmModal';
 import AppUpdatesModal from '../components/AppUpdatesModal';
 import {
   checkCustomerAppUpdate,
@@ -69,19 +64,17 @@ import {
 } from '../services/appUpdateService';
 
 export default function SettingsScreen({ route, navigation }: RootStackScreenProps<'Settings'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
   const { user } = route.params;
   const { themeMode, setThemeMode, colors, isDark } = useThemeColor();
-  const { logout } = useAuth();
 
   // Notification & Preference States
   const [errandAlerts, setErrandAlerts] = useState(true);
   const [chatAlerts, setChatAlerts] = useState(true);
   const [soundEffects, setSoundEffects] = useState(true);
-  const [cacheSize, setCacheSize] = useState('2.4 MB');
-  const [clearingCache, setClearingCache] = useState(false);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
 
   // Modals
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
 
   // App Update Detection
@@ -102,38 +95,44 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
     runUpdateCheck();
   }, [runUpdateCheck]);
 
-  const handleToggleSounds = async (val: boolean) => {
-    setSoundEffects(val);
-    await AsyncStorage.setItem('@sugo_customer_sounds_enabled', String(val));
-  };
-
-  const handleToggleErrandAlerts = async (val: boolean) => {
-    setErrandAlerts(val);
-    await AsyncStorage.setItem('@sugo_customer_errand_alerts_enabled', String(val));
-  };
-
-  const handleToggleChatAlerts = async (val: boolean) => {
-    setChatAlerts(val);
-    await AsyncStorage.setItem('@sugo_customer_chat_alerts_enabled', String(val));
-  };
-
-  const handleClearCache = async () => {
-    if (cacheSize === '0.0 MB') {
-      showAppAlert({
-        title: 'Cache Clean',
-        message: 'Your temporary store image and preview cache is already clean.',
-        variant: 'info',
-      });
-      return;
-    }
-    setCacheSize('0.0 MB');
-    await AsyncStorage.setItem('@sugo_customer_cache_size', '0.0 MB');
-    showAppAlert({
-      title: 'Cache Cleared',
-      message: '2.4 MB of temporary merchant image files and preview cache cleared successfully.',
-      variant: 'success',
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      AsyncStorage.getItem('@sugo_customer_errand_alerts_enabled'),
+      AsyncStorage.getItem('@sugo_customer_chat_alerts_enabled'),
+      AsyncStorage.getItem('@sugo_customer_sounds_enabled'),
+    ]).then(([errands, chats, sounds]) => {
+      if (!mounted) return;
+      setErrandAlerts(errands !== 'false');
+      setChatAlerts(chats !== 'false');
+      setSoundEffects(sounds !== 'false');
+    }).catch(() => {
+      // Keep the notification service's defaults when storage is unavailable.
+    }).finally(() => {
+      if (mounted) setPreferencesLoading(false);
     });
+    return () => { mounted = false; };
+  }, []);
+
+  const savePreference = async (key: string, value: boolean, apply: (value: boolean) => void) => {
+    try {
+      await AsyncStorage.setItem(key, String(value));
+      apply(value);
+    } catch {
+      showAppAlert({
+        title: 'Setting not saved',
+        message: 'Please try changing this setting again.',
+        variant: 'error',
+      });
+    }
   };
+
+  const handleToggleSounds = (value: boolean) =>
+    savePreference('@sugo_customer_sounds_enabled', value, setSoundEffects);
+  const handleToggleErrandAlerts = (value: boolean) =>
+    savePreference('@sugo_customer_errand_alerts_enabled', value, setErrandAlerts);
+  const handleToggleChatAlerts = (value: boolean) =>
+    savePreference('@sugo_customer_chat_alerts_enabled', value, setChatAlerts);
 
   // Multi-Channel Password Reset State
   type PasswordResetStep = 'CHOOSE_CHANNEL' | 'EMAIL_OTP' | 'SET_PASSWORD' | 'SUCCESS';
@@ -325,117 +324,58 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
       {/* 1. TOP NAV HEADER */}
-      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }]}>
+      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
-          style={styles.backBtn}
+          style={[styles.backBtn, { backgroundColor: colors.bgGray }]}
           testID="back-button"
           accessibilityRole="button"
           accessibilityLabel="Back to Account"
         >
-          <ChevronLeft size={22} color={colors.textDark} />
+          <ChevronLeft size={22} color={colors.textGray} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>App Settings</Text>
         <View style={styles.navHeaderRightPlaceholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* 2. THEME & APPEARANCE (3-CARD VISUAL SELECTOR) */}
-        <SettingsSection title="Appearance & Display">
-          <View style={styles.themeCardsGrid}>
-            {/* LIGHT THEME CARD */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[
-                styles.themeCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: themeMode === 'light' ? colors.primary : colors.border,
-                  borderWidth: themeMode === 'light' ? 2 : 1,
-                },
-                themeMode === 'light' && Shadows.soft,
-              ]}
-              onPress={() => setThemeMode('light')}
-              testID="theme-card-light"
-              accessibilityRole="button"
-              accessibilityLabel="Light theme"
-            >
-              <View style={[styles.themeIconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-                <Sun size={20} color={themeMode === 'light' ? colors.primary : colors.textMedium} />
-              </View>
-              <Text style={[styles.themeCardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>Light</Text>
-              <Text style={[styles.themeCardSub, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Crisp & bright</Text>
-              {themeMode === 'light' && (
-                <View style={[styles.activeThemeBadge, { backgroundColor: colors.primary }]}>
-                  <Check size={10} color="#FFFFFF" strokeWidth={3} />
+      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]} showsVerticalScrollIndicator={false}>
+        <SettingsSection title="Appearance" unboxed>
+          <View accessibilityRole="radiogroup" accessibilityLabel="App appearance">
+            {([
+              { mode: 'light', label: 'Light', description: 'Use the light appearance', Icon: Sun },
+              { mode: 'dark', label: 'Dark', description: 'Use the dark appearance', Icon: Moon },
+              { mode: 'system', label: 'System', description: 'Follow your device settings', Icon: Monitor },
+            ] as const).map(({ mode, label, description, Icon }, index) => (
+              <TouchableOpacity
+                key={mode}
+                activeOpacity={0.7}
+                style={[styles.appearanceRow, { borderBottomColor: colors.border }, index === 2 && styles.lastAppearanceRow]}
+                onPress={() => setThemeMode(mode)}
+                testID={'theme-option-' + mode}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: themeMode === mode }}
+                accessibilityLabel={label + ' theme'}
+              >
+                <View style={styles.rowIcon}>
+                  <Icon size={17} color={colors.textGray} strokeWidth={1.7} />
                 </View>
-              )}
-            </TouchableOpacity>
-
-            {/* DARK THEME CARD */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[
-                styles.themeCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: themeMode === 'dark' ? colors.primary : colors.border,
-                  borderWidth: themeMode === 'dark' ? 2 : 1,
-                },
-                themeMode === 'dark' && Shadows.soft,
-              ]}
-              onPress={() => setThemeMode('dark')}
-              testID="theme-card-dark"
-              accessibilityRole="button"
-              accessibilityLabel="Dark theme"
-            >
-              <View style={[styles.themeIconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-                <Moon size={20} color={themeMode === 'dark' ? colors.primary : colors.textMedium} />
-              </View>
-              <Text style={[styles.themeCardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>Dark</Text>
-              <Text style={[styles.themeCardSub, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>True black</Text>
-              {themeMode === 'dark' && (
-                <View style={[styles.activeThemeBadge, { backgroundColor: colors.primary }]}>
-                  <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                <View style={styles.appearanceText}>
+                  <Text style={[styles.appearanceLabel, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>{label}</Text>
+                  <Text style={[styles.appearanceDescription, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>{description}</Text>
                 </View>
-              )}
-            </TouchableOpacity>
-
-            {/* SYSTEM AUTO CARD */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[
-                styles.themeCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: themeMode === 'system' ? colors.primary : colors.border,
-                  borderWidth: themeMode === 'system' ? 2 : 1,
-                },
-                themeMode === 'system' && Shadows.soft,
-              ]}
-              onPress={() => setThemeMode('system')}
-              testID="theme-card-system"
-              accessibilityRole="button"
-              accessibilityLabel="System auto theme"
-            >
-              <View style={[styles.themeIconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
-                <Monitor size={20} color={themeMode === 'system' ? colors.primary : colors.textMedium} />
-              </View>
-              <Text style={[styles.themeCardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>System</Text>
-              <Text style={[styles.themeCardSub, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Device auto</Text>
-              {themeMode === 'system' && (
-                <View style={[styles.activeThemeBadge, { backgroundColor: colors.primary }]}>
-                  <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                <View style={styles.selectionMark}>
+                  {themeMode === mode ? <Check size={18} color={colors.primaryStrong} strokeWidth={2.5} /> : null}
                 </View>
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
           </View>
         </SettingsSection>
 
         {/* 3. NOTIFICATIONS & SOUNDS */}
-        <SettingsSection title="Notifications & Sounds">
+        <SettingsSection title="Notifications & Sounds" unboxed>
           <SettingsRow
+            unboxed
             icon={Bell}
             label="Live Delivery Updates"
             subtitle="Rider assigned, store pickup & arrival alerts"
@@ -446,10 +386,13 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
                 trackColor={{ false: isDark ? '#334155' : '#D1D5DB', true: colors.primary }}
                 thumbColor="#FFFFFF"
                 testID="switch-errand-alerts"
+                accessibilityLabel="Live Delivery Updates"
+                disabled={preferencesLoading}
               />
             }
           />
           <SettingsRow
+            unboxed
             icon={MessageSquare}
             label="Dispatcher & Rider Messages"
             subtitle="Chime for order coordination & receipt updates"
@@ -460,10 +403,13 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
                 trackColor={{ false: isDark ? '#334155' : '#D1D5DB', true: colors.primary }}
                 thumbColor="#FFFFFF"
                 testID="switch-chat-alerts"
+                accessibilityLabel="Dispatcher & Rider Messages"
+                disabled={preferencesLoading}
               />
             }
           />
           <SettingsRow
+            unboxed
             icon={Volume2}
             label="Audible In-App Chimes"
             subtitle="Sound effects on message arrival & delivery completion"
@@ -474,34 +420,16 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
                 trackColor={{ false: isDark ? '#334155' : '#D1D5DB', true: colors.primary }}
                 thumbColor="#FFFFFF"
                 testID="switch-sound-effects"
+                accessibilityLabel="Audible In-App Chimes"
+                disabled={preferencesLoading}
               />
             }
           />
         </SettingsSection>
 
-        {/* 4. SECURITY & PERMISSIONS */}
-        <SettingsSection title="Security & Permissions">
+        <SettingsSection title="Security" unboxed>
           <SettingsRow
-            icon={MapPin}
-            label="Location Access"
-            subtitle="Accurate Tacurong store routing & delivery pinpoints"
-            trailing={
-              <View style={[styles.statusPill, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5' }]}>
-                <Text style={[styles.statusPillText, { color: '#10B981' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>While In Use</Text>
-              </View>
-            }
-          />
-          <SettingsRow
-            icon={Smartphone}
-            label="Active Device Session"
-            subtitle="Android device • Current login session"
-            trailing={
-              <View style={[styles.statusPill, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : colors.bgGray }]}>
-                <Text style={[styles.statusPillText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Active Now</Text>
-              </View>
-            }
-          />
-          <SettingsRow
+            unboxed
             icon={Lock}
             label="Change Password"
             subtitle="Update your account security password"
@@ -511,123 +439,18 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
           />
         </SettingsSection>
 
-        {/* 5. DATA & STORAGE OPTIMIZATION */}
-        <SettingsSection title="Data & Storage">
-          <View style={styles.storageMeterCard}>
-            <View style={styles.storageHeaderRow}>
-              <Text style={[styles.storageTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>Local Storage Footprint</Text>
-              <Text style={[styles.storageTotal, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                {cacheSize === '0.0 MB' ? '120.0 MB' : '122.4 MB'}
-              </Text>
-            </View>
-
-            {/* Visual Segmented Bar */}
-            <View style={[styles.storageBarBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border }]}>
-              <View style={[styles.storageBarApp, { backgroundColor: colors.primary, width: '97%' }]} />
-              {cacheSize !== '0.0 MB' && (
-                <View style={[styles.storageBarCache, { backgroundColor: '#F59E0B', width: '3%' }]} />
-              )}
-            </View>
-
-            {/* Legend */}
-            <View style={styles.storageLegendRow}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-                <Text style={[styles.legendText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>App Data (120 MB)</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
-                <Text style={[styles.legendText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Cache ({cacheSize})</Text>
-              </View>
-            </View>
-
-            {/* 1-Tap Clear Cache Button */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleClearCache}
-              disabled={clearingCache || cacheSize === '0.0 MB'}
-              style={[
-                styles.clearCacheBtn,
-                {
-                  borderColor: cacheSize === '0.0 MB' ? colors.border : colors.primary,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.bgGray,
-                },
-              ]}
-              testID="clear-cache-button"
-            >
-              {clearingCache ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <View style={styles.clearCacheBtnContent}>
-                  <Trash2 size={16} color={cacheSize === '0.0 MB' ? colors.textLight : colors.primary} />
-                  <Text
-                    style={[
-                      styles.clearCacheBtnText,
-                      { color: cacheSize === '0.0 MB' ? colors.textLight : colors.primary },
-                    ]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
-                  >
-                    {cacheSize === '0.0 MB' ? 'Cache is Clean (0.0 MB)' : 'Clear Temporary Cache (2.4 MB)'}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </SettingsSection>
-
-        {/* 6. ABOUT & OPERATIONS */}
-        <SettingsSection title="About & Operations">
+        <SettingsSection title="About & Support" unboxed>
           <SettingsRow
-            icon={Activity}
-            label="Tacurong Operations Hub"
-            subtitle="Dispatch fleet & order routing active"
-            trailing={
-              <View style={[styles.statusPill, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5' }]}>
-                <Text style={[styles.statusPillText, { color: '#10B981' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Operational</Text>
-              </View>
-            }
-          />
-          <SettingsRow
+            unboxed
             icon={Smartphone}
             label="Application Version"
             subtitle={`Sugo Customer App v${updateStatus?.installedVersion || getInstalledAppVersion()}`}
-            trailing={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View
-                  style={[
-                    styles.statusPill,
-                    {
-                      backgroundColor: updateStatus?.isUpdateAvailable
-                        ? '#FEE2E2'
-                        : isDark
-                        ? 'rgba(16, 185, 129, 0.15)'
-                        : '#D1FAE5',
-                      borderColor: updateStatus?.isUpdateAvailable ? '#FCA5A5' : '#A7F3D0',
-                      borderWidth: 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      { color: updateStatus?.isUpdateAvailable ? '#DC2626' : '#10B981', fontWeight: '700' },
-                    ]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                  >
-                    {checkingUpdates
-                      ? 'Checking...'
-                      : updateStatus?.isUpdateAvailable
-                      ? `Update v${updateStatus.latestVersion}`
-                      : 'Up to date'}
-                  </Text>
-                </View>
-                <ChevronRight size={16} color={colors.textLight} />
-              </View>
-            }
+            chevron
             onPress={() => setShowUpdatesModal(true)}
             testID="row-app-version"
           />
           <SettingsRow
+            unboxed
             icon={MessageSquare}
             label="App Feedback & Reviews"
             subtitle="Send feedback, bug reports & feature suggestions"
@@ -636,6 +459,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
             testID="row-feedback"
           />
           <SettingsRow
+            unboxed
             icon={FileText}
             label="Terms of Service"
             subtitle="Fees, payments, cancellations and your responsibilities"
@@ -644,6 +468,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
             testID="row-terms"
           />
           <SettingsRow
+            unboxed
             icon={ShieldCheck}
             label="Privacy Policy"
             subtitle="What we collect, who sees it, and your rights"
@@ -653,36 +478,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
           />
         </SettingsSection>
 
-        {/* 7. ACCOUNT MANAGEMENT */}
-        <SettingsSection title="Account Management">
-          <SettingsRow
-            icon={LogOut}
-            label="Sign Out"
-            subtitle="Sign out from this Android device"
-            chevron
-            onPress={() => setShowSignOutModal(true)}
-            testID="row-sign-out"
-          />
-        </SettingsSection>
       </ScrollView>
-
-      {/* SIGN OUT CONFIRM MODAL (INVERTED HIERARCHY: STAY SIGNED IN STANDS OUT) */}
-      <ConfirmModal
-        visible={showSignOutModal}
-        title="Sign Out of Your Account?"
-        message="You will need to sign back in with your credentials to place errands or track deliveries in Tacurong.\n\nAre you sure you want to sign out?"
-        confirmLabel="Yes, Sign Out"
-        cancelLabel="Stay Signed In"
-        primaryButton="cancel"
-        buttonLayout="vertical"
-        destructive={false}
-        onConfirm={() => {
-          setShowSignOutModal(false);
-          logout();
-        }}
-        onCancel={() => setShowSignOutModal(false)}
-        testID="signout-confirm-modal"
-      />
 
       {/* APP UPDATES & CHANGELOG MODAL */}
       <AppUpdatesModal
@@ -1019,7 +815,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
                 style={[styles.modalActionBtn, { backgroundColor: colors.primary, marginTop: Spacing.md }]}
                 onPress={handleClosePasswordModal}
               >
-                <Text style={styles.modalActionBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+                <Text style={[styles.modalActionBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
                   Done
                 </Text>
               </TouchableOpacity>
@@ -1038,7 +834,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 0,
   },
   backBtn: {
@@ -1050,143 +846,42 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: 44,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.md,
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xl * 3,
   },
-  themeCardsGrid: {
+  appearanceRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    padding: Spacing.sm,
-  },
-  themeCard: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xs,
-    borderRadius: BorderRadius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    minHeight: 88,
+    minHeight: 76,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  themeIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
+  lastAppearanceRow: { borderBottomWidth: 0 },
+  rowIcon: { width: 24, alignItems: 'center', justifyContent: 'center' },
+  appearanceText: { flex: 1, marginLeft: Spacing.md, marginRight: Spacing.sm },
+  appearanceLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
   },
-  themeCardTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
-    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-    marginBottom: 2,
-  },
-  themeCardSub: {
+  appearanceDescription: {
     fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
+    marginTop: 2,
   },
-  activeThemeBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 26,
-  },
-  statusPillText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    letterSpacing: 0.2,
-  },
-  storageMeterCard: {
-    padding: Spacing.lg,
-  },
-  storageHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  storageTitle: {
-    fontFamily: FontFamily.semibold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'heading'),
-  },
-  storageTotal: {
-    fontFamily: FontFamily.mono,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-  },
-  storageBarBg: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    marginBottom: Spacing.sm,
-  },
-  storageBarApp: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  storageBarCache: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  storageLegendRow: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-  },
-  clearCacheBtn: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md - 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  clearCacheBtnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  clearCacheBtnText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-  },
+  selectionMark: { width: 24, alignItems: 'center' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronRight, RotateCw, Store } from 'lucide-react-native';
@@ -18,14 +19,14 @@ import {
 
 type RowStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
-/** A store card's width in dp, the same on every phone. */
-export const STORE_CARD_WIDTH = 150;
+/** A compact Home store card's maximum width in dp. */
+export const STORE_CARD_WIDTH = 160;
 
 export interface StoreCardRowProps {
   title: string;
   /** The icon beside the title. */
   Icon: any;
-  /** Section test ids: `<prefix>`, `<prefix>-see-all`, `-loading`, `-error`, `-empty`, `-list`, `-see-all-card`. */
+  /** Section test ids: `<prefix>`, `<prefix>-see-all`, `-loading`, `-error`, `-empty`, `-list`. */
   testID: string;
   /** Card test ids (StoreCard's `testIDPrefix`). */
   cardTestIDPrefix: string;
@@ -34,7 +35,7 @@ export interface StoreCardRowProps {
   onRetry: () => void;
   onStorePress: (store: Establishment) => void;
   onSeeAll: () => void;
-  /** The last card of the row, and the header See all link's label. */
+  /** The header See all link's label. */
   seeAll: { title: string; body: string; Icon: any; accessibilityLabel: string };
   errorMessage: string;
   /** The empty state's message and action; the action defaults to See all. */
@@ -42,7 +43,7 @@ export interface StoreCardRowProps {
   categoryImages: Record<number, string>;
   contentWidth: number;
   showRating?: boolean;
-  /** At most this many cards before the See all card. */
+  /** At most this many store cards. */
   maxCards?: number;
   /** What tapping a card does, for a screen reader (StoreCard `actionLabel`). */
   cardActionLabel?: string;
@@ -50,7 +51,7 @@ export interface StoreCardRowProps {
 
 /**
  * A Home tab row of store cards that scrolls sideways, as foodpanda lists
- * shops: a header with a "See all >" link, the cards, and a "See all" card at the end.
+ * shops: a header with a "See all >" link and the store cards.
  * "Stores near you" and "Popular Stores" are both this, with their own data.
  *
  * Every state spans the column instead of scrolling: shimmer cards while
@@ -76,20 +77,18 @@ export function StoreCardRow({
   maxCards,
   cardActionLabel,
 }: StoreCardRowProps) {
-  const { colors, isDark } = useThemeColor();
+  const pageLayout = usePageLayout();
+  const { colors } = useThemeColor();
 
-  // A fixed width, as foodpanda's cards are (2026-10-13): two and a bit on a
-  // 360 dp phone, so the row plainly continues sideways, and more on a bigger
-  // one. It was 58% of the column, so every phone showed the same 1.7 cards,
-  // only larger on a larger screen. contentWidth only caps it on tiny screens.
-  const cardWidth = Math.round(Math.min(STORE_CARD_WIDTH, contentWidth * 0.58));
-  const imageHeight = Math.round(cardWidth * 0.5);
+  // Moderate 4:3 photos, with the next card still visible on narrow phones.
+  const cardWidth = Math.round(Math.min(STORE_CARD_WIDTH, contentWidth * 0.68));
+  const imageHeight = Math.round(cardWidth * 0.75);
   const shown = maxCards ? items.slice(0, maxCards) : items;
   const isLoading = (status === 'idle' || status === 'loading') && items.length === 0;
 
   const panel = (id: string, message: string, action: { label: string; onPress: () => void; Icon: any }) => (
     <View
-      style={[styles.panel, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB' }]}
+      style={styles.panel}
       testID={id}
     >
       <Store size={20} color={colors.textLight} />
@@ -115,7 +114,6 @@ export function StoreCardRow({
     <View style={styles.section} testID={testID}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Icon size={16} color={colors.primary} />
           <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
             {title}
           </Text>
@@ -132,7 +130,7 @@ export function StoreCardRow({
           <Text style={[styles.seeAllLinkText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
             See all
           </Text>
-          <ChevronRight size={18} color={colors.primary} strokeWidth={2.5} />
+          <ChevronRight size={14} color={colors.primary} strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
@@ -141,8 +139,8 @@ export function StoreCardRow({
           horizontal
           showsHorizontalScrollIndicator={false}
           scrollEnabled={false}
-          style={styles.bleed}
-          contentContainerStyle={styles.row}
+          style={[styles.bleed, pageLayout.bleedStyle]}
+          contentContainerStyle={[styles.row, pageLayout.gutterStyle]}
           testID={`${testID}-loading`}
         >
           {[0, 1, 2].map((i) => (
@@ -152,8 +150,7 @@ export function StoreCardRow({
             >
               <ShimmerWave width={cardWidth} height={imageHeight} borderRadius={BorderRadius.lg} />
               <View style={styles.shimmerBody}>
-                <ShimmerWave height={14} width="75%" borderRadius={BorderRadius.sm} />
-                <ShimmerWave height={11} width="50%" borderRadius={BorderRadius.sm} />
+                <ShimmerWave height={11} width="85%" borderRadius={BorderRadius.sm} />
               </View>
             </View>
           ))}
@@ -170,8 +167,8 @@ export function StoreCardRow({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.bleed}
-          contentContainerStyle={styles.row}
+          style={[styles.bleed, pageLayout.bleedStyle]}
+          contentContainerStyle={[styles.row, pageLayout.gutterStyle]}
           testID={`${testID}-list`}
         >
           {shown.map((store) => (
@@ -185,38 +182,9 @@ export function StoreCardRow({
               testIDPrefix={cardTestIDPrefix}
               showRating={showRating}
               actionLabel={cardActionLabel}
+              presentation="photo-overlay"
             />
           ))}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.seeAllCard, { width: cardWidth }]}
-            onPress={onSeeAll}
-            accessibilityRole="button"
-            accessibilityLabel={`${seeAll.title}. ${seeAll.body}`}
-            testID={`${testID}-see-all-card`}
-          >
-            <View
-              style={[
-                styles.seeAllBanner,
-                {
-                  height: imageHeight,
-                  backgroundColor: isDark ? 'rgba(246, 36, 89, 0.10)' : '#FFF5F7',
-                },
-              ]}
-            >
-              <View style={[styles.seeAllIcon, { backgroundColor: colors.primary }]}>
-                <seeAll.Icon size={18} color="#FFFFFF" strokeWidth={2.6} />
-              </View>
-            </View>
-            <View style={styles.seeAllMeta}>
-              <Text style={[styles.seeAllTitle, { color: colors.primary }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
-                {seeAll.title}
-              </Text>
-              <Text style={[styles.seeAllBody, { color: colors.textGray }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
-                {seeAll.body}
-              </Text>
-            </View>
-          </TouchableOpacity>
         </ScrollView>
       )}
     </View>
@@ -225,18 +193,18 @@ export function StoreCardRow({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontFamily: FontFamily.bold,
@@ -251,7 +219,7 @@ const styles = StyleSheet.create({
   },
   seeAllLinkText: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption + 1),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   // Runs to the screen edges, as foodpanda's rows do, while the first item
   // still lines up with everything above it.
@@ -271,43 +239,10 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
     gap: 6,
   },
-  seeAllCard: {
-    // Unboxed See All item matching StoreCard layout
-  },
-  seeAllBanner: {
-    width: '100%',
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seeAllMeta: {
-    paddingTop: Spacing.xs + 2,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  seeAllIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seeAllTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
-  },
-  seeAllBody: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
-  },
   panel: {
     alignItems: 'center',
-    gap: Spacing.xs + 2,
-    borderWidth: 1,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.lg,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xl,
     paddingHorizontal: Spacing.md,
   },
   panelText: {

@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Clock, MapPin, ShoppingBag, Store } from 'lucide-react-native';
+import { Clock, MapPin } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, FontSizes, Spacing } from '../config/theme';
+import { Spacing, FontFamily, PortalFontSizes } from '../config/theme';
 import { formatDistance, formatDuration } from '../utils/format';
 
 export interface RiderToStorePanelProps {
@@ -37,7 +37,7 @@ export default function RiderToStorePanel({
   atStore,
   riderLocated,
 }: RiderToStorePanelProps) {
-  const { colors, isDark } = useThemeColor();
+  const { colors } = useThemeColor();
   const store = storeName?.trim() || 'the store';
 
   const headline = !riderLocated
@@ -51,24 +51,16 @@ export default function RiderToStorePanel({
   const showNumbers = riderLocated && !atStore && etaSeconds != null && distanceMeters != null;
 
   return (
-    <View style={[styles.wrapper, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]} testID="rider-to-store-panel">
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB' }]}>
-        <View style={[styles.iconBadge, { backgroundColor: isDark ? 'rgba(255,77,121,0.15)' : '#FFF0F5' }]}>
-          {atStore ? (
-            <ShoppingBag size={22} color={colors.primary} strokeWidth={2.2} />
-          ) : (
-            <Store size={22} color={colors.primary} strokeWidth={2.2} />
-          )}
-        </View>
-
+    <View style={[styles.wrapper, { backgroundColor: colors.bgApp }]} testID="rider-to-store-panel">
+      <View style={styles.card}>
         <Text style={[styles.headline, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
           {headline}
         </Text>
 
         {showNumbers && (
           <View style={styles.metricsRow}>
-            <View style={[styles.metric, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6' }]}>
-              <Clock size={14} color={colors.primary} strokeWidth={2.2} />
+            <View style={styles.metric}>
+              <Clock size={17} color={colors.textGray} strokeWidth={1.8} />
               <Text style={[styles.metricValue, { color: colors.textDark }]} maxFontSizeMultiplier={1.2} testID="store-eta">
                 {formatDuration(etaSeconds!)}
               </Text>
@@ -76,8 +68,8 @@ export default function RiderToStorePanel({
                 to the store
               </Text>
             </View>
-            <View style={[styles.metric, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6' }]}>
-              <MapPin size={14} color={colors.primary} strokeWidth={2.2} />
+            <View style={styles.metric}>
+              <MapPin size={17} color={colors.textGray} strokeWidth={1.8} />
               <Text style={[styles.metricValue, { color: colors.textDark }]} maxFontSizeMultiplier={1.2} testID="store-distance">
                 {formatDistance(distanceMeters!)}
               </Text>
@@ -89,8 +81,7 @@ export default function RiderToStorePanel({
         )}
 
         <Text style={[styles.note, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
-          The live map opens when your rider is on the way to you. We will send you a notification then, even if
-          the app is closed.
+          The live map opens when your rider is on the way to you. We will notify you then.
         </Text>
       </View>
     </View>
@@ -101,26 +92,16 @@ const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
   },
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing.lg,
   },
   headline: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    lineHeight: FontSizes.lg * 1.3,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.subheading,
+    lineHeight: 23,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -128,22 +109,23 @@ const styles = StyleSheet.create({
   },
   metric: {
     flex: 1,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    gap: 2,
+    paddingVertical: Spacing.sm,
+    gap: 4,
   },
   metricValue: {
-    fontSize: FontSizes.xl,
-    fontWeight: '800',
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.title,
+    lineHeight: 26,
     marginTop: 4,
   },
   metricLabel: {
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: 19,
   },
   note: {
-    fontSize: FontSizes.sm,
-    lineHeight: FontSizes.sm * 1.45,
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: 19,
   },
 });

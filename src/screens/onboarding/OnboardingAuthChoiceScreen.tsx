@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -5,6 +6,7 @@ import {
   View,
   TouchableOpacity,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,9 +15,14 @@ import { useThemeColor } from '../../hooks/useThemeColor';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../services/apiClient';
 import { signInWithGoogleNative } from '../../services/googleAuth';
+import { mfaTrustField, readLoginChallenge } from '../../services/mfaTrust';
 import { toUserMessage } from '../../services/errorMessages';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
+import KuyaSugoMascot from '../../components/KuyaSugoMascot';
 import {
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
   FontFamily,
   Spacing,
   BorderRadius,
@@ -26,6 +33,8 @@ import {
 } from '../../config/theme';
 
 export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
+  const pageLayout = usePageLayout();
+  const { height } = useWindowDimensions();
   const { colors, isDark } = useThemeColor();
   const { login } = useAuth();
   const { isTablet } = useResponsive();
@@ -52,10 +61,16 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
       setGoogleLoadingText('Signing in...');
       const response = await apiClient.post('/customers/google-login', {
         idToken: googleUser.firebaseIdToken,
+        ...(await mfaTrustField()),
       });
 
       const data = response.data;
-      if (data.status === 'PHONE_SETUP_REQUIRED') {
+      // An existing account on a device the server does not trust yet. The
+      // challenge screen runs the same first-run location setup on success.
+      const challenge = readLoginChallenge(data);
+      if (challenge) {
+        navigation.navigate('MfaChallenge', { challenge, onboarding: { detectedLocation } });
+      } else if (data.status === 'PHONE_SETUP_REQUIRED') {
         navigation.navigate('GooglePhoneSetup', {
           googleIdToken: googleUser.firebaseIdToken,
           email: data.email || googleUser.email,
@@ -109,9 +124,15 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
       style={[styles.safeArea, { backgroundColor: colors.bgApp }]}
       edges={['top', 'bottom']}
     >
-      <View style={[styles.container, isTablet && styles.tabletContainer]}>
+      <View style={[styles.container, isTablet && styles.tabletContainer, pageLayout.gutterStyle, pageLayout.frameStyle]}>
         {/* Hero Copy */}
         <View style={styles.heroSection}>
+          {/* Kuya Sugo walks in from the left screen edge and out past the right one, so his lane bleeds into the side padding. */}
+          {!errorMessage && (
+            <View style={[styles.walkLane, pageLayout.bleedStyle]}>
+              <KuyaSugoMascot action="delivery" height={Math.min(176, Math.max(48, height - 624))} />
+            </View>
+          )}
           <Text
             style={[styles.headline, { color: colors.textDark }]}
             maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
@@ -139,7 +160,7 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
                 },
               ]}
             >
-              <Text style={[styles.errorText, { color: colors.danger }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.errorText, { color: colors.danger }]}>
                 {errorMessage}
               </Text>
             </View>
@@ -174,14 +195,14 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
             accessibilityLabel="Create an Account"
           >
             <View style={styles.btnInnerRow}>
-              <UserPlus size={18} color="#FFFFFF" strokeWidth={2.2} />
+              <UserPlus size={18} color={colors.onPrimary} strokeWidth={2.2} />
               <Text
-                style={styles.createAccountBtnText}
+                style={[styles.createAccountBtnText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
               >
                 Create an Account
               </Text>
-              <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.2} />
+              <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.2} />
             </View>
           </TouchableOpacity>
 
@@ -306,6 +327,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
   },
+  walkLane: {
+    marginHorizontal: -Spacing.xl,
+  },
   headline: {
     fontFamily: FontFamily.bold,
     fontSize: 26,
@@ -369,9 +393,10 @@ const styles = StyleSheet.create({
     height: 1,
   },
   dividerText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     marginHorizontal: Spacing.md,
     fontFamily: FontFamily.bold,
-    fontSize: 12,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
   },
   loginLinkBtn: {
     minHeight: 56,
@@ -392,8 +417,9 @@ const styles = StyleSheet.create({
     fontSize: PortalFontSizes.body,
   },
   loginSubtext: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: 12,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     marginTop: 2,
   },
   consentText: {

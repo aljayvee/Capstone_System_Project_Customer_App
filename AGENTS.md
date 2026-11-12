@@ -2,6 +2,17 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+# Customer Brand Identity
+
+- Keep the Sugo Express app logo flat 2D at all times, using white and pink only. Never use a 3D mascot portrait, bevel, lighting, gradient or shadow as the launcher logo. The editable master is `assets/mascot/sugo-app-logo.svg`; regenerate variants with `node artwork/kuya-sugo/export_flat_logo.mjs`.
+- Kuya Sugo is a faceless **chibi** 3D mascot: oversized round head, short soft body, compact limbs, pure-white body, pink uniform, dark-blue pants, no hat/cap, facing front. His animation is 10 seconds at 24 fps (240 frames). A 3D character does not change the flat-logo rule.
+- The user's supplied chibi image (`artwork/kuya-sugo/reference/chibi-style-reference.png`) is the primary proportion/style reference and supersedes the tall athletic body. Keep **Pack + Box**. The earlier HTML supplies carrying mechanics and the existing rig, not the final body proportions. Regeneration applies `refine_chibi_mascot.py` after the clean source build.
+- The 2026-10-29 refinement uses `refine_clean_mascot.py` after source import: rounded blank head, continuous fitted clothing and smooth joint weights. Preserve that cleanup when regenerating; the user rejected the earlier blocky chest and segmented limbs. Keep every weighted mesh attached to the original rig.
+- Keep pink as the Customer App brand across screens: light primary `#F62459`, dark primary `#FF4D79`, and light-mode readable strong pink `#C41B47`.
+- Use the existing theme pink tokens for primary actions, selected navigation/filter states and brand accents. Do not replace them with charcoal, blue, or the Rider App palette.
+- Pair filled pink controls with `colors.onPrimary`; use `colors.primaryStrong` in light mode when small foreground text requires stronger contrast.
+- Preserve meaningful success/warning/error colors and the requested detail colors: bold dark store names, blue references/payment methods, pink addresses, green fees and gray rider names. Neutral surfaces, body text and secondary controls remain appropriate.
+
 # 🌐 Dual-Agent Handshake & Collaboration Invariant (Claude App ◄► Antigravity 2.0)
 > **ALWAYS ACTIVE IN ALL SESSIONS**: Both Claude App and Antigravity 2.0 operate as a unified engineering team.
 1. **Boot-Time Handshake Check (Step 0)**: In every single session, ALWAYS inspect `AGENT_HANDSHAKE.md` in this directory before modifying mobile code.

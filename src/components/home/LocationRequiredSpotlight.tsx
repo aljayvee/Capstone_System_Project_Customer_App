@@ -81,8 +81,8 @@ export default function LocationRequiredSpotlight({ visible, target, onSetLocati
         accessibilityLabel="Set my location"
         testID="location-required-set"
       >
-        <MapPin size={16} color="#FFFFFF" strokeWidth={2.4} />
-        <Text style={styles.buttonText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+        <MapPin size={16} color={colors.onPrimary} strokeWidth={2.4} />
+        <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
           Set my location
         </Text>
       </TouchableOpacity>

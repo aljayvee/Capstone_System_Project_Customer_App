@@ -95,7 +95,7 @@ export function extractMerchantCategories(
   }
 
   if (fallbackToId && errand?.id) {
-    return `Merchant Categories ${formatErrandId(errand.id)}`;
+    return `Merchant Categories ${formatErrandId(errand.id, errand.referenceNo)}`;
   }
 
   return 'Merchant Categories';

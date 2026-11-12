@@ -236,6 +236,6 @@ describe('the stores on the map', () => {
     // rather than removed.
     expect(res.getAllByTestId('mock-circle')).toHaveLength(2);
     expect(res.getByText('1')).toBeTruthy();
-    expect(res.getByText('✓')).toBeTruthy();
+    expect(res.getByLabelText('Store 2: Primark Save More, completed')).toBeTruthy();
   });
 });

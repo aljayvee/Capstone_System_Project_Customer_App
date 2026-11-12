@@ -1,0 +1,99 @@
+c9ff120ff66e9b7680958333fdccecad
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.AsyncStorageError = void 0;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+var _wrapNativeSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/wrapNativeSuper"));
+var AsyncStorageErrorType = function (AsyncStorageErrorType) {
+  AsyncStorageErrorType["NativeModuleError"] = "NativeModuleError";
+  AsyncStorageErrorType["WebStorageError"] = "WebStorageError";
+  AsyncStorageErrorType["SqliteStorageError"] = "SqliteStorageError";
+  AsyncStorageErrorType["OtherStorageError"] = "OtherStorageError";
+  AsyncStorageErrorType["UnknownError"] = "UnknownError";
+  return AsyncStorageErrorType;
+}(AsyncStorageErrorType || {});
+var AsyncStorageError = exports.AsyncStorageError = function (_Error) {
+  function AsyncStorageError(errorMessage, type) {
+    var _this;
+    (0, _classCallCheck2.default)(this, AsyncStorageError);
+    _this = (0, _callSuper2.default)(this, AsyncStorageError, [errorMessage]);
+    _this.errorMessage = errorMessage;
+    _this.type = type;
+    _this.name = _this.constructor.name;
+    return _this;
+  }
+  (0, _inherits2.default)(AsyncStorageError, _Error);
+  return (0, _createClass2.default)(AsyncStorageError, null, [{
+    key: "nativeError",
+    value: function nativeError(e) {
+      if (e instanceof AsyncStorageError) {
+        throw e;
+      }
+      var error = getNativeError(e);
+      if (!error) {
+        return new AsyncStorageError(e?.message ?? `Unknown error ${e}`, AsyncStorageErrorType.UnknownError);
+      }
+      var errorType = AsyncStorageErrorType.UnknownError;
+      switch (error.type) {
+        case "SqliteException":
+          errorType = AsyncStorageErrorType.SqliteStorageError;
+          break;
+        case "OtherException":
+          errorType = AsyncStorageErrorType.OtherStorageError;
+          break;
+      }
+      return new AsyncStorageError(error.message, errorType);
+    }
+  }, {
+    key: "jsError",
+    value: function jsError(error, type) {
+      return new AsyncStorageError(error, type);
+    }
+  }]);
+}((0, _wrapNativeSuper2.default)(Error));
+AsyncStorageError.Type = AsyncStorageErrorType;
+function isNativeError(e) {
+  if (typeof e !== "object") {
+    return false;
+  }
+  var err = e;
+  return !!err.message && err?.code === "AsyncStorageError";
+}
+function getNativeError(e) {
+  if (!isNativeError(e)) {
+    return null;
+  }
+  var errorType = e.userInfo ? e.userInfo["type"] : null;
+  switch (errorType) {
+    case "SqliteException":
+      {
+        return {
+          type: "SqliteException",
+          message: e.message
+        };
+      }
+    case "OtherException":
+      {
+        return {
+          type: "OtherException",
+          message: e.message
+        };
+      }
+    case "LegacyStorageException":
+      {
+        return {
+          type: "LegacyStorageException",
+          message: e.message
+        };
+      }
+  }
+  return null;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJBc3luY1N0b3JhZ2VFcnJvclR5cGUiLCJBc3luY1N0b3JhZ2VFcnJvciIsImV4cG9ydHMiLCJfRXJyb3IiLCJlcnJvck1lc3NhZ2UiLCJ0eXBlIiwiX3RoaXMiLCJfY2xhc3NDYWxsQ2hlY2syIiwiZGVmYXVsdCIsIl9jYWxsU3VwZXIyIiwibmFtZSIsImNvbnN0cnVjdG9yIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsIm5hdGl2ZUVycm9yIiwiZSIsImVycm9yIiwiZ2V0TmF0aXZlRXJyb3IiLCJtZXNzYWdlIiwiVW5rbm93bkVycm9yIiwiZXJyb3JUeXBlIiwiU3FsaXRlU3RvcmFnZUVycm9yIiwiT3RoZXJTdG9yYWdlRXJyb3IiLCJqc0Vycm9yIiwiX3dyYXBOYXRpdmVTdXBlcjIiLCJFcnJvciIsIlR5cGUiLCJpc05hdGl2ZUVycm9yIiwiZXJyIiwiY29kZSIsInVzZXJJbmZvIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL0FzeW5jU3RvcmFnZUVycm9yLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7SUFBS0EscUJBQXFCLGFBQXJCQSxxQkFBcUI7RUFBckJBLHFCQUFxQjtFQUFyQkEscUJBQXFCO0VBQXJCQSxxQkFBcUI7RUFBckJBLHFCQUFxQjtFQUFyQkEscUJBQXFCO0VBQUEsT0FBckJBLHFCQUFxQjtBQUFBLEVBQXJCQSxxQkFBcUI7QUFBQSxJQThCYkMsaUJBQWlCLEdBQUFDLE9BQUEsQ0FBQUQsaUJBQUEsYUFBQUUsTUFBQTtFQUNwQixTQUFBRixrQkFDQ0csWUFBb0IsRUFDcEJDLElBQTJCLEVBQ2xDO0lBQUEsSUFBQUMsS0FBQTtJQUFBLElBQUFDLGdCQUFBLENBQUFDLE9BQUEsUUFBQVAsaUJBQUE7SUFDQUssS0FBQSxPQUFBRyxXQUFBLENBQUFELE9BQUEsUUFBQVAsaUJBQUEsR0FBTUcsWUFBWTtJQUFFRSxLQUFBLENBSGJGLFlBQW9CLEdBQXBCQSxZQUFv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

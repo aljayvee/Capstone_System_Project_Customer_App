@@ -105,18 +105,18 @@ describe('EditAccountScreen Component', () => {
     expect(res.getByTestId('back-button')).toBeTruthy();
   });
 
-  it('renders Personal Identity and Contact Details Bento cards', async () => {
+  it('renders personal and contact detail sections', async () => {
     const res: any = await render(
       <EditAccountScreen navigation={mockNavigation} route={mockRoute} />
     );
 
     expect(res.getByText('Personal Identity')).toBeTruthy();
-    expect(res.getByText('FIRST NAME *')).toBeTruthy();
-    expect(res.getByText('MIDDLE NAME (OPTIONAL)')).toBeTruthy();
-    expect(res.getByText('LAST NAME *')).toBeTruthy();
+    expect(res.getByText('First name *')).toBeTruthy();
+    expect(res.getByText('Middle name (optional)')).toBeTruthy();
+    expect(res.getByText('Last name *')).toBeTruthy();
     expect(res.getByText('Contact Details')).toBeTruthy();
-    expect(res.getByText('EMAIL ADDRESS')).toBeTruthy();
-    expect(res.getByText('MOBILE PHONE')).toBeTruthy();
+    expect(res.getByText('Email address')).toBeTruthy();
+    expect(res.getByText('Mobile phone')).toBeTruthy();
   });
 
   it('renders sticky bottom save button with testID', async () => {
@@ -190,16 +190,83 @@ describe('EditAccountScreen Component', () => {
     }
   });
 
-  it('renders phonePrefixBox with neutral frosted substrate and black shadow in dark mode', async () => {
+  it('renders a flat neutral phone prefix in dark mode', async () => {
     mockIsDark = true;
     try {
       const res: any = await render(<EditAccountScreen navigation={mockNavigation} route={mockRoute} />);
       const prefixBox = res.getByTestId('phone-prefix-box');
       const flattened = StyleSheet.flatten(prefixBox.props.style);
-      expect(flattened.backgroundColor).toBe('rgba(255, 255, 255, 0.08)');
-      expect(flattened.shadowColor).toBe('#000000');
+      expect(flattened.backgroundColor).toBe('#F1F5F9');
+      expect(flattened.elevation).toBe(0);
+      expect(flattened.shadowOpacity).toBe(0);
     } finally {
       mockIsDark = false;
     }
   });
+
+  it('navigates back instead of pushing a duplicate Account screen when profile is saved', async () => {
+    jest.useFakeTimers();
+    try {
+      mockNavigation.goBack.mockClear();
+      mockNavigation.navigate.mockClear();
+      const verifiedRoute: any = {
+        params: {
+          user: {
+            ...mockRoute.params.user,
+            phoneVerified: true,
+          },
+        },
+      };
+      const res: any = await render(
+        <EditAccountScreen navigation={mockNavigation} route={verifiedRoute} />
+      );
+
+      const saveBtn = res.getByTestId('save-profile-button');
+      await act(async () => {
+        fireEvent.press(saveBtn);
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(800);
+      });
+
+      expect(mockNavigation.goBack).toHaveBeenCalled();
+      expect(mockNavigation.navigate).not.toHaveBeenCalledWith('Account', expect.anything());
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+  it('leaves Android back to a screen in front of it, even with unsaved changes', async () => {
+    // A chat opened from a push sits on top of this screen while its listener
+    // stays registered and is asked first. With an edit pending it used to
+    // claim the press and raise "Discard Unsaved Changes?" over the chat,
+    // which then would not close (2026-11-06).
+    const { BackHandler } = require('react-native');
+    const spy = jest.spyOn(BackHandler, 'addEventListener');
+    const behind: any = { navigate: jest.fn(), goBack: jest.fn(), isFocused: jest.fn(() => false) };
+    try {
+      const res: any = await render(<EditAccountScreen navigation={behind} route={mockRoute} />);
+      await fireEvent.changeText(res.getByTestId('edit-phone-input'), '9998887777');
+      expect(res.getByText('Save 1 Change')).toBeTruthy();
+      const handler = spy.mock.calls.filter((args: any[]) => args[0] === 'hardwareBackPress').at(-1)![1] as () => boolean;
+
+      let handled: boolean | undefined;
+      await act(async () => {
+        handled = handler();
+      });
+      expect(handled).toBe(false);
+      expect(res.queryByText('Discard Unsaved Changes?')).toBeNull();
+
+      // In front again: the guard against losing the edit still holds.
+      behind.isFocused.mockReturnValue(true);
+      await act(async () => {
+        handled = handler();
+      });
+      expect(handled).toBe(true);
+      expect(res.getByText('Discard Unsaved Changes?')).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
+

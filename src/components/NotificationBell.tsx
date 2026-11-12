@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNotifications } from '../context/NotificationContext';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily } from '../config/theme';
+import { PortalFontSizeMultipliers, FontFamily } from '../config/theme';
 import { RootStackParamList } from '../navigation/types';
 
 export interface NotificationBellProps {
@@ -40,7 +40,7 @@ export function NotificationBell({ user, navigation: customNav, onPress }: Notif
       <Bell size={21} color={colors.textGray} strokeWidth={2} />
       {unreadCount > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.primary }]} testID="notification-bell-badge">
-          <Text style={styles.badgeText} testID="notification-bell-count">
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.badgeText, { color: colors.onPrimary }]} testID="notification-bell-count">
             {unreadCount > 9 ? '9+' : unreadCount}
           </Text>
         </View>

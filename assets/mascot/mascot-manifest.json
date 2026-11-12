@@ -1,0 +1,289 @@
+{
+  "name": "Kuya Sugo",
+  "brand": "Sugo Express",
+  "source": "reference/pink_express_athletic_delivery_rider.html",
+  "blender": "5.2.3 LTS",
+  "actions": [
+    {
+      "name": "KuyaSugo_Greeting",
+      "frames": [
+        1.0,
+        241.0
+      ]
+    },
+    {
+      "name": "KuyaSugo_Idle",
+      "frames": [
+        1.0,
+        241.0
+      ]
+    },
+    {
+      "name": "KuyaSugo_PackBox",
+      "frames": [
+        1.0,
+        241.0
+      ]
+    },
+    {
+      "name": "KuyaSugo_Wave",
+      "frames": [
+        1.0,
+        241.0
+      ]
+    }
+  ],
+  "animation": {
+    "frames": 240,
+    "fps": 24,
+    "durationMs": 10000,
+    "size": [
+      384,
+      448
+    ],
+    "frameFolder": "chibi-wave-frames",
+    "loop": "once"
+  },
+  "character": {
+    "style": "faceless chibi courier",
+    "facing": "front",
+    "faceFeatures": false,
+    "headwear": false,
+    "carryMode": "Pack + Box"
+  },
+  "palette": {
+    "primary": "#F62459",
+    "strong": "#C41B47",
+    "white": "#FFFFFF",
+    "pants": "#172554"
+  },
+  "logo": {
+    "style": "flat 2D vector",
+    "source": "assets/mascot/sugo-app-logo.svg",
+    "colors": [
+      "#FFFFFF",
+      "#F62459"
+    ],
+    "neverUse3DPortrait": true
+  },
+  "tools": [
+    "Blender surface smoothing",
+    "Original HTML kinematic hierarchy"
+  ],
+  "provenance": "Imported from the user's pink_express_athletic_delivery_rider.html, using Pack + Box mode, smoothed in Blender and baked from its original walk. Separate flat app logo: the Sugo Tacurong scooter, redrawn as a filled white mark (2026-11-01).",
+  "renderDevice": "EEVEE",
+  "renderEngine": "BLENDER_EEVEE",
+  "exports": {
+    "android-icon-foreground.png": {
+      "bytes": 19287,
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "android-icon-monochrome.png": {
+      "bytes": 19287,
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "app-icon.png": {
+      "bytes": 40415,
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "favicon.png": {
+      "bytes": 1771,
+      "size": [
+        64,
+        64
+      ]
+    },
+    "kuya-sugo-greeting.webp": {
+      "bytes": 1547770,
+      "size": [
+        384,
+        448
+      ]
+    },
+    "kuya-sugo-portrait.png": {
+      "bytes": 327409,
+      "size": [
+        768,
+        768
+      ]
+    },
+    "kuya-sugo-standing.png": {
+      "bytes": 358178,
+      "size": [
+        768,
+        896
+      ]
+    },
+    "kuya-sugo-welcome.png": {
+      "bytes": 362969,
+      "size": [
+        768,
+        896
+      ]
+    },
+    "notification-icon.png": {
+      "bytes": 3177,
+      "size": [
+        96,
+        96
+      ]
+    },
+    "sugo-logo-pink-on-white.png": {
+      "bytes": 37494,
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    "kuya-sugo-delivery.webp": {
+      "bytes": 3462040,
+      "size": [
+        480,
+        432
+      ]
+    },
+    "kuya-sugo-delivery-thumbs-up.png": {
+      "bytes": 59530,
+      "size": [
+        480,
+        432
+      ]
+    },
+    "kuya-sugo-chibi-hello.webp": {
+      "bytes": 2193842,
+      "size": [
+        576,
+        672
+      ]
+    },
+    "kuya-sugo-chibi-hello-wave.png": {
+      "bytes": 251270,
+      "size": [
+        576,
+        672
+      ]
+    },
+    "kuya-sugo-walk.webp": {
+      "bytes": 377322,
+      "size": [
+        300,
+        500
+      ]
+    },
+    "kuya-sugo-walk-still.png": {
+      "bytes": 97360,
+      "size": [
+        300,
+        500
+      ]
+    },
+    "kuya-sugo-story.webp": {
+      "bytes": 5924742,
+      "size": [
+        880,
+        400
+      ]
+    },
+    "kuya-sugo-story-thumbs-up.png": {
+      "bytes": 96091,
+      "size": [
+        880,
+        400
+      ]
+    }
+  },
+  "nativeAndroidExports": [
+    "android\\app\\src\\main\\res\\mipmap-hdpi\\ic_launcher.webp",
+    "android\\app\\src\\main\\res\\mipmap-hdpi\\ic_launcher_background.webp",
+    "android\\app\\src\\main\\res\\mipmap-hdpi\\ic_launcher_foreground.webp",
+    "android\\app\\src\\main\\res\\mipmap-hdpi\\ic_launcher_monochrome.webp",
+    "android\\app\\src\\main\\res\\mipmap-hdpi\\ic_launcher_round.webp",
+    "android\\app\\src\\main\\res\\mipmap-mdpi\\ic_launcher.webp",
+    "android\\app\\src\\main\\res\\mipmap-mdpi\\ic_launcher_background.webp",
+    "android\\app\\src\\main\\res\\mipmap-mdpi\\ic_launcher_foreground.webp",
+    "android\\app\\src\\main\\res\\mipmap-mdpi\\ic_launcher_monochrome.webp",
+    "android\\app\\src\\main\\res\\mipmap-mdpi\\ic_launcher_round.webp",
+    "android\\app\\src\\main\\res\\mipmap-xhdpi\\ic_launcher.webp",
+    "android\\app\\src\\main\\res\\mipmap-xhdpi\\ic_launcher_background.webp",
+    "android\\app\\src\\main\\res\\mipmap-xhdpi\\ic_launcher_foreground.webp",
+    "android\\app\\src\\main\\res\\mipmap-xhdpi\\ic_launcher_monochrome.webp",
+    "android\\app\\src\\main\\res\\mipmap-xhdpi\\ic_launcher_round.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxhdpi\\ic_launcher.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxhdpi\\ic_launcher_background.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxhdpi\\ic_launcher_foreground.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxhdpi\\ic_launcher_monochrome.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxhdpi\\ic_launcher_round.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxxhdpi\\ic_launcher.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxxhdpi\\ic_launcher_background.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxxhdpi\\ic_launcher_foreground.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxxhdpi\\ic_launcher_monochrome.webp",
+    "android\\app\\src\\main\\res\\mipmap-xxxhdpi\\ic_launcher_round.webp"
+  ],
+  "designVersion": 7,
+  "styleReference": "reference/chibi-style-reference.png",
+  "delivery": {
+    "screen": "OnboardingAuthChoiceScreen (second onboarding screen)",
+    "source": "C:/Capstone_Server/character_animation/smooth_fix/Chibi_Special_Delivery.blend, frames 0-305",
+    "story": "walk with parcel, trip, recover, pick up, smile and thumbs-up",
+    "loop": "once, holds on thumbs-up",
+    "frames": 306,
+    "fps": 24,
+    "durationMs": 12750,
+    "size": [
+      480,
+      432
+    ],
+    "stillFrame": 305
+  },
+  "hello": {
+    "screen": "OnboardingLocationScreen (first onboarding screen)",
+    "source": "C:/Capstone_Server/character_animation/smooth_fix/Chibi_Special_Delivery.blend, authored wave",
+    "story": "hand rises in front, opens and waves beside the head about three and a half times at 1.5 Hz, comes back down in front, smile",
+    "loop": "once, ends at rest",
+    "frames": 120,
+    "fps": 24,
+    "durationMs": 5000,
+    "size": [
+      576,
+      672
+    ],
+    "stillFrame": 40
+  },
+  "walk": {
+    "screen": "OnboardingAuthChoiceScreen (second onboarding screen)",
+    "source": "C:/Capstone_Server/character_animation/smooth_fix/Chibi_Special_Delivery.blend, frames 24-47 on the spot",
+    "story": "walk carrying the parcel; KuyaSugoMascot moves it across the screen at 0.2993 frame heights per second",
+    "loop": "forever",
+    "frames": 24,
+    "fps": 30,
+    "durationMs": 800,
+    "size": [
+      300,
+      500
+    ],
+    "stillFrame": 0
+  },
+  "story": {
+    "screen": "OnboardingAuthChoiceScreen (second onboarding screen)",
+    "source": "C:/Capstone_Server/character_animation/smooth_fix/Chibi_Special_Delivery.blend rig and carry pose; motion keyed in story_choreography.py",
+    "story": "walk in from the left edge, stub a toe and stumble as the parcel flies ahead, belly-flop, shake it off, get up, squat-lift the parcel, step-turn for a sculpted thumbs-up, walk out past the right edge",
+    "loop": "forever",
+    "frames": 431,
+    "fps": 20,
+    "durationMs": 21550,
+    "size": [
+      880,
+      400
+    ],
+    "stillFrame": 315
+  }
+}

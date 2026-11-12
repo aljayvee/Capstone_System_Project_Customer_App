@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -90,6 +91,7 @@ export function StoreSearchView({
   onBack: () => void;
   inTab?: boolean;
 }) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const initialCategory =
     openedCategory && isPabiliCategory(openedCategory.name) ? openedCategory : null;
   const [category, setCategory] = useState<{ id: number; name: string } | null>(initialCategory);
@@ -137,8 +139,8 @@ export function StoreSearchView({
   const dockCovers = count > 0 ? Math.max(0, dockHeight - dockPadding) : 0;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
-      <View style={styles.navHeaderRow}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
+      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={onBack}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -160,6 +162,7 @@ export function StoreSearchView({
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Spacing.lg + (count > 0 ? 0 : inTab ? navSpace : insets.bottom) },
+          pageLayout.gutterStyle,
         ]}
         showsVerticalScrollIndicator={false}
         // A tap on a store picks it, even with the keyboard up.
@@ -247,8 +250,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: PortalTouchTargets.compact,

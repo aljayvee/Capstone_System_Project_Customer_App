@@ -1,0 +1,11 @@
+49e69f73f91e940be4aaf5b2c231f9f8
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.NavigationMetaContext = void 0;
+var React = _interopRequireWildcard(require("react"));
+var NavigationMetaContext = exports.NavigationMetaContext = React.createContext(undefined);
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIk5hdmlnYXRpb25NZXRhQ29udGV4dCIsImV4cG9ydHMiLCJjcmVhdGVDb250ZXh0IiwidW5kZWZpbmVkIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL05hdmlnYXRpb25NZXRhQ29udGV4dC50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFBQSxJQUFBQSxLQUFBLEdBQUFDLHVCQUFBLENBQUFDLE9BQUE7QUFXTyxJQUFNQyxxQkFBcUIsR0FBQUMsT0FBQSxDQUFBRCxxQkFBQSxHQUFHSCxLQUFLLENBQUNLLGFBQWEsQ0FDdERDLFNBQ0YsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

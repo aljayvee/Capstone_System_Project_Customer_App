@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { apiClient } from '../services/apiClient';
 import { clearNearbyEstablishmentCache } from '../services/establishments';
 import NearbyStoresScreen from '../screens/NearbyStoresScreen';
@@ -97,6 +98,9 @@ describe('the Stores near you screen', () => {
     const res: any = await draw();
     expect(await res.findByTestId('nearby-stores-screen-store-n4')).toBeTruthy();
     expect(res.getByText('Stores near you')).toBeTruthy();
+    expect(within(res.getByTestId('nearby-stores-screen-store-title-overlay-n1')).getByText('Shop 1')).toBeTruthy();
+    expect(StyleSheet.flatten(res.getByTestId('nearby-stores-screen-store-icon-n1').props.style).minHeight).toBe(180);
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     // The first page is the row's, not asked for again.
     expect(apiClient.get).toHaveBeenCalledTimes(1);
 

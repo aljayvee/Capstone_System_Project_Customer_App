@@ -115,11 +115,11 @@ describe('RegisterScreen', () => {
     expect(navigation.goBack).toHaveBeenCalled();
   });
 
-  it('offers the way back to sign in', async () => {
+  it('offers the way back to sign in by popping the stack', async () => {
     const res: any = await render(<RegisterScreen navigation={navigation} />);
 
     await fireEvent.press(res.getByText('Log In'));
 
-    expect(navigation.navigate).toHaveBeenCalledWith('Login');
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 });

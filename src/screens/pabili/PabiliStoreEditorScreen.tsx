@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -68,10 +69,14 @@ import {
  * ("Rose Pharmacy Lozartan 5mg") is taken out of the item, with a warning.
  */
 export default function PabiliStoreEditorScreen({ route, navigation }: RootStackScreenProps<'PabiliStoreEditor'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { category } = route.params;
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
   const draft = usePabiliDraft();
+  useEffect(() => {
+    if (draft?.submission) navigation.replace('PabiliReview', { user: route.params.user });
+  }, [draft?.submission, navigation, route.params.user]);
   const [editing, setEditing] = useState<{ row: DraftRow; name: string; size: string; notes: string } | null>(null);
 
   const rows = draft?.rowsByCategory[category] ?? [];
@@ -147,21 +152,21 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
   if (!draft) {
     // Reached without the hub (a stale deep link, or the list was just sent).
     return (
-      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }]} testID="editor-no-list">
+      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} testID="editor-no-list">
         <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
           This list isn't open
         </Text>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, alignSelf: 'stretch' }]} onPress={() => navigation.goBack()}>
-          <Text style={styles.primaryText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Go back</Text>
+          <Text style={[styles.primaryText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
-        <View style={styles.navRow}>
+        <View style={[styles.navRow, pageLayout.gutterStyle]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={PortalTouchTargets.compactHitSlop}
@@ -173,7 +178,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
           </TouchableOpacity>
           <View style={styles.navTitleRow}>
             <Icon size={16} color={colors.primary} strokeWidth={2.2} />
-            <Text style={[styles.navTitle, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+            <Text style={[styles.navTitle, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
               {category}
             </Text>
           </View>
@@ -190,7 +195,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {picked ? (
             <Text
               style={[styles.caption, styles.pickedStoreLine, { color: colors.textGray }]}
@@ -252,8 +257,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
               borderTopColor: colors.border,
               paddingBottom: Math.max(insets.bottom, Spacing.md),
             },
-            Shadows.liftedUp,
-          ]}
+            Shadows.liftedUp, pageLayout.gutterStyle]}
         >
           {/* Top Row: What to buy (expanded) + Quantity Stepper on the right */}
           <View style={styles.composeRow}>
@@ -329,38 +333,6 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-
-          {/* Quick Quantities Presets */}
-          <View style={styles.pillRow}>
-            {QUICK_QUANTITIES.map((n) => {
-              const selected = compose.quantity === n;
-              return (
-                <TouchableOpacity
-                  key={n}
-                  style={[
-                    styles.qtyPill,
-                    {
-                      backgroundColor: selected ? colors.primary : isDark ? 'rgba(255,255,255,0.05)' : colors.bgGray,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => pabiliDraftStore.update((d) => setCompose(d, category, { quantity: n }))}
-                  hitSlop={PortalTouchTargets.compactHitSlop}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`Quantity ${n}`}
-                  testID={`quick-qty-${n}`}
-                >
-                  <Text
-                    style={[styles.qtyPillText, { color: selected ? '#FFFFFF' : colors.textDark }]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                  >
-                    {`${n}×`}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
 
           {/* Bottom Button: Replaced "Back to my Stores" with "+" Add Item button */}
@@ -465,7 +437,6 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
 }
 
 /** The counts customers ask for most, one tap each. */
-const QUICK_QUANTITIES = [1, 2, 3, 5];
 
 /**
  * "Rose Pharmacy Lozartan 5mg" was added as Lozartan, 5 mg. The dispatcher
@@ -577,7 +548,7 @@ function StoreMismatchNotice({
             hitSlop={PortalTouchTargets.compactHitSlop}
             testID={`${testID}-move`}
           >
-            <Text style={[styles.noticeBtnText, { color: '#FFFFFF' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+            <Text style={[[styles.noticeBtnText, { color: '#FFFFFF' }], { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
               {`Move to ${moveTo}`}
             </Text>
           </TouchableOpacity>
@@ -638,7 +609,7 @@ const styles = StyleSheet.create({
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 10 },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   navTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 8 },
-  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(17), lineHeight: getPortalLineHeight(17, 'heading'), flexShrink: 1 },
+  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading), lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'), flexShrink: 1 },
   doneNavBtn: {
     minWidth: 44,
     height: 44,
@@ -686,17 +657,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   fieldCaptionCenter: { textAlign: 'center' },
-  pillRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyPill: {
-    minWidth: 44,
-    height: 38,
-    paddingHorizontal: 10,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyPillText: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
   noteField: { minHeight: 64, paddingTop: 12, textAlignVertical: 'top' },
   composeInput: {
     flex: 1,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ActivityIndicator } from 'react-native';
 import { RefreshCw, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing } from '../config/theme';
 
 interface ErrandStateConflictModalProps {
   visible: boolean;
@@ -33,8 +33,8 @@ export const ErrandStateConflictModal: React.FC<ErrandStateConflictModalProps> =
             <AlertTriangle size={24} color={colors.warning} />
           </View>
 
-          <Text style={[styles.title, { color: colors.textDark }]}>{title}</Text>
-          <Text style={[styles.message, { color: colors.textGray }]}>{message}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.title, { color: colors.textDark }]}>{title}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.message, { color: colors.textGray }]}>{message}</Text>
 
           <View style={styles.buttonRow}>
             {onCancel && (
@@ -42,7 +42,7 @@ export const ErrandStateConflictModal: React.FC<ErrandStateConflictModalProps> =
                 onPress={onCancel}
                 style={[styles.cancelButton, { borderColor: colors.border }]}
               >
-                <Text style={[styles.cancelText, { color: colors.textGray }]}>Dismiss</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cancelText, { color: colors.textGray }]}>Dismiss</Text>
               </TouchableOpacity>
             )}
 
@@ -52,11 +52,11 @@ export const ErrandStateConflictModal: React.FC<ErrandStateConflictModalProps> =
               style={[styles.syncButton, { backgroundColor: colors.primary }]}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (
                 <>
-                  <RefreshCw size={15} color="#FFFFFF" />
-                  <Text style={styles.syncButtonText} maxFontSizeMultiplier={1.15}>Show me the latest</Text>
+                  <RefreshCw size={15} color={colors.onPrimary} />
+                  <Text style={[styles.syncButtonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.15}>Show me the latest</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -94,15 +94,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   title: {
-    fontSize: FontSizes.md,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
   },
   message: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   buttonRow: {
     flexDirection: 'row',
@@ -120,7 +121,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelText: {
-    fontSize: FontSizes.xs,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.semibold,
   },
   syncButton: {
@@ -133,8 +135,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   syncButtonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.bold,
   },
 });

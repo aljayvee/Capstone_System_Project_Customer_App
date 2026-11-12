@@ -18,7 +18,7 @@ import { fetchQuote, type FeeQuote } from '../services/quoteService';
 import FeeBreakdownCard from '../components/FeeBreakdownCard';
 import { PaymentMethodTile } from '../components/PaymentMethodTile';
 import { PAYMENT_METHODS, type PaymentMethodId } from '../services/paymentMethodStrategy';
-import { FontFamily, FontSizes, FontWeights, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 
 export default function CheckoutScreen({ route, navigation }: RootStackScreenProps<'Checkout'>) {
   const { user, errandPayload } = route.params || {
@@ -213,7 +213,7 @@ export default function CheckoutScreen({ route, navigation }: RootStackScreenPro
           style={[styles.submitBtn, { backgroundColor: colors.primary }, Shadows.liftedUp]}
           onPress={handlePlaceErrand}
         >
-          <Text style={styles.submitBtnText} maxFontSizeMultiplier={1.25}>Place Pabili Errand Now</Text>
+          <Text style={[styles.submitBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.25}>Place Pabili Errand Now</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -233,13 +233,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   headerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: Spacing.xs,
   },
   subTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginBottom: Spacing.md,
   },
   card: {
@@ -255,12 +257,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   cardTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   summaryItem: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginBottom: 6,
   },
   boldText: {
@@ -274,8 +278,9 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(48, 0.2),
   },
   submitBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
 });

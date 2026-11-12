@@ -17,6 +17,10 @@ jest.mock('../services/directionsService', () => ({
   fetchDrivingRoute: jest.fn(),
 }));
 
+// No line shared by the rider: this app calculates its own, which is what
+// these tests are about (the rider's line: useLiveRouteRiderLine.test.tsx).
+jest.mock('../hooks/useRiderLine', () => ({ useRiderLine: () => null }));
+
 const mockedFetch = fetchDrivingRoute as jest.MockedFunction<typeof fetchDrivingRoute>;
 
 const rider = { latitude: 6.6813, longitude: 124.6634 };

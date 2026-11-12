@@ -57,7 +57,7 @@ jest.mock('../services/apiClient', () => ({
 }));
 
 function ConsumerComponent() {
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, refreshNotifications } =
+  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, refreshNotifications } =
     useNotifications();
 
   return (
@@ -65,6 +65,7 @@ function ConsumerComponent() {
       <Text testID="unread-count">{unreadCount}</Text>
       <Text testID="loading-state">{loading ? 'loading' : 'idle'}</Text>
       <Text testID="items-count">{notifications.length}</Text>
+      <Text testID="error-flag">{error ? 'error' : 'ok'}</Text>
       {notifications.map((n) => (
         <View key={n.id} testID={`notification-item-${n.id}`}>
           <Text testID={`title-${n.id}`}>{n.title}</Text>
@@ -240,7 +241,7 @@ describe('NotificationContext', () => {
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.objectContaining({
-          title: 'Rider is Arriving Soon! 🛵',
+          title: 'Your rider is almost there',
           data: { errandId: 'SGO-PROX-99', type: 'RIDER_NEARBY' },
         }),
       })
@@ -255,5 +256,85 @@ describe('NotificationContext', () => {
     });
 
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a repeated event for the same row once', async () => {
+    const res: any = await render(
+      <NotificationProvider>
+        <ConsumerComponent />
+      </NotificationProvider>
+    );
+    await waitFor(() => expect(res.getByTestId('unread-count').props.children).toBe(2));
+
+    const event = { id: 40, type: 'RIDER_ON_THE_WAY', title: 'Your order is on the way', body: 'b', errandId: 'e-1' };
+    await act(async () => {
+      socketListeners['notification:new'](event);
+      socketListeners['notification:new']({ ...event });
+    });
+
+    expect(res.getByTestId('unread-count').props.children).toBe(3);
+    expect(res.getByTestId('items-count').props.children).toBe(4);
+  });
+
+  it('replaces a bumped chat row in place instead of adding one', async () => {
+    const res: any = await render(
+      <NotificationProvider>
+        <ConsumerComponent />
+      </NotificationProvider>
+    );
+    await waitFor(() => expect(res.getByTestId('unread-count').props.children).toBe(2));
+
+    await act(async () => {
+      socketListeners['notification:new']({ id: 50, type: 'CHAT_MESSAGE', title: 'Message from Ana', body: 'one', errandId: 'e-1' });
+    });
+    await act(async () => {
+      socketListeners['notification:new']({ id: 50, type: 'CHAT_MESSAGE', title: 'Message from Ana (2 new)', body: 'two', errandId: 'e-1' });
+    });
+
+    expect(res.getByTestId('items-count').props.children).toBe(4);
+    expect(res.getByTestId('unread-count').props.children).toBe(3);
+  });
+
+  it('rings for an ephemeral reminder but never lists or counts it', async () => {
+    const res: any = await render(
+      <NotificationProvider>
+        <ConsumerComponent />
+      </NotificationProvider>
+    );
+    await waitFor(() => expect(res.getByTestId('unread-count').props.children).toBe(2));
+
+    await act(async () => {
+      socketListeners['notification:new']({
+        type: 'RIDER_ETA_REMINDER',
+        title: 'Your rider is getting close',
+        body: 'About 9 min away.',
+        errandId: 'e-1',
+        ephemeral: true,
+      });
+    });
+
+    expect(res.getByTestId('items-count').props.children).toBe(3);
+    expect(res.getByTestId('unread-count').props.children).toBe(2);
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.objectContaining({ title: 'Your rider is getting close' }) })
+    );
+  });
+
+  it('keeps the last good list and reports the error when a refresh fails', async () => {
+    const res: any = await render(
+      <NotificationProvider>
+        <ConsumerComponent />
+      </NotificationProvider>
+    );
+    await waitFor(() => expect(res.getByTestId('items-count').props.children).toBe(3));
+
+    (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      fireEvent.press(res.getByTestId('refresh-btn'));
+    });
+    await waitFor(() => expect(res.getByTestId('error-flag').props.children).toBe('error'));
+
+    expect(res.getByTestId('items-count').props.children).toBe(3);
+    expect(res.getByTestId('error-flag').props.children).toBe('error');
   });
 });

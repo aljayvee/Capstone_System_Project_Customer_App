@@ -1,0 +1,20 @@
+{
+  "version": 7,
+  "style": "faceless chibi courier",
+  "styleReference": "reference/chibi-style-reference.png",
+  "source": "reference/pink_express_athletic_delivery_rider.html",
+  "carryMode": "Pack + Box",
+  "action": "KuyaSugo_Wave",
+  "renderEngine": "BLENDER_EEVEE",
+  "body": "#FFFFFF",
+  "uniform": "#F62459",
+  "pants": "#172554",
+  "facing": "front",
+  "hat": false,
+  "faceFeatures": false,
+  "durationMs": 10000,
+  "fps": 24,
+  "frameCount": 240,
+  "size": [384, 448],
+  "frameFolder": "chibi-wave-frames"
+}

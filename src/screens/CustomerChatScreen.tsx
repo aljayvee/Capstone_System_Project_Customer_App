@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -37,7 +38,6 @@ import {
   RotateCw,
   WifiOff,
   ChevronLeft,
-  Headphones,
   Info,
   Package,
   Store,
@@ -64,7 +64,6 @@ import ErrandDetailsModal from '../components/ErrandDetailsModal';
 import DispatcherAvatar from '../components/DispatcherAvatar';
 import { PaymentModeSelectionModal } from '../components/PaymentModeSelectionModal';
 import { labelForMode } from '../services/paymentMethodStrategy';
-import { RatingModal } from '../components/RatingModal';
 import StatusBadge from '../components/StatusBadge';
 import TypingIndicator from '../components/TypingIndicator';
 import { useChatPresence } from '../hooks/useChatPresence';
@@ -297,6 +296,7 @@ export default function CustomerChatScreen({
   route,
   navigation,
 }: RootStackScreenProps<'CustomerChat'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user, errandId, initialStatus } = (route.params || {
     user: { id: 'test-user', username: 'testuser', firstName: 'Customer', lastName: 'User' },
     errandId: 'PABILI-123456',
@@ -326,8 +326,6 @@ export default function CustomerChatScreen({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentProofModal, setShowPaymentProofModal] = useState(false);
   const [confirmedPaymentMethod, setConfirmedPaymentMethod] = useState<string | null>(null);
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [hasHandledRatingPrompt, setHasHandledRatingPrompt] = useState(false);
   const [errandStatus, setErrandStatus] = useState<string | null>(initialStatus || null);
   const [errandData, setErrandData] = useState<any | null>(null);
   const [statusLoading, setStatusLoading] = useState<boolean>(!initialStatus);
@@ -673,33 +671,23 @@ export default function CustomerChatScreen({
       void subscribeToErrand(errandId);
     }
 
-    // Concurrently fetch rating check and errand status
-    Promise.all([
-      apiClient.get(`/errands/${errandId}/rating`).catch(() => ({ data: null })),
-      apiClient.get(`/errands/${errandId}`).catch((err) => {
+    // The errand's status. The rating prompt that used to be checked alongside
+    // it belongs to the Track tab, where the delivery is watched finishing
+    // (hooks/useDeliveryRatingPrompt.ts, 2026-11-06); a chat with the
+    // dispatcher is not the place to rate the rider.
+    apiClient
+      .get(`/errands/${errandId}`)
+      .catch((err) => {
         console.warn('[CustomerChat] Error fetching errand status:', err.message);
         return null;
-      }),
-    ])
-      .then(([ratingRes, errandRes]) => {
+      })
+      .then((errandRes) => {
         if (cancelled) return;
-        const existingRating = ratingRes?.data;
-        if (existingRating) {
-          setHasHandledRatingPrompt(true);
-        }
-
         if (errandRes?.data) {
           setErrandData(errandRes.data);
           const status = String(errandRes.data.status || '').toUpperCase();
           if (status) {
             setErrandStatus(status);
-          }
-          if (status === 'DELIVERED' && !existingRating) {
-            setHasHandledRatingPrompt((already) => {
-              if (already) return already;
-              setShowRatingModal(true);
-              return true;
-            });
           }
         }
       })
@@ -745,14 +733,6 @@ export default function CustomerChatScreen({
       const newStatus = String(updatedErrand.status ?? '').toUpperCase();
       if (newStatus) {
         setErrandStatus(newStatus);
-      }
-
-      if (newStatus === 'DELIVERED') {
-        setHasHandledRatingPrompt((already) => {
-          if (already) return already;
-          setShowRatingModal(true);
-          return true;
-        });
       }
     };
 
@@ -1037,7 +1017,7 @@ export default function CustomerChatScreen({
   }, [messages]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.card }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         // "padding" on both platforms: this component reads the IME frame itself
@@ -1053,22 +1033,31 @@ export default function CustomerChatScreen({
             styles.navHeaderRow,
             {
               borderBottomColor: colors.border,
-              backgroundColor: colors.bgApp,
-            },
-          ]}
+              backgroundColor: colors.card,
+            }, pageLayout.gutterStyle]}
         >
           {/* Back Action */}
           <TouchableOpacity
             onPress={() =>
-              navigation.navigate('CustomerPortal', {
-                user,
-                initialTab: 'chat',
-              })
+              // Back to the portal already under this chat. A plain
+              // navigate() pushes a second portal in React Navigation 7 (it
+              // reuses a route only when it is the focused one), and that
+              // fresh portal replayed the last tapped push straight back into
+              // this chat (2026-11-06). pop: true returns to the existing one.
+              navigation.navigate(
+                'CustomerPortal',
+                {
+                  user,
+                  initialTab: 'chat',
+                },
+                { pop: true }
+              )
             }
             hitSlop={PortalTouchTargets.compactHitSlop}
             style={styles.backBtn}
             testID="back-button"
             accessibilityLabel="Back to messages"
+            accessibilityRole="button"
           >
             <ChevronLeft size={22} color={colors.textDark} />
           </TouchableOpacity>
@@ -1077,13 +1066,13 @@ export default function CustomerChatScreen({
           <View style={styles.navTitleCenter}>
             <View style={styles.navHeaderProfile}>
               <View style={styles.avatarPresenceWrapper}>
-                <DispatcherAvatar dispatcherId={dispatcherId} size={36} iconSize={17} />
+                <DispatcherAvatar dispatcherId={dispatcherId} size={36} iconSize={17} neutral />
                 <View
                   style={[
                     styles.onlineBadgeDot,
                     {
                       backgroundColor: otherPresence.online ? '#10B981' : '#9CA3AF',
-                      borderColor: isDark ? colors.bgApp : '#FFFFFF',
+                      borderColor: colors.card,
                     },
                   ]}
                   testID="chat-header-presence-dot"
@@ -1103,9 +1092,8 @@ export default function CustomerChatScreen({
                 <View style={styles.presenceRow}>
                   {otherPresence.online ? (
                     <View style={styles.activePill}>
-                      <View style={styles.activeGreenPulse} />
                       <Text
-                        style={styles.activeText}
+                        style={[styles.activeText, { color: colors.success }]}
                         maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                       >
                         Active now
@@ -1119,13 +1107,6 @@ export default function CustomerChatScreen({
                       Offline
                     </Text>
                   )}
-                  <Text style={[styles.metaDivider, { color: colors.textLight }]}>•</Text>
-                  <Text
-                    style={[styles.errandPillText, { color: colors.textGray }]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
-                  >
-                    {formatErrandId(errandId)}
-                  </Text>
                 </View>
               </View>
             </View>
@@ -1137,12 +1118,12 @@ export default function CustomerChatScreen({
               <TouchableOpacity
                 activeOpacity={0.75}
                 hitSlop={PortalTouchTargets.compactHitSlop}
-                style={styles.actionIconBtn}
+                style={[styles.actionIconBtn, { backgroundColor: colors.bgGray }]}
                 onPress={() => setShowMapModal(true)}
                 accessibilityLabel="View store pins on map"
                 testID="header-view-map-button"
               >
-                <MapPin size={16} color={colors.primary} />
+                <MapPin size={18} color={colors.textGray} />
               </TouchableOpacity>
             )}
 
@@ -1152,6 +1133,7 @@ export default function CustomerChatScreen({
                 hitSlop={PortalTouchTargets.compactHitSlop}
                 style={[
                   styles.actionIconBtn,
+                  { backgroundColor: colors.bgGray },
                   isChatClosed && { opacity: 0.4 },
                 ]}
                 onPress={() => !isChatClosed && setShowDetailsModal(true)}
@@ -1159,7 +1141,7 @@ export default function CustomerChatScreen({
                 accessibilityLabel="View errand details"
                 testID="header-view-details-button"
               >
-                <Info size={16} color={colors.textDark} />
+                <Info size={18} color={colors.textGray} />
               </TouchableOpacity>
             )}
           </View>
@@ -1174,21 +1156,20 @@ export default function CustomerChatScreen({
               style={[
                 styles.bentoCapsuleBar,
                 {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                  borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                },
-              ]}
+                  backgroundColor: colors.card,
+                  borderBottomColor: colors.border,
+                }, pageLayout.gutterStyle]}
               accessibilityRole="button"
               accessibilityLabel="Toggle order summary"
+              accessibilityState={{ expanded: isOrderSummaryExpanded }}
               testID="bento-order-capsule-toggle"
             >
               <View style={styles.bentoCapsuleLeft}>
-                <Store size={14} color={colors.primary} strokeWidth={2.2} />
-                <Text style={[styles.bentoCapsuleOrderCode, { color: colors.textDark }]} numberOfLines={1}>
-                  #{formatErrandId(errandData?.id || errandId)}
+                <Text style={[styles.bentoCapsuleStoreText, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
+                  {latestPinpoints.map((point) => point.storeName).filter(Boolean).join(' & ') || extractMerchantCategories(errandData, null, true)}
                 </Text>
-                <Text style={[styles.bentoCapsuleStoreText, { color: colors.textGray }]} numberOfLines={1}>
-                  • {extractMerchantCategories(errandData, null, true)}
+                <Text style={[styles.bentoCapsuleOrderCode, { color: colors.textGray }]} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                  #{formatErrandId(errandData?.id || errandId, errandData?.referenceNo)}
                 </Text>
               </View>
 
@@ -1208,16 +1189,15 @@ export default function CustomerChatScreen({
                 style={[
                   styles.bentoDrawer,
                   {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC',
-                    borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                  },
-                ]}
+                    backgroundColor: colors.card,
+                    borderBottomColor: colors.border,
+                  }, pageLayout.gutterStyle]}
               >
                 {/* Store Pinpoints / Route chips */}
                 {latestPinpoints.length > 0 ? (
                   <View style={styles.bentoDrawerSection}>
-                    <Text style={[styles.bentoDrawerSectionTitle, { color: colors.textGray }]}>
-                      STOPS & ITINERARY ({latestPinpoints.length})
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.bentoDrawerSectionTitle, { color: colors.textGray }]}>
+                      Stops & itinerary ({latestPinpoints.length})
                     </Text>
                     <View style={styles.bentoDrawerRow}>
                       {latestPinpoints.map((pt, pIdx) => (
@@ -1226,13 +1206,12 @@ export default function CustomerChatScreen({
                           style={[
                             styles.bentoStoreChip,
                             {
-                              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
-                              borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+                              backgroundColor: 'transparent',
                             },
                           ]}
                         >
                           <MapPin size={11} color={colors.primary} />
-                          <Text style={[styles.bentoStoreChipText, { color: colors.textDark }]} numberOfLines={1}>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.bentoStoreChipText, { color: colors.textDark }]} numberOfLines={2}>
                             {pt.storeName || `Stop ${pIdx + 1}`}
                           </Text>
                         </View>
@@ -1249,14 +1228,13 @@ export default function CustomerChatScreen({
                       style={[
                         styles.bentoDrawerActionBtn,
                         {
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
-                          borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                          backgroundColor: colors.bgGray,
                         },
                       ]}
                       onPress={() => setShowMapModal(true)}
                     >
                       <MapPin size={13} color={colors.primary} />
-                      <Text style={[styles.bentoDrawerActionBtnText, { color: colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.bentoDrawerActionBtnText, { color: colors.textDark }]}>
                         View Route Map
                       </Text>
                     </TouchableOpacity>
@@ -1268,14 +1246,13 @@ export default function CustomerChatScreen({
                       style={[
                         styles.bentoDrawerActionBtn,
                         {
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
-                          borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                          backgroundColor: colors.bgGray,
                         },
                       ]}
                       onPress={() => setShowDetailsModal(true)}
                     >
                       <Info size={13} color={colors.textDark} />
-                      <Text style={[styles.bentoDrawerActionBtnText, { color: colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.bentoDrawerActionBtnText, { color: colors.textDark }]}>
                         Full Errand Info
                       </Text>
                     </TouchableOpacity>
@@ -1290,15 +1267,14 @@ export default function CustomerChatScreen({
                 style={[
                   styles.collapsedHalfStrip,
                   {
-                    backgroundColor: isDark ? 'rgba(246,36,89,0.14)' : '#FFF1F4',
-                    borderBottomColor: isDark ? 'rgba(246,36,89,0.3)' : '#FBCFDA',
-                  },
-                ]}
+                    backgroundColor: colors.bgGray,
+                    borderBottomColor: colors.border,
+                  }, pageLayout.gutterStyle]}
                 testID="half-payment-banner"
               >
                 <View style={styles.ribbonLeft}>
                   <ReceiptText size={13} color={colors.primary} />
-                  <Text style={[styles.ribbonText, { color: colors.textDark }]} numberOfLines={2}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.ribbonText, { color: colors.textDark }]} numberOfLines={2}>
                     {`Half-payment needed: ₱${Number(paymentPlan?.dueUpFront ?? 0).toFixed(2)}, half of the ₱${Number(paymentPlan?.goodsTotal ?? 0).toFixed(2)} your rider paid`}
                   </Text>
                 </View>
@@ -1306,8 +1282,9 @@ export default function CustomerChatScreen({
                   onPress={() => setShowPaymentProofModal(true)}
                   accessibilityRole="button"
                   testID="half-payment-banner-action"
+                  style={styles.receiptReminderAction}
                 >
-                  <Text style={{ color: colors.primary, fontFamily: FontFamily.bold, fontSize: 12 }}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ color: colors.primary, fontFamily: FontFamily.bold, fontSize: 12 }}>
                     Send receipt
                   </Text>
                 </TouchableOpacity>
@@ -1319,18 +1296,15 @@ export default function CustomerChatScreen({
         {/* 3. MESSAGES FEED */}
         {connectionError ? (
           <View
-            style={[
-              styles.errorContainer,
-              { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2', borderColor: colors.danger },
-            ]}
+            style={[styles.errorContainer, pageLayout.gutterStyle]}
             testID="chat-connection-error-banner"
           >
-            <WifiOff size={30} color={colors.danger} strokeWidth={2} />
+            <WifiOff size={24} color={colors.textGray} strokeWidth={1.8} />
             {/* Only blames the network when the phone really is offline. The
                 banner itself means the chat refused this device's sign-in, and
                 "check your Wi-Fi" sent connected customers hunting for a fault
                 they did not have. */}
-            <Text style={[styles.errorTitle, { color: colors.danger }]} maxFontSizeMultiplier={1.2}>
+            <Text style={[styles.errorTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
               {isConnected ? "This chat didn't open" : "You're offline"}
             </Text>
             <Text style={[styles.errorSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
@@ -1344,13 +1318,13 @@ export default function CustomerChatScreen({
               onPress={handleRefresh}
               testID="tap-to-refresh-chat-connection-btn"
             >
-              <RotateCw size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.refreshBtnTextWhite} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
+              <RotateCw size={14} color={colors.onDanger} strokeWidth={2.2} />
+              <Text style={[styles.refreshBtnTextWhite, { color: colors.onDanger }]} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
             </TouchableOpacity>
           </View>
         ) : loading ? (
           showCircularFallback ? (
-            <View style={styles.centerContainer}>
+            <View style={[styles.centerContainer, pageLayout.gutterStyle]}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={[styles.loadingText, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
                 Slow connection. Still opening this chat...
@@ -1373,12 +1347,9 @@ export default function CustomerChatScreen({
             <ChatMessagesSkeleton />
           )
         ) : messages.length === 0 ? (
-          <View style={styles.centerContainer}>
-            <View style={[styles.emptyChatCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}>
-              <Headphones size={28} color={colors.textLight} />
-            </View>
-            <Text style={[styles.emptyText, { color: colors.textDark }]}>Live Dispatcher Connected</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textGray }]}>
+          <View style={[styles.centerContainer, pageLayout.gutterStyle]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyText, { color: colors.textDark }]}>Start the conversation</Text>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptySubtext, { color: colors.textGray }]}>
               Send a message below to clarify items, prices, or store preferences.
             </Text>
           </View>
@@ -1389,7 +1360,7 @@ export default function CustomerChatScreen({
             data={messageClusters}
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.messagesList}
+            contentContainerStyle={[styles.messagesList, pageLayout.gutterStyle]}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             keyboardDismissMode="on-drag"
@@ -1443,23 +1414,22 @@ export default function CustomerChatScreen({
                       { maxWidth: '96%', width: '96%' },
                     ]}
                   >
-                    <Text style={[styles.senderLabel, { color: colors.textGray }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.senderLabel, { color: colors.textGray }]}>
                       {item.senderName || 'Dispatcher'}
                     </Text>
 
                     <View
                       style={[
                         styles.orderConfirmCard,
-                        Shadows.soft,
                         {
                           backgroundColor: colors.card,
-                          borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#CBD5E1',
-                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderWidth: StyleSheet.hairlineWidth,
                         },
                       ]}
                     >
                       {/* CARD HEADER */}
-                      <View style={[styles.orderConfirmHeader, { backgroundColor: isDark ? '#1E293B' : '#1E3A5F' }]}>
+                      <View style={[styles.orderConfirmHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                         <View
                           style={{
                             flexDirection: 'row',
@@ -1469,12 +1439,12 @@ export default function CustomerChatScreen({
                             minWidth: 0,
                           }}
                         >
-                          <ReceiptText size={16} color="#FFFFFF" strokeWidth={2.2} />
+                          <ReceiptText size={16} color={colors.textGray} strokeWidth={2.2} />
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={styles.orderConfirmTitle} numberOfLines={1}>
-                              ITEM CHECK
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.orderConfirmTitle, { color: colors.textDark }]} numberOfLines={1}>
+                              Item check
                             </Text>
-                            <Text style={[styles.orderConfirmSubtitle, { color: isDark ? '#94A3B8' : '#93C5FD' }]} numberOfLines={1}>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.orderConfirmSubtitle, { color: colors.textGray }]} numberOfLines={1}>
                               Store availability review
                             </Text>
                           </View>
@@ -1493,12 +1463,12 @@ export default function CustomerChatScreen({
                             {item.status === 'approved' ? (
                               <>
                                 <CheckCircle2 size={11} color="#10B981" strokeWidth={2.4} />
-                                <Text style={styles.confirmedPillText}>You Approved</Text>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedPillText, { color: colors.success }]}>You Approved</Text>
                               </>
                             ) : (
                               <>
                                 <XCircle size={11} color="#EF4444" strokeWidth={2.4} />
-                                <Text style={[styles.confirmedPillText, { color: '#EF4444' }]}>
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedPillText, { color: '#EF4444' }]}>
                                   You Declined
                                 </Text>
                               </>
@@ -1507,19 +1477,19 @@ export default function CustomerChatScreen({
                         ) : (
                           <View style={styles.pendingPill}>
                             <Clock size={11} color="#F59E0B" strokeWidth={2.4} />
-                            <Text style={styles.pendingPillText}>Action Needed</Text>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pendingPillText, { color: colors.warning }]}>Action Needed</Text>
                           </View>
                         )}
                       </View>
 
                       {/* CARD BODY */}
-                      <View style={[styles.orderConfirmBody, { padding: 12, gap: 10 }]}>
+                      <View style={styles.orderConfirmBody}>
                         {hasStructuredItems ? (
-                          <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: isDark ? colors.textDark : '#334155', lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                          <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textDark, lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                             The dispatcher checked store availability and updated your order items. Please review below:
                           </Text>
                         ) : (
-                          <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: isDark ? colors.textDark : '#334155', lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                          <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textDark, lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                             {item.text || 'The dispatcher checked your order and requested adjustments. Please review below.'}
                           </Text>
                         )}
@@ -1543,7 +1513,7 @@ export default function CustomerChatScreen({
                               <Text style={{ fontFamily: FontFamily.bold, fontSize: PortalFontSizes.micro, color: isDark ? '#93C5FD' : '#1E40AF', marginBottom: 2 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                                 Dispatcher Note
                               </Text>
-                              <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: isDark ? colors.textDark : '#1E3A5F', lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                              <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textDark, lineHeight: 18 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                                 {customNote}
                               </Text>
                             </View>
@@ -1554,11 +1524,7 @@ export default function CustomerChatScreen({
                         {dropped.length > 0 && (
                           <View
                             style={{
-                              backgroundColor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#FEF2F2',
-                              borderRadius: BorderRadius.sm + 2,
-                              borderWidth: 1,
-                              borderColor: isDark ? 'rgba(239, 68, 68, 0.22)' : '#FECACA',
-                              padding: 10,
+                              paddingVertical: Spacing.sm,
                               gap: 6,
                             }}
                           >
@@ -1593,11 +1559,7 @@ export default function CustomerChatScreen({
                         {keeping.length > 0 && (
                           <View
                             style={{
-                              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : '#F0FDF4',
-                              borderRadius: BorderRadius.sm + 2,
-                              borderWidth: 1,
-                              borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : '#BBF7D0',
-                              padding: 10,
+                              paddingVertical: Spacing.sm,
                               gap: 6,
                             }}
                           >
@@ -1663,7 +1625,7 @@ export default function CustomerChatScreen({
                               ]}
                             >
                               <CheckCircle2 size={15} color="#10B981" strokeWidth={2.5} />
-                              <Text style={[styles.confirmedStatusText, { color: isDark ? '#34D399' : '#065F46' }]}>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedStatusText, { color: isDark ? '#34D399' : '#065F46' }]}>
                                 You approved these item changes ✓
                               </Text>
                             </View>
@@ -1682,7 +1644,7 @@ export default function CustomerChatScreen({
                               ]}
                             >
                               <Clock size={14} color="#DC2626" strokeWidth={2.4} />
-                              <Text style={[styles.confirmedStatusText, { color: isDark ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedStatusText, { color: isDark ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
                                 Adjustment Requested
                               </Text>
                             </View>
@@ -1709,7 +1671,7 @@ export default function CustomerChatScreen({
                               onPress={() => promptRejectRevision(item.id)}
                             >
                               <Pencil size={14} color={isDark ? colors.textDark : '#475569'} strokeWidth={2.2} />
-                              <Text style={[styles.revisionActionText, { color: isDark ? colors.textDark : '#334155' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                              <Text style={[styles.revisionActionText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                                 Decline / Adjust
                               </Text>
                             </TouchableOpacity>
@@ -1746,7 +1708,7 @@ export default function CustomerChatScreen({
                       </View>
                     </View>
 
-                    <Text style={[styles.timeLabel, { color: colors.textLight }]}>{formatTime(item.timestamp)}</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.timeLabel, { color: colors.textLight }]}>{formatTime(item.timestamp)}</Text>
                   </View>
                 );
               }
@@ -1763,17 +1725,17 @@ export default function CustomerChatScreen({
                       { maxWidth: '96%', width: '96%' },
                     ]}
                   >
-                    <Text style={[styles.senderLabel, { color: colors.textGray }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.senderLabel, { color: colors.textGray }]}>
                       {item.senderName || 'Dispatcher'}
                     </Text>
 
-                    <View style={[styles.orderConfirmCard, Shadows.soft, { backgroundColor: colors.card, borderColor: isDark ? 'rgba(255,255,255,0.15)' : '#1E3A5F' }]}>
-                      <View style={[styles.orderConfirmHeader, { backgroundColor: isDark ? '#1E293B' : '#0B132B' }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <ReceiptText size={16} color="#FFFFFF" strokeWidth={2.2} />
-                          <View>
-                            <Text style={styles.orderConfirmTitle}>
-                              ORDER QUOTE #{formatErrandId(errandData?.id || errandId)}
+                    <View style={[styles.orderConfirmCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <View style={[styles.orderConfirmHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                          <ReceiptText size={16} color={colors.textGray} strokeWidth={2.2} />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.orderConfirmTitle, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
+                              Order quote #{formatErrandId(errandData?.id || errandId, errandData?.referenceNo)}
                             </Text>
                           </View>
                         </View>
@@ -1781,26 +1743,26 @@ export default function CustomerChatScreen({
                         {item.confirmed ? (
                           <View style={styles.confirmedPill}>
                             <CheckCircle2 size={11} color="#10B981" strokeWidth={2.4} />
-                            <Text style={styles.confirmedPillText}>Approved</Text>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedPillText, { color: colors.success }]}>Approved</Text>
                           </View>
                         ) : (
                           <View style={styles.pendingPill}>
                             <Clock size={11} color="#F59E0B" strokeWidth={2.4} />
-                            <Text style={styles.pendingPillText}>Action Needed</Text>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pendingPillText, { color: colors.warning }]}>Action Needed</Text>
                           </View>
                         )}
                       </View>
 
                       <View style={styles.orderConfirmBody}>
                         {parsedStoreGroups.length === 0 ? (
-                          <View style={[styles.storeGroupCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' }]}>
+                          <View style={styles.storeGroupCard}>
                             {(item.items || []).map((it: any, idx: number) => (
                               <View key={idx} style={styles.storeGroupItemRow}>
-                                <Text style={[styles.storeGroupItemName, { color: isDark ? colors.textDark : '#334155' }]} numberOfLines={1}>
+                                <Text style={[styles.storeGroupItemName, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
                                   {it.itemName}
                                 </Text>
-                                <View style={[styles.quantityBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF', borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE' }]}>
-                                  <Text style={[styles.quantityBadgeText, { color: isDark ? '#93C5FD' : '#1E3A5F' }]}>
+                                <View style={[styles.quantityBadge, { backgroundColor: colors.bgGray }]}>
+                                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.quantityBadgeText, { color: colors.textGray }]}>
                                     {it.quantity}×
                                   </Text>
                                 </View>
@@ -1809,12 +1771,12 @@ export default function CustomerChatScreen({
                           </View>
                         ) : (
                           parsedStoreGroups.map((storeGroup, sIdx) => (
-                            <View key={sIdx} style={[styles.storeGroupCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' }]}>
-                              <View style={[styles.storeGroupHeader, { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' }]}>
-                                <Store size={13} color="#DC2626" strokeWidth={2.2} />
-                                <Text style={[styles.storeGroupName, { color: isDark ? colors.textDark : '#1E3A5F' }]}>{storeGroup.storeName}</Text>
-                                <View style={[styles.storeItemsCountPill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF', borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE' }]}>
-                                  <Text style={[styles.storeItemsCountText, { color: isDark ? '#93C5FD' : '#1E3A5F' }]}>
+                            <View key={sIdx} style={styles.storeGroupCard}>
+                              <View style={[styles.storeGroupHeader, { borderBottomColor: colors.border }]}>
+                                <Store size={13} color={colors.textGray} strokeWidth={2.2} />
+                                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.storeGroupName, { color: colors.textDark }]}>{storeGroup.storeName}</Text>
+                                <View style={styles.storeItemsCountPill}>
+                                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.storeItemsCountText, { color: colors.textGray }]}>
                                     {storeGroup.totalItemsCount} {storeGroup.totalItemsCount === 1 ? 'item' : 'items'}
                                   </Text>
                                 </View>
@@ -1824,14 +1786,14 @@ export default function CustomerChatScreen({
                                 {storeGroup.categories.map((catGroup, cIdx) => (
                                   <View key={cIdx} style={styles.categorySection} testID={`order-category-${sIdx}-${cIdx}`}>
                                     {catGroup.categoryName !== 'General Items' && (
-                                      <View style={[styles.categoryHeader, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                      <View style={[styles.categoryHeader, { borderBottomColor: colors.border }]}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
                                           <FolderOpen size={12} color={isDark ? '#93C5FD' : '#1E3A5F'} />
-                                          <Text style={[styles.categoryTitle, { color: isDark ? colors.textDark : '#1E3A5F' }]}>
+                                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.categoryTitle, { color: colors.textDark }]}>
                                             {catGroup.categoryName}
                                           </Text>
                                         </View>
-                                        <Text style={[styles.categoryItemCount, { color: colors.textGray }]}>
+                                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.categoryItemCount, { color: colors.textGray }]}>
                                           {catGroup.items.length} {catGroup.items.length === 1 ? 'item' : 'items'}
                                         </Text>
                                       </View>
@@ -1840,11 +1802,11 @@ export default function CustomerChatScreen({
                                     <View style={styles.storeGroupItemsList} testID={`order-items-${sIdx}-${cIdx}`}>
                                       {catGroup.items.map((gItem, gIdx) => (
                                         <View key={gIdx} style={styles.storeGroupItemRow}>
-                                          <Text style={[styles.storeGroupItemName, { color: isDark ? colors.textDark : '#334155' }]} numberOfLines={1}>
+                                          <Text style={[styles.storeGroupItemName, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
                                             {gItem.itemName}
                                           </Text>
-                                          <View style={[styles.quantityBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF', borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE' }]}>
-                                            <Text style={[styles.quantityBadgeText, { color: isDark ? '#93C5FD' : '#1E3A5F' }]}>
+                                          <View style={[styles.quantityBadge, { backgroundColor: colors.bgGray }]}>
+                                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.quantityBadgeText, { color: colors.textGray }]}>
                                               {gItem.quantity}×
                                             </Text>
                                           </View>
@@ -1859,13 +1821,13 @@ export default function CustomerChatScreen({
                         )}
 
                         {/* ESTIMATED FEES & PRICE BREAKDOWN */}
-                        <View style={[styles.deliveryFeeRow, { flexDirection: 'column', alignItems: 'stretch', gap: 6, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : '#EFF6FF', borderColor: isDark ? 'rgba(59, 130, 246, 0.25)' : '#BFDBFE' }]}>
+                        <View style={[styles.deliveryFeeRow, { flexDirection: 'column', alignItems: 'stretch', gap: 6, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: colors.bgGray, borderColor: colors.border }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Receipt size={15} color={isDark ? '#93C5FD' : '#1E3A5F'} strokeWidth={2.2} />
-                              <Text style={[styles.deliveryFeeLabel, { color: isDark ? '#93C5FD' : '#1E3A5F' }]}>Estimated Delivery Fee</Text>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.deliveryFeeLabel, { color: colors.textGray }]}>Estimated Delivery Fee</Text>
                             </View>
-                            <Text style={{ fontFamily: FontFamily.bold, fontSize: 13, color: isDark ? '#93C5FD' : '#1E3A5F' }}>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ fontFamily: FontFamily.bold, fontSize: 13, color: colors.textGray }}>
                               ₱{Number(item.deliveryFee ?? errandData?.deliveryFee ?? 50).toFixed(2)}
                             </Text>
                           </View>
@@ -1879,21 +1841,21 @@ export default function CustomerChatScreen({
                           ) : (
                             <View style={{ gap: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: 'rgba(30,58,95,0.08)' }}>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                <Text style={{ fontSize: PortalFontSizes.caption, color: colors.textGray }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Base & Distance Delivery Fee</Text>
+                                <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textGray }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Base & Distance Delivery Fee</Text>
                                 <Text style={{ fontSize: PortalFontSizes.caption, fontFamily: FontFamily.bold, color: colors.textDark }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                                   ₱{Number(item.deliveryFee ?? errandData?.deliveryFee ?? 50).toFixed(2)}
                                 </Text>
                               </View>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                <Text style={{ fontSize: PortalFontSizes.caption, color: colors.textGray }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Purchased Items Subtotal</Text>
-                                <Text style={{ fontSize: PortalFontSizes.caption, color: colors.textGray, fontStyle: 'italic' }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                                <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textGray }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>Purchased Items Subtotal</Text>
+                                <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: colors.textGray, fontStyle: 'italic' }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                                   Per store receipts (COD)
                                 </Text>
                               </View>
                             </View>
                           )}
 
-                          <Text style={{ fontSize: PortalFontSizes.micro, color: colors.textGray, fontStyle: 'italic', marginTop: 2 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                          <Text style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.micro, color: colors.textGray, fontStyle: 'italic', marginTop: 2 }} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
                             Purchased items verified by physical merchant receipts upon delivery (COD)
                           </Text>
 
@@ -1931,8 +1893,8 @@ export default function CustomerChatScreen({
                             ]}
                             onPress={() => setShowPaymentModal(true)}
                           >
-                            <CreditCard size={14} color="#FFFFFF" strokeWidth={2.5} />
-                            <Text style={[styles.revisionActionText, { color: '#FFFFFF' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                            <CreditCard size={14} color={colors.onPrimary} strokeWidth={2.5} />
+                            <Text style={[[styles.revisionActionText, { color: '#FFFFFF' }], { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                               Choose payment method
                             </Text>
                           </TouchableOpacity>
@@ -1940,11 +1902,11 @@ export default function CustomerChatScreen({
                           <View style={[styles.confirmedStatusRow, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5', borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0' }]}>
                             <CheckCircle2 size={15} color="#10B981" strokeWidth={2.5} />
                             <View style={{ flexShrink: 1 }}>
-                              <Text style={[styles.confirmedStatusText, { color: isDark ? '#34D399' : '#065F46' }]}>Order & Estimated Fees Approved</Text>
+                              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedStatusText, { color: isDark ? '#34D399' : '#065F46' }]}>Order & Estimated Fees Approved</Text>
                               {(chosenPaymentMethod || item.paymentMethod) && (
                                 <Text
                                   testID="order-paying-by"
-                                  style={{ fontSize: PortalFontSizes.caption, color: isDark ? '#34D399' : '#065F46', marginTop: 2 }}
+                                  style={{ fontFamily: FontFamily.regular, fontSize: PortalFontSizes.caption, color: isDark ? '#34D399' : '#065F46', marginTop: 2 }}
                                   maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                                 >
                                   {`Paying by ${chosenPaymentMethod || item.paymentMethod}`}
@@ -1955,7 +1917,7 @@ export default function CustomerChatScreen({
                         ) : item.status === 'rejected' || item.status === 'modification_requested' ? (
                           <View style={[styles.confirmedStatusRow, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2', borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FECACA', paddingHorizontal: 10 }]}>
                             <Clock size={14} color="#DC2626" strokeWidth={2.4} />
-                            <Text style={[styles.confirmedStatusText, { color: isDark ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
+                            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmedStatusText, { color: isDark ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
                               Adjustment Requested
                             </Text>
                           </View>
@@ -2015,7 +1977,7 @@ export default function CustomerChatScreen({
                       </View>
                     </View>
 
-                    <Text style={[styles.timeLabel, { color: colors.textLight }]}>{formatTime(item.timestamp)}</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.timeLabel, { color: colors.textLight }]}>{formatTime(item.timestamp)}</Text>
                   </View>
                 );
               }
@@ -2047,19 +2009,19 @@ export default function CustomerChatScreen({
                     <View
                       style={[
                         styles.systemNoticeCard,
-                        { backgroundColor: tone.bg, borderColor: tone.border },
+                        { backgroundColor: 'transparent' },
                       ]}
                     >
                       <View style={styles.systemNoticeHeader}>
                         <ToneIcon size={14} color={tone.accent} strokeWidth={2.4} />
-                        <Text style={[styles.systemNoticeHeading, { color: tone.accent }]}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.systemNoticeHeading, { color: tone.accent }]}>
                           {heading}
                         </Text>
-                        <Text style={[styles.systemNoticeTime, { color: colors.textLight }]}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.systemNoticeTime, { color: colors.textLight }]}>
                           {formatTime(item.timestamp)}
                         </Text>
                       </View>
-                      <Text style={[styles.systemNoticeBody, { color: colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.systemNoticeBody, { color: colors.textDark }]}>
                         {item.text}
                       </Text>
                     </View>
@@ -2077,12 +2039,12 @@ export default function CustomerChatScreen({
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.itemDeletedHeaderTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Item Removed from Order</Text>
-                          <Text style={[styles.timeLabel, { color: isDark ? '#F87171' : '#DC2626', marginHorizontal: 0, marginTop: 0 }]}>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.itemDeletedHeaderTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Item Removed from Order</Text>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.timeLabel, { color: isDark ? '#F87171' : '#DC2626', marginHorizontal: 0, marginTop: 0 }]}>
                             {formatTime(item.timestamp)}
                           </Text>
                         </View>
-                        <Text style={[styles.itemDeletedBodyText, { color: isDark ? colors.textDark : '#7F1D1D' }]}>{item.text}</Text>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.itemDeletedBodyText, { color: isDark ? colors.textDark : '#7F1D1D' }]}>{item.text}</Text>
                       </View>
                     </View>
                   </View>
@@ -2099,7 +2061,7 @@ export default function CustomerChatScreen({
                 >
                   {/* Sender name shown only on first message in cluster for dispatcher */}
                   {!isCustomer && item.isFirstInGroup && (
-                    <Text style={[styles.senderLabel, { color: colors.textGray }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.senderLabel, { color: colors.textGray }]}>
                       {item.senderName || 'Dispatcher'}
                     </Text>
                   )}
@@ -2115,7 +2077,7 @@ export default function CustomerChatScreen({
                     {!isCustomer && (
                       <View style={{ width: 28, height: 28, justifyContent: 'flex-end' }}>
                         {item.isLastInGroup ? (
-                          <DispatcherAvatar dispatcherId={dispatcherId} size={28} iconSize={13} />
+                          <DispatcherAvatar dispatcherId={dispatcherId} size={28} iconSize={13} neutral />
                         ) : null}
                       </View>
                     )}
@@ -2127,27 +2089,26 @@ export default function CustomerChatScreen({
                           ? [
                               styles.customerBubble,
                               {
-                                backgroundColor: colors.primary,
-                                borderTopRightRadius: item.isFirstInGroup ? 18 : 6,
+                                backgroundColor: isDark ? colors.primary : colors.primaryStrong,
+                                borderTopRightRadius: item.isFirstInGroup ? 14 : 6,
                                 borderBottomRightRadius: item.isLastInGroup ? 4 : 6,
                               },
                             ]
                           : [
                               styles.dispatcherBubble,
                               {
-                                backgroundColor: isDark ? '#1F2937' : '#F0F2F5',
-                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB',
-                                borderTopLeftRadius: item.isFirstInGroup ? 18 : 6,
+                                backgroundColor: colors.bgGray,
+                                borderTopLeftRadius: item.isFirstInGroup ? 14 : 6,
                                 borderBottomLeftRadius: item.isLastInGroup ? 4 : 6,
                               },
                             ],
-                        Shadows.soft,
                       ]}
                     >
                       <Text
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                         style={[
                           styles.messageText,
-                          { color: isCustomer ? '#FFFFFF' : colors.textDark },
+                          { color: isCustomer ? colors.onPrimary : colors.textDark },
                         ]}
                       >
                         {item.text}
@@ -2165,7 +2126,7 @@ export default function CustomerChatScreen({
                           testID="chat-view-map-button"
                         >
                           <MapPin size={13} color="#FFFFFF" strokeWidth={2.2} />
-                          <Text style={styles.pinMessageActionText}>View Store Pins on Map</Text>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.pinMessageActionText}>View Store Pins on Map</Text>
                         </TouchableOpacity>
                       )}
 
@@ -2188,7 +2149,7 @@ export default function CustomerChatScreen({
                           disabled={!isHalfPaymentDue || isChatClosed}
                         >
                           <ReceiptText size={13} color="#FFFFFF" strokeWidth={2.2} />
-                          <Text style={styles.pinMessageActionText}>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.pinMessageActionText}>
                             {isHalfPaymentDue
                               ? 'Send my receipt'
                               : isHalfPaid
@@ -2203,6 +2164,7 @@ export default function CustomerChatScreen({
                   {/* Micro timestamp shown only on last message in cluster */}
                   {item.isLastInGroup && (
                     <Text
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                       style={[
                         styles.timeLabel,
                         {
@@ -2234,8 +2196,8 @@ export default function CustomerChatScreen({
             testID="new-messages-pill"
             accessibilityLabel={`Scroll to latest view. New message ${unreadNewCount}`}
           >
-            <ArrowDown size={13} color="#FFFFFF" strokeWidth={2.6} />
-            <Text style={styles.newMessagesPillText}>
+            <ArrowDown size={13} color={colors.onPrimary} strokeWidth={2.6} />
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.newMessagesPillText, { color: colors.onPrimary }]}>
               New Message [{unreadNewCount}]
             </Text>
           </TouchableOpacity>
@@ -2246,6 +2208,7 @@ export default function CustomerChatScreen({
           <View
             style={[
               styles.readOnlyNotice,
+              pageLayout.gutterStyle,
               {
                 backgroundColor: colors.card,
                 borderTopColor: colors.border,
@@ -2253,7 +2216,7 @@ export default function CustomerChatScreen({
               },
             ]}
           >
-            <Text style={[styles.readOnlyNoticeText, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.readOnlyNoticeText, { color: colors.textGray }]}>
               {errandStatusUpper === 'CANCELLED'
                 ? 'This errand was cancelled. Conversation is archived.'
                 : errandStatusUpper === 'DELIVERED'
@@ -2265,6 +2228,7 @@ export default function CustomerChatScreen({
           <View
             style={[
               styles.readOnlyNotice,
+              pageLayout.gutterStyle,
               {
                 backgroundColor: colors.card,
                 borderTopColor: colors.border,
@@ -2277,7 +2241,7 @@ export default function CustomerChatScreen({
             ]}
           >
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.readOnlyNoticeText, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.readOnlyNoticeText, { color: colors.textGray }]}>
               Checking session status...
             </Text>
           </View>
@@ -2289,17 +2253,13 @@ export default function CustomerChatScreen({
                 backgroundColor: colors.card,
                 borderTopColor: colors.border,
                 paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom, 8),
-              },
-            ]}
+              }, pageLayout.gutterStyle]}
           >
             <View
               style={[
                 styles.inputWrapperPill,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                  borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
-                  shadowOpacity: isDark ? 0.25 : 0.08,
+                  backgroundColor: colors.bgGray,
                 },
               ]}
               testID="chat-input-wrapper-pill"
@@ -2312,7 +2272,7 @@ export default function CustomerChatScreen({
                   },
                 ]}
                 placeholder="Message..."
-                placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+                placeholderTextColor={colors.textGray}
                 value={inputText}
                 onChangeText={handleInputChange}
                 onBlur={() => broadcastTyping(false)}
@@ -2320,6 +2280,8 @@ export default function CustomerChatScreen({
                 blurOnSubmit={false}
                 scrollEnabled={true}
                 testID="chat-text-input"
+                accessibilityLabel="Message your dispatcher"
+                maxFontSizeMultiplier={1.2}
               />
             </View>
 
@@ -2350,8 +2312,9 @@ export default function CustomerChatScreen({
               onPress={handleSendMessage}
               disabled={!inputText.trim() || isChatClosed || statusLoading}
               accessibilityLabel="Send message"
+              accessibilityRole="button"
             >
-              <Send size={16} color="#FFFFFF" strokeWidth={2.5} />
+              <Send size={16} color={colors.onPrimary} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         )}
@@ -2404,7 +2367,7 @@ export default function CustomerChatScreen({
                 ]}
               >
                 <View style={[styles.declineModalHeader, { justifyContent: 'space-between' }]}>
-                  <Text style={[styles.declineModalTitle, { color: colors.textDark }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.declineModalTitle, { color: colors.textDark }]}>
                     Payment receipt
                   </Text>
                   <TouchableOpacity
@@ -2424,7 +2387,7 @@ export default function CustomerChatScreen({
                     onUploaded={handleReceiptUploaded}
                   />
                 ) : (
-                  <Text style={{ color: colors.textGray }}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ color: colors.textGray }}>
                     Nothing is currently due on this errand.
                   </Text>
                 )}
@@ -2432,15 +2395,6 @@ export default function CustomerChatScreen({
             </View>
           </TouchableWithoutFeedback>
         </Modal>
-
-        <RatingModal
-          visible={showRatingModal}
-          errandId={errandId}
-          onDone={() => {
-            setShowRatingModal(false);
-            setHasHandledRatingPrompt(true);
-          }}
-        />
 
         {/* CROSS-PLATFORM DECLINE / ADJUST REVISION MODAL */}
         <Modal
@@ -2473,10 +2427,10 @@ export default function CustomerChatScreen({
                       <XCircle size={20} color="#EF4444" strokeWidth={2.4} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.declineModalTitle, { color: colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.declineModalTitle, { color: colors.textDark }]}>
                         Decline or Request Adjustment
                       </Text>
-                      <Text style={[styles.declineModalSubtitle, { color: colors.textGray }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.declineModalSubtitle, { color: colors.textGray }]}>
                         Specify brand, quantity, or replacement preference.
                       </Text>
                     </View>
@@ -2511,6 +2465,7 @@ export default function CustomerChatScreen({
                         ]}
                       >
                         <Text
+                          maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                           style={[
                             styles.declineChipText,
                             {
@@ -2529,6 +2484,7 @@ export default function CustomerChatScreen({
 
                   {/* Text Input */}
                   <TextInput
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.input}
                     value={declineReasonText}
                     onChangeText={updateDeclineReason}
                     placeholder="Type specific instructions (e.g. get brand X, cancel item)..."
@@ -2558,7 +2514,7 @@ export default function CustomerChatScreen({
                         },
                       ]}
                     >
-                      <Text style={[styles.declineModalCancelText, { color: colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.declineModalCancelText, { color: colors.textDark }]}>
                         Cancel
                       </Text>
                     </TouchableOpacity>
@@ -2575,7 +2531,7 @@ export default function CustomerChatScreen({
                       {isSubmittingDecline ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.declineModalSubmitText}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.declineModalSubmitText}>
                           Send Response
                         </Text>
                       )}
@@ -2638,8 +2594,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: PortalFontSizes.subheading,
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
   },
   presenceRow: {
     flexDirection: 'row',
@@ -2652,12 +2609,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  activeGreenPulse: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
   activeText: {
     fontFamily: FontFamily.medium,
     fontSize: PortalFontSizes.micro,
@@ -2667,22 +2618,15 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: PortalFontSizes.micro,
   },
-  metaDivider: {
-    fontSize: PortalFontSizes.micro,
-  },
-  errandPillText: {
-    fontFamily: FontFamily.mono,
-    fontSize: PortalFontSizes.micro,
-  },
   navRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   actionIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2702,27 +2646,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    minHeight: 46,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    minHeight: 64,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   bentoCapsuleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     flex: 1,
-    marginRight: Spacing.sm,
+    minWidth: 0,
+    gap: 4,
+    marginRight: Spacing.md,
   },
   bentoCapsuleOrderCode: {
-    fontFamily: FontFamily.mono,
-    fontSize: PortalFontSizes.caption,
-    fontWeight: '700',
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.micro,
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
   },
   bentoCapsuleStoreText: {
-    fontFamily: FontFamily.medium,
-    fontSize: PortalFontSizes.caption,
-    flex: 1,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.body,
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
   },
   bentoCapsuleRight: {
     flexDirection: 'row',
@@ -2730,39 +2673,33 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bentoDrawer: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.md,
   },
   bentoDrawerSection: {
     gap: 4,
   },
   bentoDrawerSectionTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: PortalFontSizes.micro,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.caption,
   },
   bentoDrawerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   bentoStoreChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
+    gap: Spacing.sm,
     maxWidth: '100%',
   },
   bentoStoreChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: PortalFontSizes.micro,
+    flexShrink: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   bentoDrawerActions: {
     flexDirection: 'row',
@@ -2775,14 +2712,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 7,
+    paddingVertical: 12,
     paddingHorizontal: 10,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    minHeight: 34,
+    borderRadius: 10,
+    minHeight: 48,
   },
   bentoDrawerActionBtnText: {
-    fontFamily: FontFamily.semibold,
+    flexShrink: 1,
+    textAlign: 'center',
+    fontFamily: FontFamily.medium,
     fontSize: PortalFontSizes.caption,
   },
   bentoHalfPaymentCard: {
@@ -2796,11 +2734,17 @@ const styles = StyleSheet.create({
   },
   collapsedHalfStrip: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  receiptReminderAction: {
+    minHeight: 48,
+    paddingHorizontal: Spacing.sm,
+    justifyContent: 'center',
   },
   ribbonLeft: {
     flexDirection: 'row',
@@ -2819,14 +2763,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.xl,
   },
-  emptyChatCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
   emptyText: {
     fontFamily: FontFamily.bold,
     fontSize: PortalFontSizes.subheading,
@@ -2840,12 +2776,9 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    padding: Spacing.lg,
+    padding: Spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    margin: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
   },
   errorTitle: {
     fontFamily: FontFamily.bold,
@@ -2895,9 +2828,9 @@ const styles = StyleSheet.create({
     fontSize: PortalFontSizes.caption,
   },
   messagesList: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xl,
   },
   messageBubbleContainer: {
     marginBottom: 3,
@@ -2918,9 +2851,9 @@ const styles = StyleSheet.create({
     marginLeft: 36,
   },
   bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 18,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: 14,
     maxWidth: '100%',
   },
   customerBubble: {
@@ -2928,7 +2861,6 @@ const styles = StyleSheet.create({
   },
   dispatcherBubble: {
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
   },
   messageText: {
     fontFamily: FontFamily.regular,
@@ -2939,11 +2871,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 38,
-    gap: 5,
-    marginTop: 6,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 6,
+    minHeight: 48,
+    gap: 6,
+    marginTop: Spacing.sm,
+    borderRadius: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
   },
   pinMessageActionText: {
@@ -2954,33 +2886,30 @@ const styles = StyleSheet.create({
   timeLabel: {
     fontFamily: FontFamily.regular,
     fontSize: PortalFontSizes.micro,
-    marginTop: 2,
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
+    marginTop: 6,
+    marginBottom: 8,
     marginHorizontal: 4,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: Spacing.md,
+    paddingTop: 12,
     paddingBottom: 8,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
   inputWrapperPill: {
     flex: 1,
     minHeight: 48,
     maxHeight: 124,
-    borderRadius: 22,
-    borderWidth: 1.2,
-    borderTopWidth: 1.5,
-    paddingHorizontal: 16,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   textInput: {
     maxHeight: 100,
@@ -2995,25 +2924,21 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 0,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
   },
   readOnlyNotice: {
-    padding: Spacing.md,
-    borderTopWidth: 1,
+    padding: Spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
   readOnlyNoticeText: {
     fontFamily: FontFamily.medium,
     fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    textAlign: 'center',
   },
   systemNoticeWrapper: {
     width: '100%',
@@ -3021,11 +2946,9 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   systemNoticeCard: {
-    width: '94%',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    width: '100%',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: 2,
   },
   systemNoticeHeader: {
     flexDirection: 'row',
@@ -3049,26 +2972,26 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   orderConfirmCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
     alignSelf: 'stretch',
   },
   orderConfirmHeader: {
-    backgroundColor: '#1E3A5F',
-    paddingHorizontal: Spacing.sm + 4,
-    paddingVertical: Spacing.sm + 2,
+    padding: Spacing.lg,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   orderConfirmTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: PortalFontSizes.caption,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.body,
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
   },
   orderConfirmSubtitle: {
     fontFamily: FontFamily.regular,
@@ -3079,12 +3002,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+    paddingVertical: 4,
   },
   confirmedPillText: {
     fontFamily: FontFamily.bold,
@@ -3095,12 +3013,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
+    paddingVertical: 4,
   },
   pendingPillText: {
     fontFamily: FontFamily.bold,
@@ -3127,23 +3040,19 @@ const styles = StyleSheet.create({
   // item lines. The category box is gone (a heading and a hairline remain) and
   // the two boxes left have room, so the list reads as a list, not a grid.
   orderConfirmBody: {
-    padding: Spacing.md - 2,
-    gap: Spacing.md - 2,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
   },
   storeGroupCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing.md - 2,
-    gap: Spacing.sm + 2,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.md,
   },
   storeGroupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    gap: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: Spacing.sm,
   },
   storeGroupName: {
@@ -3153,12 +3062,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   storeItemsCountPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
   storeItemsCountText: {
     fontFamily: FontFamily.bold,
@@ -3171,18 +3075,17 @@ const styles = StyleSheet.create({
   },
   categoryHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: Spacing.xs + 2,
+    gap: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   categoryTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: PortalFontSizes.micro,
-    color: '#1E3A5F',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    flexShrink: 1,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'heading'),
   },
   categoryItemCount: {
     fontFamily: FontFamily.bold,
@@ -3190,12 +3093,9 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   quantityBadge: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     marginLeft: Spacing.sm,
   },
   quantityBadgeText: {
@@ -3214,9 +3114,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   storeGroupItemName: {
+    flex: 1,
     fontFamily: FontFamily.medium,
     fontSize: PortalFontSizes.caption,
-    color: '#334155',
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   storeGroupItemNote: {
     fontFamily: FontFamily.regular,

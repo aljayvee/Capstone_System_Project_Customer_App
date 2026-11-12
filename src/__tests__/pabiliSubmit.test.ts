@@ -42,7 +42,7 @@ it('creates the errand, then opens the chat with the order', async () => {
   (apiClient.post as jest.Mock).mockResolvedValueOnce({ data: { id: 'E-1', deliveryFee: 60 } });
   const errandId = await submitPabili(draft(), location, 7);
   expect(errandId).toBe('E-1');
-  expect(apiClient.post).toHaveBeenCalledWith('/errands', expect.objectContaining({ storeCount: 2 }));
+  expect(apiClient.post).toHaveBeenCalledWith('/errands', expect.objectContaining({ storeCount: 2 }), { timeout: 120000 });
   expect(postOrderSubmitted).toHaveBeenCalledWith(
     'E-1',
     expect.objectContaining({ items: expect.arrayContaining([expect.objectContaining({ itemName: 'Chicken', size: '5 kg' })]) })

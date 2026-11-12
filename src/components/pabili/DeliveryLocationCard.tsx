@@ -101,8 +101,8 @@ export default function DeliveryLocationCard({ location, loading, failed, onChan
           onPress={onChange}
           accessibilityRole="button"
         >
-          <MapPin size={15} color="#FFFFFF" strokeWidth={2.2} />
-          <Text style={styles.setBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+          <MapPin size={15} color={colors.onPrimary} strokeWidth={2.2} />
+          <Text style={[styles.setBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
             Set delivery location
           </Text>
         </TouchableOpacity>

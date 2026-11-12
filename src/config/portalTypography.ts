@@ -66,7 +66,7 @@ export function scaledPortalFontSize(size: number, width?: number): number {
 
 /**
  * Calculates dynamic proportional line-height based on font size and typography role.
- * Eliminates descender clipping ('g', 'y', 'p', 'q') on custom Inter fonts.
+ * Eliminates descender clipping ('g', 'y', 'p', 'q') on custom Urbanist fonts.
  */
 export function getPortalLineHeight(
   fontSize: number,
@@ -129,6 +129,8 @@ export const PortalFontSizeMultipliers = {
   title: 1.20,
   /** Button labels */
   button: 1.20,
+  /** Form fields and search inputs */
+  input: 1.20,
   /** Card titles and structured rows */
   card: 1.20,
   /** Body text, instructions, and multi-line descriptions */

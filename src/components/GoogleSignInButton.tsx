@@ -8,11 +8,13 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import {
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
   FontFamily,
   Spacing,
   BorderRadius,
   AuthFontSizeMultipliers,
-  scaledFontSize,
 } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 
@@ -136,8 +138,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   text: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
     letterSpacing: 0.1,
   },
   disabled: {

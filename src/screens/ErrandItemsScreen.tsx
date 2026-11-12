@@ -47,13 +47,11 @@ import { postOrderSubmitted } from '../services/chatSystemMessages';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
   FontFamily,
-  FontSizes,
   Spacing,
   BorderRadius,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   moderateScale,
   PortalFontSizes,
   scaledPortalFontSize,
@@ -537,9 +535,9 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
             <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
             <View style={[styles.stepPillActive, { backgroundColor: colors.primary }]}>
               <View style={styles.stepNumCircleActive}>
-                <Text style={styles.stepNumActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>2</Text>
+                <Text style={[styles.stepNumActive, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>2</Text>
               </View>
-              <Text style={styles.stepTextActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>List Items</Text>
+              <Text style={[styles.stepTextActive, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>List Items</Text>
             </View>
             <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
             <View style={[styles.stepPillInactive, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
@@ -656,8 +654,8 @@ export default function ErrandItemsScreen({ route, navigation }: RootStackScreen
                 style={[styles.setLocationBtn, { backgroundColor: colors.primary }, Shadows.soft]}
                 onPress={() => navigation.navigate('CustomerLocation', { user })}
               >
-                <MapPin size={15} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.setLocationBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Set Delivery Location Now</Text>
+                <MapPin size={15} color={colors.onPrimary} strokeWidth={2.2} />
+                <Text style={[styles.setLocationBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Set Delivery Location Now</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1053,8 +1051,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: 44,

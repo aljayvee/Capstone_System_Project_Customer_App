@@ -1,0 +1,1185 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Modal,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
+import { showAppAlert } from '../services/alertModal';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Pencil,
+  MapPin,
+  ChevronRight,
+  ChevronLeft,
+  Settings,
+  LogOut,
+  Package,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  X,
+  Moon,
+  Sun,
+  MessageSquare,
+  Sparkles,
+} from 'lucide-react-native';
+import { useAuth } from '../context/AuthContext';
+import { useThemeColor } from '../hooks/useThemeColor';
+import {
+  BorderRadius,
+  Spacing,
+  FontFamily,
+  Shadows,
+  useResponsive,
+  MAX_CONTENT_WIDTH,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
+import MapPreviewField, { MapMarkerSpec } from '../components/MapPreviewField';
+import ConfirmModal from '../components/ConfirmModal';
+import CustomerHelpModal from '../components/CustomerHelpModal';
+import AppUpdatesModal from '../components/AppUpdatesModal';
+import {
+  checkCustomerAppUpdate,
+  AppUpdateCheckResult,
+} from '../services/appUpdateService';
+import { MapCoordinate, DEFAULT_CENTER, sanitizeCoordinate } from '../utils/coords';
+import { apiClient } from '../services/apiClient';
+import { defaultLocationOf, useSavedLocations } from '../hooks/useSavedLocations';
+import { hydrateCache, readCache, writeCache } from '../services/swrCache';
+import { toUserMessage } from '../services/errorMessages';
+import { safePickImage } from '../utils/safeImagePicker';
+import { RootStackScreenProps } from '../navigation/types';
+
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
+function fieldOrPlaceholder(value: string | undefined) {
+  return value && value.trim() !== '' ? value : null;
+}
+
+export default function AccountScreen({ route, navigation }: RootStackScreenProps<'Account'>) {
+  const { user: authUser, logout, updateUser } = useAuth();
+  const { colors, isDark, setThemeMode } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
+  const { width: windowWidth } = useResponsive();
+  const contentMaxWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
+
+  const initialUser =
+    route.params?.user || authUser || {
+      id: 1,
+      username: 'customer',
+      firstName: 'Customer',
+      lastName: 'User',
+    };
+
+  const [currentUser, setCurrentUser] = useState<any>(initialUser);
+  const [pinPickerVisible, setPinPickerVisible] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [completedErrandsCount, setCompletedErrandsCount] = useState<number>(0);
+
+  const [defaultAddressText, setDefaultAddressText] = useState<string | null>(null);
+  const [customerPinCoords, setCustomerPinCoords] = useState<MapCoordinate>(DEFAULT_CENTER);
+  const [defaultLocationLabel, setDefaultLocationLabel] = useState<string | null>(null);
+  const [savedLocations, setSavedLocations] = useState<any[]>([]);
+
+  // App Update Detection
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateCheckResult | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  const fetchAppUpdate = useCallback(async () => {
+    setCheckingUpdates(true);
+    try {
+      const res = await checkCustomerAppUpdate();
+      setUpdateStatus(res);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAppUpdate();
+  }, [fetchAppUpdate]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    setCurrentUser((prev: any) => {
+      const merged = { ...prev, ...authUser };
+      const unchanged = Object.keys(merged).every((key) => merged[key] === prev?.[key]);
+      return unchanged ? prev : merged;
+    });
+  }, [authUser]);
+
+  // The default pin, from the shared, cached saved-locations list
+  // (hooks/useSavedLocations.ts, 2026-10-14), as the Home header reads it. The
+  // last list shows at once, a failed refresh keeps it (this screen used to
+  // blank the pin on any error), and a default changed in Saved Locations is
+  // here on return without asking again: it is the same list.
+  const { data: savedLocationsData, revalidate: revalidateSavedLocations } = useSavedLocations(currentUser.id);
+  const fetchLocations = useCallback(
+    (force = false) => void revalidateSavedLocations({ force }),
+    [revalidateSavedLocations]
+  );
+
+  useEffect(() => {
+    if (savedLocationsData === undefined) return;
+    setSavedLocations(savedLocationsData as any);
+    const def = defaultLocationOf(savedLocationsData);
+    if (def) {
+      setDefaultAddressText(def.address);
+      setDefaultLocationLabel(def.label);
+      setCustomerPinCoords(sanitizeCoordinate({ latitude: def.latitude, longitude: def.longitude }));
+    } else {
+      setDefaultAddressText(null);
+      setDefaultLocationLabel(null);
+    }
+  }, [savedLocationsData]);
+
+  useEffect(() => {
+    const isMountedRef = { current: true };
+    const transactionsKey = `transactions:${currentUser.id}`;
+    const countCompleted = (orders: any[]) =>
+      orders.filter((o) => o.status === 'COMPLETED' || o.status === 'DELIVERED').length;
+
+    // Home's kept errand list first, so the count is right on the first frame.
+    void hydrateCache(transactionsKey).then(() => {
+      const kept = readCache<any[]>(transactionsKey)?.data;
+      if (isMountedRef.current && kept) setCompletedErrandsCount(countCompleted(kept));
+    });
+
+    apiClient
+      .get(`/customers/${currentUser.id}/transactions`)
+      .then((res) => {
+        if (!isMountedRef.current) return;
+        const orders: any[] = res.data?.orders || [];
+        writeCache(transactionsKey, orders, { persist: true });
+        setCompletedErrandsCount(countCompleted(orders));
+      })
+      .catch(() => {});
+
+    // Saved Locations opens on top of this screen, so returning from it does
+    // not remount. The list is shared, so a change made there is already
+    // here; the focus only refreshes a list over a minute old.
+    const unsubscribeFocus = navigation.addListener('focus', () => fetchLocations());
+
+    return () => {
+      isMountedRef.current = false;
+      unsubscribeFocus();
+    };
+  }, [currentUser.id, fetchLocations]);
+
+  const handleSaveLocationPin = (coords: MapCoordinate) => {
+    const label = 'Pinned Location';
+    setCustomerPinCoords(coords);
+    setDefaultLocationLabel(label);
+
+    apiClient
+      .post(`/customer-locations/${currentUser.id}`, {
+        label,
+        address: `${label} (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        isDefault: true,
+      })
+      .then(() => fetchLocations(true))
+      .catch((err) => {
+        console.error('Failed to persist customer location pin:', err.message);
+      });
+  };
+
+  // Handle Photo Picker (Camera or Gallery)
+  const handleSelectImage = async (mode: 'camera' | 'gallery') => {
+    setShowPhotoModal(false);
+    try {
+      const asset = await safePickImage({
+        mode,
+        aspect: [1, 1],
+        quality: 0.8,
+        purpose: 'profile photo',
+      });
+
+      if (!asset) return;
+
+      const fileName = asset.fileName || asset.uri.split('/').pop() || 'profile.jpg';
+      const fileExt = fileName.split('.').pop()?.toLowerCase();
+      let mimeType = asset.mimeType || (fileExt === 'png' ? 'image/png' : 'image/jpeg');
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+
+      const isValidMime =
+        ALLOWED_MIME_TYPES.includes(mimeType) || ['jpg', 'jpeg', 'png'].includes(fileExt || '');
+      if (!isValidMime) {
+        showAppAlert({
+          title: 'Invalid Format',
+          message: 'Only .jpeg, .jpg, and .png image files are allowed.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      const fileSize =
+        asset.fileSize || (asset.base64 ? Math.round((asset.base64.length * 3) / 4) : 0);
+      if (fileSize > MAX_IMAGE_SIZE_BYTES) {
+        showAppAlert({
+          title: 'Photo Too Large',
+          message: 'Maximum allowed photo size is 5MB.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      if (!asset.base64) {
+        showAppAlert({
+          title: 'Upload Error',
+          message: 'Could not read photo data. Please try again.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      const photoData = `data:${mimeType};base64,${asset.base64}`;
+      setUploadingPhoto(true);
+
+      const uploadRes = await apiClient.put(`/customers/${currentUser.id}/photo`, {
+        photoData,
+        mimeType: mimeType === 'image/png' ? 'image/png' : 'image/jpeg',
+        fileSize,
+        fileName,
+      });
+
+      const updatedAvatar = uploadRes.data?.user?.avatar || photoData;
+      setCurrentUser((prev: any) => ({ ...prev, avatar: updatedAvatar }));
+      if (updateUser) {
+        await updateUser({ avatar: updatedAvatar });
+      }
+      showAppAlert({
+        title: 'Success',
+        message: 'Profile photo updated successfully!',
+        variant: 'success',
+      });
+    } catch (err: any) {
+      showAppAlert('Photo not saved', toUserMessage(err, 'profile'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Handle Remove Photo
+  const handleRemovePhoto = async () => {
+    setShowPhotoModal(false);
+    try {
+      setUploadingPhoto(true);
+      await apiClient.delete(`/customers/${currentUser.id}/photo`);
+      setCurrentUser((prev: any) => ({ ...prev, avatar: null }));
+      if (updateUser) {
+        await updateUser({ avatar: null });
+      }
+      showAppAlert({
+        title: 'Success',
+        message: 'Profile photo removed.',
+        variant: 'success',
+      });
+    } catch (err: any) {
+      showAppAlert('Photo not removed', toUserMessage(err, 'profile'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const email = fieldOrPlaceholder(currentUser.email);
+  const phone = fieldOrPlaceholder(currentUser.phone);
+
+  const locationMarkers: MapMarkerSpec[] = (savedLocations || []).map((loc) => ({
+    key: String(loc.id || loc.label),
+    coordinate: { latitude: Number(loc.latitude), longitude: Number(loc.longitude) },
+    title: `${loc.label}${loc.isDefault ? ' (Default)' : ''}`,
+    description: loc.address,
+    pinColor: loc.isDefault ? colors.primary : '#3B82F6',
+  }));
+
+  const userInitials = `${(
+    currentUser.firstName?.[0] ||
+    currentUser.username?.[0] ||
+    'C'
+  ).toUpperCase()}${(currentUser.lastName?.[0] || '').toUpperCase()}`;
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.card }]}
+      edges={['top', 'bottom', 'left', 'right']}
+    >
+      {/* 1. TOP NAV BAR WITH BACK BUTTON */}
+      <View
+        style={[
+          styles.navHeaderRow,
+          {
+            borderBottomColor: colors.border,
+            backgroundColor: colors.card,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          style={styles.backBtn}
+          testID="back-button"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ChevronLeft size={22} color={colors.textDark} />
+        </TouchableOpacity>
+
+        <Text
+          style={[styles.navTitle, { color: colors.textDark }]}
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+        >
+          Account & Profile
+        </Text>
+
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => navigation.navigate('Settings', { user: currentUser })}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          accessibilityRole="button"
+          accessibilityLabel="Open Settings"
+          testID="account-settings-gear-button"
+        >
+          <Settings size={19} color={colors.textDark} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. APP UPDATE ALERT BANNER */}
+        {updateStatus?.isUpdateAvailable && !bannerDismissed && (
+          <View
+            style={[
+              styles.updateBannerCard,
+              {
+                backgroundColor: isDark ? 'rgba(220, 38, 38, 0.12)' : '#FEF2F2',
+                borderColor: isDark ? 'rgba(220, 38, 38, 0.3)' : '#FECACA',
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.updateBannerContent}
+              activeOpacity={0.8}
+              onPress={() => setShowUpdatesModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View app updates"
+            >
+              <View style={[styles.updateBannerIconCircle, { backgroundColor: '#DC2626' }]}>
+                <Sparkles size={14} color="#FFFFFF" />
+              </View>
+              <View style={styles.updateBannerTextCol}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.updateBannerTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                    Sugo Express v{updateStatus.latestVersion} Available
+                  </Text>
+                  <View style={styles.updateNewChip}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.updateNewChipText}>NEW</Text>
+                  </View>
+                </View>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.updateBannerSubtitle, { color: isDark ? '#F87171' : '#B91C1C' }]}>
+                  Tap to view new features, fixes & download APK
+                </Text>
+              </View>
+              <ChevronRight size={16} color={isDark ? '#FCA5A5' : '#991B1B'} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.updateBannerDismissBtn}
+              onPress={() => setBannerDismissed(true)}
+              hitSlop={PortalTouchTargets.compactHitSlop}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss update notice"
+            >
+              <X size={14} color={isDark ? '#FCA5A5' : '#991B1B'} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Profile identity */}
+        <View style={styles.heroSection}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setShowPhotoModal(true)}
+            style={[
+              styles.avatarRing,
+              { borderColor: colors.border },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+            testID="profile-photo-button"
+          >
+            {currentUser.avatar ? (
+              <Image source={{ uri: currentUser.avatar }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarBadge, { backgroundColor: colors.bgGray }]}>
+                <Text style={[styles.avatarText, { color: colors.textDark }]} maxFontSizeMultiplier={1}>
+                  {userInitials}
+                </Text>
+              </View>
+            )}
+            {uploadingPhoto ? (
+              <View style={styles.avatarUploadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.avatarCameraBadge,
+                  {
+                    backgroundColor: brandColor,
+                    borderColor: colors.card,
+                  },
+                ]}
+              >
+                <Camera size={15} color={colors.onPrimary} strokeWidth={2.4} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Text
+            style={[styles.heroFullName, { color: colors.textDark }]}
+            numberOfLines={2}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+            testID="profile-full-name"
+          >
+            {currentUser.firstName} {currentUser.lastName}
+          </Text>
+          <Text
+            style={[styles.heroHandle, { color: colors.textGray }]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+          >
+            @{currentUser.username}
+            {phone ? `  ·  ${phone}` : ''}
+          </Text>
+
+          <View style={styles.heroTagRow}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.editProfileBtn, { backgroundColor: colors.bgGray }]}
+              onPress={() => navigation.navigate('EditAccount', { user: currentUser })}
+              hitSlop={PortalTouchTargets.compactHitSlop}
+              testID="edit-profile-button"
+              accessibilityRole="button"
+              accessibilityLabel="Edit Profile"
+            >
+              <Pencil size={13} color={colors.textDark} strokeWidth={2.2} />
+              <Text
+                style={[styles.editProfileText, { color: colors.textDark }]}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+              >
+                Edit Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Delivery details stay in the page flow; the map opens on demand. */}
+        <View style={[styles.pinSection, { borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+            Delivery address
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.addressRow}
+            onPress={() => defaultAddressText
+              ? setPinPickerVisible(true)
+              : navigation.navigate('CustomerLocation', { user: currentUser })}
+            accessibilityRole="button"
+            accessibilityLabel={defaultAddressText ? 'View delivery pin on map' : 'Set your delivery address'}
+          >
+            <MapPin size={21} color={colors.textGray} strokeWidth={1.7} />
+            <View style={styles.addressTextCol}>
+              <Text style={[styles.addressLabel, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+                {defaultAddressText ? (defaultLocationLabel || 'Default address') : 'Add a delivery address'}
+              </Text>
+              <Text style={[styles.addressDescription, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                {defaultAddressText || 'Set a saved location for your next delivery.'}
+              </Text>
+            </View>
+            <ChevronRight size={17} color={colors.textGray} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Account options */}
+        <View style={styles.groupSection}>
+          <Text
+            style={[styles.sectionTitle, { color: colors.textDark }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+          >
+            Your account
+          </Text>
+          <View>
+            {/* Row 1: Errands Completed */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
+              onPress={() => navigation.navigate('CustomerPortal', { user: currentUser, initialTab: 'errands' })}
+              accessibilityRole="button"
+              accessibilityLabel="View errand receipts"
+            >
+              <View style={styles.menuIconBadge}>
+                <Package size={17} color={colors.textGray} strokeWidth={1.7} />
+              </View>
+              <View style={styles.menuTextCol}>
+                <Text
+                  style={[styles.menuTitle, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+                >
+                  Order history
+                </Text>
+                <Text
+                  style={[styles.menuSubtitle, { color: colors.textGray }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                >
+                  Past orders and receipts
+                </Text>
+              </View>
+              <View style={styles.menuRightCol}>
+                <Text
+                  style={[styles.menuValueText, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                >
+                  {completedErrandsCount}
+                </Text>
+                <ChevronRight size={16} color={colors.textLight} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Row 2: Saved places */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
+              onPress={() => navigation.navigate('CustomerLocation', { user: currentUser })}
+              accessibilityRole="button"
+              accessibilityLabel="Manage saved locations"
+            >
+              <View style={styles.menuIconBadge}>
+                <MapPin size={17} color={colors.textGray} strokeWidth={1.7} />
+              </View>
+              <View style={styles.menuTextCol}>
+                <Text
+                  style={[styles.menuTitle, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+                >
+                  Saved places
+                </Text>
+                <Text
+                  style={[styles.menuSubtitle, { color: colors.textGray }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                >
+                  Manage your delivery locations
+                </Text>
+              </View>
+              <View style={styles.menuRightCol}>
+                <Text
+                  style={[styles.menuValueText, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                >
+                  {savedLocations.length}
+                </Text>
+                <ChevronRight size={16} color={colors.textLight} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Row 3: Appearance & Theme Toggle */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
+              onPress={() => setThemeMode(isDark ? 'light' : 'dark')}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle light and dark mode"
+            >
+              <View style={styles.menuIconBadge}>
+                {isDark ? (
+                  <Moon size={17} color={colors.textGray} strokeWidth={1.7} />
+                ) : (
+                  <Sun size={17} color={colors.textGray} strokeWidth={1.7} />
+                )}
+              </View>
+              <View style={styles.menuTextCol}>
+                <Text
+                  style={[styles.menuTitle, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+                >
+                  Appearance
+                </Text>
+                <Text
+                  style={[styles.menuSubtitle, { color: colors.textGray }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                >
+                  Tap to switch appearance
+                </Text>
+              </View>
+              <View style={styles.menuRightCol}>
+                <Text
+                  style={[styles.menuValueText, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                >
+                  {isDark ? 'Dark' : 'Light'}
+                </Text>
+                <ChevronRight size={16} color={colors.textLight} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Row 4: Feedback & reviews */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.menuRow, { borderBottomWidth: 0 }]}
+              onPress={() => navigation.navigate('Feedback', { user: currentUser })}
+              accessibilityRole="button"
+              accessibilityLabel="App feedback and reviews"
+            >
+              <View style={styles.menuIconBadge}>
+                <MessageSquare size={17} color={colors.textGray} strokeWidth={1.7} />
+              </View>
+              <View style={styles.menuTextCol}>
+                <Text
+                  style={[styles.menuTitle, { color: colors.textDark }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
+                >
+                  Feedback & reviews
+                </Text>
+                <Text
+                  style={[styles.menuSubtitle, { color: colors.textGray }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+                >
+                  Share your experience
+                </Text>
+              </View>
+              <View style={styles.menuRightCol}>
+                <ChevronRight size={16} color={colors.textLight} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 5. SIGN OUT BUTTON (CLEAN & SHADOW-FREE) */}
+        <View style={styles.logoutSection}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[
+              styles.logoutBtn,
+              {
+                backgroundColor: 'transparent',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)',
+              },
+            ]}
+            onPress={() => setShowSignOutModal(true)}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            testID="account-logout-button"
+            accessibilityRole="button"
+            accessibilityLabel="Sign out of account"
+          >
+            <LogOut size={15} color={colors.danger} strokeWidth={2.2} />
+            <Text
+              style={[styles.logoutBtnText, { color: colors.danger }]}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+            >
+              Sign Out of Account
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* PHOTO SELECTION MODAL */}
+      <Modal
+        visible={showPhotoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhotoModal(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowPhotoModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.photoModalCard,
+              { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
+              Shadows.liftedUp,
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.photoModalHeader}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalTitle, { color: colors.textDark }]}>
+                Profile Photo
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPhotoModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={18} color={colors.textLight} />
+              </TouchableOpacity>
+            </View>
+
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalSub, { color: colors.textGray }]}>
+              {currentUser.avatar
+                ? 'Update or remove your current profile photo.'
+                : 'Select an image from your device gallery to personalize your account.'}
+            </Text>
+
+            <View style={styles.photoModalOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.photoOptionBtn,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: colors.border },
+                ]}
+                onPress={() => handleSelectImage('gallery')}
+                accessibilityRole="button"
+                accessibilityLabel="Choose from Gallery"
+              >
+                <ImageIcon size={18} color={colors.primary} />
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
+                  Choose from Gallery
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.photoOptionBtn,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: colors.border },
+                ]}
+                onPress={() => handleSelectImage('camera')}
+                accessibilityRole="button"
+                accessibilityLabel="Take a Photo"
+              >
+                <Camera size={18} color={colors.primary} />
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
+                  Take a Photo
+                </Text>
+              </TouchableOpacity>
+
+              {currentUser.avatar && (
+                <TouchableOpacity
+                  style={[
+                    styles.photoOptionBtn,
+                    { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#FEF2F2', borderColor: 'rgba(239, 68, 68, 0.2)' },
+                  ]}
+                  onPress={handleRemovePhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove Current Photo"
+                >
+                  <Trash2 size={18} color={colors.danger} />
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.danger }]}>
+                    Remove Current Photo
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* DELIVERY PIN MAP MODAL (READ ONLY - NO PINNING, NO SAVE PINPOINT) */}
+      <MapPreviewField
+        editable={false}
+        center={customerPinCoords}
+        markers={locationMarkers}
+        label="Delivery Pin Location"
+        modalTitle="Delivery Pin Location"
+        locationLabel={defaultLocationLabel}
+        addressText={defaultAddressText}
+        controlled={{
+          visible: pinPickerVisible,
+          onClose: () => setPinPickerVisible(false),
+        }}
+      />
+
+      {/* CUSTOMER HELP & GUIDE MODAL */}
+      <CustomerHelpModal
+        visible={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+      />
+
+      {/* SIGN OUT ANTI-CHURN CONFIRM MODAL (INVERTED HIERARCHY: STAY SIGNED IN STANDS OUT) */}
+      <ConfirmModal
+        visible={showSignOutModal}
+        title="Sign Out of Your Account?"
+        message={`You have ${savedLocations.length} saved ${
+          savedLocations.length === 1 ? 'place' : 'places'
+        } and ${completedErrandsCount} completed ${
+          completedErrandsCount === 1 ? 'errand' : 'errands'
+        } recorded in Tacurong.\n\nAre you sure you want to sign out?`}
+        confirmLabel="Yes, Sign Out"
+        cancelLabel="Stay Signed In"
+        primaryButton="cancel"
+        buttonLayout="vertical"
+        destructive={false}
+        onConfirm={() => {
+          setShowSignOutModal(false);
+          logout();
+        }}
+        onCancel={() => setShowSignOutModal(false)}
+      />
+
+      {/* APP UPDATES & CHANGELOG MODAL */}
+      <AppUpdatesModal
+        visible={showUpdatesModal}
+        updateStatus={updateStatus}
+        checking={checkingUpdates}
+        onRefresh={fetchAppUpdate}
+        onClose={() => setShowUpdatesModal(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+/** The profile photo, in dp: the largest element on the screen. */
+const AVATAR_SIZE = 96;
+const AVATAR_RING = 2.5;
+const AVATAR_GAP = 3;
+
+const styles = StyleSheet.create({
+  updateBannerCard: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  updateBannerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs + 2,
+  },
+  updateBannerIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateBannerTextCol: {
+    flex: 1,
+  },
+  updateBannerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  updateBannerSubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    marginTop: 1,
+  },
+  updateNewChip: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  updateNewChipText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    color: '#FFFFFF',
+  },
+  updateBannerDismissBtn: {
+    padding: 6,
+    marginLeft: 4,
+  },
+  container: {
+    flex: 1,
+  },
+  navHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 0,
+  },
+  backBtn: {
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
+    borderRadius: PortalTouchTargets.compact / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
+  },
+  settingsBtn: {
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
+    borderRadius: PortalTouchTargets.compact / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xxl,
+  },
+
+  // 1. Identity Hero Section (Unboxed & Breathable)
+  heroSection: {
+    alignItems: 'center',
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+    marginBottom: Spacing.xs,
+  },
+  pinSection: {
+    paddingVertical: Spacing.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.xxl,
+  },
+
+  // 2. Hero Identity: photo, then name, the two largest things on the screen.
+  // A soft ring with a gap sets the photo apart from the page.
+  avatarRing: {
+    position: 'relative',
+    width: AVATAR_SIZE + (AVATAR_RING + AVATAR_GAP) * 2,
+    height: AVATAR_SIZE + (AVATAR_RING + AVATAR_GAP) * 2,
+    borderRadius: (AVATAR_SIZE + (AVATAR_RING + AVATAR_GAP) * 2) / 2,
+    borderWidth: AVATAR_RING,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  avatarBadge: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  avatarText: {
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+    fontSize: 34,
+    letterSpacing: 0.5,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarUploadingOverlay: {
+    position: 'absolute',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: AVATAR_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroFullName: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.hero),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.hero), 'display'),
+    letterSpacing: -0.3,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  heroHandle: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  heroTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm + 2,
+  },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    minHeight: 48,
+  },
+  editProfileText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
+  },
+  sectionTitle: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
+    marginBottom: Spacing.sm,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
+    minHeight: 72,
+    gap: Spacing.md,
+  },
+  addressTextCol: { flex: 1, minWidth: 0 },
+  addressLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
+    marginBottom: 4,
+  },
+  addressDescription: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+  },
+  groupSection: { marginBottom: Spacing.xl },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 76,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  menuIconBadge: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTextCol: {
+    flex: 1,
+    marginLeft: Spacing.md,
+    marginRight: Spacing.xs,
+  },
+  menuTitle: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
+    marginBottom: 2,
+  },
+  menuSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
+  },
+  menuRightCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  menuValueText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
+  },
+
+  // 6. Sign Out Section
+  logoutSection: {
+    marginBottom: Spacing.lg,
+    alignItems: 'flex-start',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    minHeight: 48,
+    paddingVertical: 12,
+  },
+  logoutBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'label'),
+  },
+  versionFootnote: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
+    textAlign: 'center',
+  },
+
+  // Photo Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  photoModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: Spacing.lg,
+  },
+  photoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  photoModalTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
+  },
+  photoModalSub: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    marginBottom: Spacing.md,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+  },
+  photoModalOptions: {
+    gap: 8,
+  },
+  photoOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    minHeight: PortalTouchTargets.compact,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  photoOptionText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'label'),
+  },
+});

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useRateConfig } from '../hooks/useRateConfig';
-import { BorderRadius, FontFamily, FontSizes, Spacing, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, BorderRadius, FontFamily, Spacing, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 
 export interface CustomerHelpModalProps {
   visible: boolean;
@@ -44,8 +44,8 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
                 <HelpCircle size={20} color={colors.textGray} />
               </View>
               <View>
-                <Text style={[styles.modalTitle, { color: colors.textDark }]}>Sugo Express Help</Text>
-                <Text style={[styles.modalSubtitle, { color: colors.textGray }]}>Customer Guide & FAQ</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalTitle, { color: colors.textDark }]}>Sugo Express Help</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalSubtitle, { color: colors.textGray }]}>Customer Guide & FAQ</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -67,16 +67,16 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
             <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.sectionHeaderRow}>
                 <Sparkles size={16} color={colors.primary} />
-                <Text style={[styles.sectionHeading, { color: colors.textDark }]}>How Sugo Express Works</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionHeading, { color: colors.textDark }]}>How Sugo Express Works</Text>
               </View>
 
               <View style={styles.stepRow}>
                 <View style={[styles.stepNumberBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>1</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepNumberText, { color: colors.onPrimary }]}>1</Text>
                 </View>
                 <View style={styles.stepDetails}>
-                  <Text style={[styles.stepTitle, { color: colors.textDark }]}>Choose Category & List Items</Text>
-                  <Text style={[styles.stepDesc, { color: colors.textGray }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepTitle, { color: colors.textDark }]}>Choose Category & List Items</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepDesc, { color: colors.textGray }]}>
                     Select your store type (Groceries, Pharmacy, Food, etc.) and list the items you need bought.
                   </Text>
                 </View>
@@ -84,11 +84,11 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
 
               <View style={styles.stepRow}>
                 <View style={[styles.stepNumberBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>2</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepNumberText, { color: colors.onPrimary }]}>2</Text>
                 </View>
                 <View style={styles.stepDetails}>
-                  <Text style={[styles.stepTitle, { color: colors.textDark }]}>Dispatcher Reviews & Assigns Rider</Text>
-                  <Text style={[styles.stepDesc, { color: colors.textGray }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepTitle, { color: colors.textDark }]}>Dispatcher Reviews & Assigns Rider</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepDesc, { color: colors.textGray }]}>
                     A dispatcher confirms your order via in-app chat, calculates transparent rates, and assigns a verified rider.
                   </Text>
                 </View>
@@ -96,11 +96,11 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
 
               <View style={styles.stepRow}>
                 <View style={[styles.stepNumberBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>3</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepNumberText, { color: colors.onPrimary }]}>3</Text>
                 </View>
                 <View style={styles.stepDetails}>
-                  <Text style={[styles.stepTitle, { color: colors.textDark }]}>Pay on Arrival (Cash on Delivery)</Text>
-                  <Text style={[styles.stepDesc, { color: colors.textGray }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepTitle, { color: colors.textDark }]}>Pay on Arrival (Cash on Delivery)</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.stepDesc, { color: colors.textGray }]}>
                     Inspect your items upon arrival and pay the rider directly via Cash on Delivery.
                   </Text>
                 </View>
@@ -111,22 +111,22 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
             <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.sectionHeaderRow}>
                 <Banknote size={16} color="#10B981" />
-                <Text style={[styles.sectionHeading, { color: colors.textDark }]}>Transparent Delivery Pricing</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionHeading, { color: colors.textDark }]}>Transparent Delivery Pricing</Text>
               </View>
 
               <View style={styles.pricingRow}>
-                <Text style={[styles.pricingLabel, { color: colors.textMedium }]}>Base Delivery Fee (First 2.0 km)</Text>
-                <Text style={[styles.pricingValue, { color: colors.primary }]}>₱{Number(baseFee).toFixed(2)}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pricingLabel, { color: colors.textMedium }]}>Base Delivery Fee (First 2.0 km)</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pricingValue, { color: colors.primary }]}>₱{Number(baseFee).toFixed(2)}</Text>
               </View>
 
               <View style={styles.pricingRow}>
-                <Text style={[styles.pricingLabel, { color: colors.textMedium }]}>Excess Distance Rate</Text>
-                <Text style={[styles.pricingValue, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pricingLabel, { color: colors.textMedium }]}>Excess Distance Rate</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pricingValue, { color: colors.textDark }]}>
                   ₱{Number(rateConfig?.perKmRate ?? 10).toFixed(2)} / km
                 </Text>
               </View>
 
-              <Text style={[styles.pricingNote, { color: colors.textLight }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.pricingNote, { color: colors.textLight }]}>
                 * Item costs are reimbursed at actual store receipt value upon delivery.
               </Text>
             </View>
@@ -135,19 +135,19 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
             <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.sectionHeaderRow}>
                 <MapPin size={16} color={colors.primary} />
-                <Text style={[styles.sectionHeading, { color: colors.textDark }]}>Coverage & Service Hours</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionHeading, { color: colors.textDark }]}>Coverage & Service Hours</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Clock size={14} color={colors.textGray} />
-                <Text style={[styles.infoText, { color: colors.textMedium }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoText, { color: colors.textMedium }]}>
                   Operating Daily: <Text style={{ fontFamily: FontFamily.bold, color: colors.textDark }}>7:00 AM – 9:00 PM</Text>
                 </Text>
               </View>
 
               <View style={styles.infoRow}>
                 <ShieldCheck size={14} color="#10B981" />
-                <Text style={[styles.infoText, { color: colors.textMedium }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoText, { color: colors.textMedium }]}>
                   Service Area: <Text style={{ fontFamily: FontFamily.bold, color: colors.textDark }}>Tacurong City & Immediate Vicinities</Text>
                 </Text>
               </View>
@@ -157,9 +157,9 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
             <View style={[styles.sectionCard, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.sectionHeaderRow}>
                 <PhoneCall size={16} color={colors.primary} />
-                <Text style={[styles.sectionHeading, { color: colors.textDark }]}>Need Order Assistance?</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionHeading, { color: colors.textDark }]}>Need Order Assistance?</Text>
               </View>
-              <Text style={[styles.supportDesc, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.supportDesc, { color: colors.textDark }]}>
                 If you have questions about your active order or need urgent assistance, select your errand from the Messages & Support tab to chat in real-time with your assigned dispatcher.
               </Text>
             </View>
@@ -172,7 +172,7 @@ export default function CustomerHelpModal({ visible, onClose }: CustomerHelpModa
               style={[styles.gotItButton, { backgroundColor: colors.primary }]}
               onPress={onClose}
             >
-              <Text style={styles.gotItButtonText}>Got It, Thanks!</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.gotItButtonText, { color: colors.onPrimary }]}>Got It, Thanks!</Text>
             </TouchableOpacity>
           </View>
     </TrueBottomSheet>
@@ -215,12 +215,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
   },
   modalSubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   closeButton: {
     width: 30,
@@ -249,8 +251,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   sectionHeading: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   stepRow: {
     flexDirection: 'row',
@@ -267,22 +270,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stepNumberText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   stepDetails: {
     flex: 1,
   },
   stepTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: 2,
   },
   stepDesc: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    lineHeight: 14,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   pricingRow: {
     flexDirection: 'row',
@@ -291,16 +296,19 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   pricingLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   pricingValue: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   pricingNote: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginTop: 4,
     fontStyle: 'italic',
   },
@@ -311,13 +319,14 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   infoText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   supportDesc: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: 15,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   modalFooter: {
     paddingHorizontal: Spacing.md,
@@ -332,8 +341,9 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(46, 0.2),
   },
   gotItButtonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     color: '#FFFFFF',
   },
 });

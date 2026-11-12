@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { ShieldCheck, Check, Lock, RefreshCw, X } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, AuthFontSizes, scaledAuthFontSize, getAuthLineHeight, FontFamily, Spacing, BorderRadius, Shadows } from '../config/theme';
 
 interface RecaptchaModalProps {
   visible: boolean;
@@ -86,8 +86,8 @@ export default function RecaptchaModal({
                 <ShieldCheck size={28} color={colors.primary} />
               </View>
 
-              <Text style={[styles.title, { color: colors.textDark }]}>{title}</Text>
-              <Text style={[styles.subtitle, { color: colors.textGray }]}>{subtitle}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.title, { color: colors.textDark }]}>{title}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.subtitle, { color: colors.textGray }]}>{subtitle}</Text>
 
               {/* RECAPTCHA BOX */}
               <View
@@ -119,10 +119,10 @@ export default function RecaptchaModal({
                 </TouchableOpacity>
 
                 <View style={styles.recaptchaTextContainer}>
-                  <Text style={[styles.recaptchaLabel, { color: colors.textDark }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.recaptchaLabel, { color: colors.textDark }]}>
                     {isChecked ? 'Verification Confirmed' : "I'm not a robot"}
                   </Text>
-                  <Text style={[styles.recaptchaSub, { color: colors.textLight }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.recaptchaSub, { color: colors.textLight }]}>
                     Protected by reCAPTCHA Enterprise
                   </Text>
                 </View>
@@ -131,7 +131,7 @@ export default function RecaptchaModal({
                   <View style={[styles.miniLogoBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB' }]}>
                     <Lock size={12} color={colors.textGray} />
                   </View>
-                  <Text style={[styles.privacyText, { color: colors.textLight }]}>Privacy • Terms</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.privacyText, { color: colors.textLight }]}>Privacy • Terms</Text>
                 </View>
               </View>
 
@@ -142,7 +142,7 @@ export default function RecaptchaModal({
                   onPress={onClose}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.cancelBtnText, { color: colors.textDark }]}>Cancel</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cancelBtnText, { color: colors.textDark }]}>Cancel</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -158,7 +158,7 @@ export default function RecaptchaModal({
                   disabled={!isChecked}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.confirmBtnText}>Save Changes</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.confirmBtnText}>Save Changes</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -206,16 +206,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   title: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.lg,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     marginBottom: Spacing.lg,
   },
   recaptchaBox: {
@@ -241,12 +242,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recaptchaLabel: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
   },
   recaptchaSub: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs - 2,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
     marginTop: 2,
   },
   logoCol: {
@@ -261,8 +264,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   privacyText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: 8,
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
   },
   actionRow: {
     flexDirection: 'row',
@@ -278,8 +282,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
   confirmBtn: {
     flex: 1.4,
@@ -289,8 +294,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBtnText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
 });

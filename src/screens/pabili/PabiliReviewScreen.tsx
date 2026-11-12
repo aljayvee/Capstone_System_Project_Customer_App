@@ -1,4 +1,6 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useEffect, useRef, useState } from 'react';
+import { usePreventRemove } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowRight, ChevronLeft, MapPin, ShoppingBag } from 'lucide-react-native';
@@ -14,7 +16,9 @@ import {
   type DraftRow,
 } from '../../services/pabiliDraft';
 import { tidyItemLines } from '../../services/itemTidyService';
-import { submitPabili } from '../../services/pabiliSubmit';
+import { pabiliSubmissionStore } from '../../services/pabiliSubmission';
+import { usePabiliSubmission } from '../../hooks/usePabiliSubmission';
+import SubmissionFeedback from '../../components/pabili/SubmissionFeedback';
 import { fetchQuote, type FeeQuote } from '../../services/quoteService';
 import { showAppAlert } from '../../services/alertModal';
 import { toUserMessage } from '../../services/errorMessages';
@@ -49,6 +53,7 @@ const ROWS_BEFORE_FOLD = 5;
  * is exactly how every order went before this.
  */
 export default function PabiliReviewScreen({ route, navigation }: RootStackScreenProps<'PabiliReview'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user } = route.params;
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
@@ -58,25 +63,54 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
   const [tidyingIds, setTidyingIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [quote, setQuote] = useState<FeeQuote | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const submittingRef = useRef(false);
+  const submission = usePabiliSubmission(user.id);
+  const [leavingForOrders, setLeavingForOrders] = useState(false);
+  const isSubmitting = submission.phase === 'sending';
+  const locked = isSubmitting || submission.phase === 'unconfirmed';
+  usePreventRemove(locked && !leavingForOrders, () => {});
   const tidyAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!leavingForOrders && (submission.phase !== 'confirmed' || !submission.errandId)) return;
+    const timer = setTimeout(() => {
+      if (leavingForOrders) {
+        navigation.reset({ index: 0, routes: [{ name: 'CustomerPortal', params: { user, initialTab: 'errands' } }] });
+      } else {
+        showAppAlert('Order submitted', 'Your request has been sent for dispatcher review.');
+        navigation.reset({ index: 1, routes: [
+          { name: 'CustomerPortal', params: { user, initialTab: 'errands' } },
+          { name: 'ErrandDetails', params: { user, errandId: submission.errandId } },
+        ] });
+        pabiliSubmissionStore.acknowledge();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [submission.phase, submission.errandId, leavingForOrders, navigation, user]);
+
+  useEffect(() => {
+    if (submission.phase === 'rejected') {
+      showAppAlert('Check your order', submission.storageFailed
+        ? 'We couldn’t save your order safely. Check your device storage and try again.'
+        : toUserMessage(submission.error, 'errand'));
+    }
+  }, [submission.phase, submission.error, submission.storageFailed]);
 
   // Android Three-Key Navigation: Back button safely returns to previous screen preserving draft
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const onBackPress = () => {
+      if (locked) return true;
       navigation.goBack();
       return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [navigation]);
+  }, [navigation, locked]);
 
   // ── the model reads the lines the rules would not ─────────────────────
   useEffect(() => {
     const current = pabiliDraftStore.getSnapshot();
-    if (!current) return;
+    if (!current || current.submission) return;
     const waiting = rowsAwaitingTidy(current);
     if (waiting.length === 0) return;
 
@@ -89,7 +123,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
       controller.signal
     ).then((answer) => {
       if (controller.signal.aborted) return;
-      pabiliDraftStore.update((d) => applyTidy(d, ids, answer?.available ?? false, answer?.results ?? []));
+      pabiliDraftStore.update((d) => applyTidy(d, ids, answer?.available ?? false, answer?.results ?? [], waiting.map(({ row }) => row)));
       setTidyingIds([]);
     });
     return () => controller.abort();
@@ -117,38 +151,24 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
 
   const send = async () => {
     const current = pabiliDraftStore.getSnapshot();
-    if (submittingRef.current || !current || !location) return;
-    submittingRef.current = true;
-    setIsSubmitting(true);
+    if (isSubmitting || !current || (!current.submission && !location)) return;
+    const longCategory = current.categories.find((cat) => current.rowsByCategory[cat]?.some((row) => row.name.length > 120));
+    if (longCategory && !current.submission) {
+      showAppAlert('Check this item', 'Please split the request into separate items or shorten the item name to 120 characters. Keep instructions in the note.');
+      navigation.navigate('PabiliStoreEditor', { user, category: longCategory });
+      return;
+    }
     // A read still in flight is dropped; the rules' version goes.
     tidyAbortRef.current?.abort();
     setTidyingIds([]);
 
-    pabiliDraftStore.update((d) => ({ ...d, submitStartedAt: Date.now() }));
-    await pabiliDraftStore.flush();
-    try {
-      const errandId = await submitPabili(current, location, user.id);
-      await pabiliDraftStore.clear();
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'CustomerPortal', params: { user } },
-          { name: 'WaitingForDispatcher', params: { user, errandId } },
-        ],
-      });
-    } catch (err: any) {
-      pabiliDraftStore.update((d) => ({ ...d, submitStartedAt: null }));
-      showAppAlert('Errand not sent', toUserMessage(err, 'errand'));
-    } finally {
-      submittingRef.current = false;
-      setIsSubmitting(false);
-    }
+    void pabiliSubmissionStore.start(String(user.id), location);
   };
 
   // ── empty: nothing to review ──────────────────────────────────────────
   if (!draft || units === 0) {
     return (
-      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }]} testID="review-empty">
+      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} testID="review-empty">
         <ShoppingBag size={32} color={colors.textLight} />
         <Text style={[styles.title, { color: colors.textDark, textAlign: 'center' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
           Your list is empty
@@ -157,7 +177,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
           Add what you need from each store, then come back here to send it.
         </Text>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, alignSelf: 'stretch' }]} onPress={() => navigation.goBack()}>
-          <Text style={styles.primaryText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Add items</Text>
+          <Text style={[styles.primaryText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Add items</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -166,6 +186,8 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
   const tidyingSet = new Set(tidyingIds);
   const sendState = isSubmitting
     ? 'sending'
+    : draft.submission
+    ? 'ready'
     : locationLoading
     ? 'locating'
     : locationFailed
@@ -175,13 +197,14 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
     : 'ready';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.navRow}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={[styles.navRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
           style={styles.backBtn}
           testID="review-back"
+          disabled={locked}
           accessibilityLabel="Back to your stores"
         >
           <ChevronLeft size={22} color={colors.textDark} />
@@ -192,14 +215,14 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
         <StepPills step={3} storeCount={draft.categories.length} />
 
         <DeliveryLocationCard
-          location={location}
-          loading={locationLoading}
-          failed={locationFailed}
-          onChange={() => navigation.navigate('CustomerLocation', { user })}
+          location={draft.submission?.location ?? location}
+          loading={!draft.submission && locationLoading}
+          failed={!draft.submission && locationFailed}
+          onChange={() => { if (!locked) navigation.navigate('CustomerLocation', { user }); }}
           onRetry={retry}
         />
 
@@ -210,13 +233,14 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
           return (
             <View key={cat} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, Shadows.soft]} testID={`review-store-${cat}`}>
               <View style={styles.storeHeader}>
-                <Text style={[styles.cardTitle, { color: colors.textDark, flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                <Text style={[styles.cardTitle, { color: colors.textDark, flex: 1 }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                   {cat}
                 </Text>
                 <TouchableOpacity
                   onPress={() => navigation.navigate('PabiliStoreEditor', { user, category: cat })}
                   hitSlop={PortalTouchTargets.compactHitSlop}
                   testID={`edit-store-${cat}`}
+                  disabled={locked}
                 >
                   <Text style={[styles.smallBtnText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Edit</Text>
                 </TouchableOpacity>
@@ -240,7 +264,10 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
                     <ShimmerWave height={16} width="70%" />
                   </View>
                 ) : (
-                  <View key={row.id} style={[styles.tableRow, { borderBottomColor: colors.border }]} testID={`review-row-${row.id}`}>
+                  <TouchableOpacity key={row.id} style={[styles.tableRow, { borderBottomColor: colors.border }]} testID={`review-row-${row.id}`}
+                    disabled={locked}
+                    accessibilityRole="button" accessibilityLabel={`Edit ${row.name}`} accessibilityHint="Check the item, quantity, unit and note"
+                    onPress={() => navigation.navigate('PabiliStoreEditor', { user, category: cat })}>
                     <Text style={[styles.cell, styles.qtyCell, styles.qtyValue, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                       {row.quantity}
                     </Text>
@@ -253,11 +280,16 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
                           {`Note: ${row.notes}`}
                         </Text>
                       ) : null}
+                      {row.review && row.review.tidy !== 'applied' ? (
+                        <Text style={[styles.noteText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                          Check item, quantity, unit and note
+                        </Text>
+                      ) : null}
                     </View>
                     <Text style={[styles.cell, styles.sizeCell, { color: row.size ? colors.textDark : colors.textLight }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                       {row.size ?? 'Any'}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 )
               )}
               {!open ? (
@@ -280,8 +312,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
             borderTopColor: colors.border,
             paddingBottom: Math.max(insets.bottom, Spacing.md),
           },
-          Shadows.liftedUp,
-        ]}
+          Shadows.liftedUp, pageLayout.gutterStyle]}
       >
         <View style={styles.summaryRow}>
           <Text style={[styles.summary, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
@@ -342,6 +373,9 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
           )}
         </TouchableOpacity>
       </View>
+      <SubmissionFeedback state={leavingForOrders ? { ...submission, phase: 'idle' } : submission}
+        onRetry={() => { void pabiliSubmissionStore.start(String(user.id)); }}
+        onViewOrders={() => setLeavingForOrders(true)} />
     </SafeAreaView>
   );
 }
@@ -351,7 +385,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm },
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 10 },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(17), lineHeight: getPortalLineHeight(17, 'heading') },
+  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading), lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading') },
   scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xl * 2 },
   title: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.title) },
   caption: {

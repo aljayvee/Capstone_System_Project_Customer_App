@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ErrandSummary } from '../hooks/useActiveErrands';
+import { rememberErrandReferences } from '../utils/formatErrandId';
 
 const CACHE_KEY = '@sugo_customer_last_active_errand';
 
@@ -40,6 +41,7 @@ export async function readCachedActiveErrand(): Promise<CachedActiveErrand | nul
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedActiveErrand;
     if (!parsed?.errand?.id) return null;
+    rememberErrandReferences(parsed.errand);
     return parsed;
   } catch {
     return null;

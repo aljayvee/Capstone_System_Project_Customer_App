@@ -64,16 +64,16 @@ describe('what counts as active, and its fee', () => {
 describe('the Active Errands screen', () => {
   it('lists two or more as cards: the errand ID first, then the estimated fee and the status', async () => {
     serverHas([
-      errand('aaaa-0001', 'PENDING', { grandTotal: 0, totalCost: 0 }),
-      errand('bbbb-0002', 'IN_TRANSIT', { grandTotal: 315.5 }),
+      errand('aaaa-0001', 'PENDING', { grandTotal: 0, totalCost: 0, referenceNo: '261019-A0001-0001' }),
+      errand('bbbb-0002', 'IN_TRANSIT', { grandTotal: 315.5, referenceNo: '261019-B0002-0002' }),
       errand('cccc-0003', 'COMPLETED', { grandTotal: 99 }),
     ]);
     const res: any = await draw();
 
     expect(await res.findByTestId('active-errand-aaaa-0001')).toBeTruthy();
     expect(apiClient.get).toHaveBeenCalledWith('/customers/4/transactions');
-    expect(res.getByText('SGO-AA0001')).toBeTruthy();
-    expect(res.getByText('SGO-BB0002')).toBeTruthy();
+    expect(res.getByText('261019-A0001-0001')).toBeTruthy();
+    expect(res.getByText('261019-B0002-0002')).toBeTruthy();
     // Finished errands are not here.
     expect(res.queryByTestId('active-errand-cccc-0003')).toBeNull();
     expect(res.getByTestId('active-errand-fee-aaaa-0001').props.children).toBe('₱50.00');
@@ -82,9 +82,9 @@ describe('the Active Errands screen', () => {
     expect(res.getByText('In Transit')).toBeTruthy();
     // Heading before fee before status, on each card.
     const order = res
-      .getAllByText(/^(SGO-BB0002|₱315\.50|In Transit)$/)
+      .getAllByText(/^(261019-B0002-0002|₱315\.50|In Transit)$/)
       .map((el: any) => ([] as unknown[]).concat(el.props.children).join(''));
-    expect(order).toEqual(['SGO-BB0002', '₱315.50', 'In Transit']);
+    expect(order).toEqual(['261019-B0002-0002', '₱315.50', 'In Transit']);
   });
 
   it('opens an errand\'s details from its ">" and from the card', async () => {

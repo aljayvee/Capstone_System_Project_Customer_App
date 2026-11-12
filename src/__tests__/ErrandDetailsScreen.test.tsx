@@ -61,6 +61,7 @@ const mockUser = {
 const mockActiveErrand = {
   id: 42,
   orderId: 'SGO-2E2246',
+  referenceNo: '261019-E2246-0007',
   status: 'PENDING',
   categories: 'Supermarket & Grocery',
   items: [
@@ -92,9 +93,9 @@ describe('ErrandDetailsScreen', () => {
       />
     );
 
-    // Verified: Displays "Errand SGO-2E2246" without "#"
-    expect(res.getByText('Errand SGO-2E2246')).toBeTruthy();
-    expect(res.queryByText('Errand #SGO-2E2246')).toBeNull();
+    // Verified: Displays "Errand 261019-E2246-0007" without "#"
+    expect(res.getByText('Errand 261019-E2246-0007')).toBeTruthy();
+    expect(res.queryByText('Errand #261019-E2246-0007')).toBeNull();
     expect(res.getByText('Transaction Summary')).toBeTruthy();
 
     // Section headers

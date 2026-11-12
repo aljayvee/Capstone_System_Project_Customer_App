@@ -1,0 +1,88 @@
+699de97465c0b8738ad5226a4fd14c49
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useSyncState = useSyncState;
+var React = _interopRequireWildcard(require("react"));
+var _useLatestCallback = _interopRequireDefault(require("use-latest-callback"));
+var _deepFreeze = require("./deepFreeze.js");
+var createStore = getInitialState => {
+  var listeners = [];
+  var initialized = false;
+  var state;
+  var getState = () => {
+    if (initialized) {
+      return state;
+    }
+    initialized = true;
+    state = (0, _deepFreeze.deepFreeze)(getInitialState());
+    return state;
+  };
+  var isBatching = false;
+  var didUpdate = false;
+  var setState = newState => {
+    state = (0, _deepFreeze.deepFreeze)(newState);
+    if (isBatching) {
+      didUpdate = true;
+    } else {
+      listeners.forEach(listener => listener());
+    }
+  };
+  var subscribe = callback => {
+    listeners.push(callback);
+    return () => {
+      var index = listeners.indexOf(callback);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    };
+  };
+  var batchUpdates = callback => {
+    isBatching = true;
+    callback();
+    isBatching = false;
+    if (didUpdate) {
+      didUpdate = false;
+      listeners.forEach(listener => listener());
+    }
+  };
+  return {
+    getState,
+    setState,
+    batchUpdates,
+    subscribe
+  };
+};
+function useSyncState(getInitialState) {
+  var store = React.useRef(createStore(getInitialState)).current;
+  var state = React.useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  React.useDebugValue(state);
+  var pendingUpdatesRef = React.useRef([]);
+  var scheduleUpdate = (0, _useLatestCallback.default)(callback => {
+    pendingUpdatesRef.current.push(callback);
+  });
+  var flushUpdates = (0, _useLatestCallback.default)(() => {
+    var pendingUpdates = pendingUpdatesRef.current;
+    pendingUpdatesRef.current = [];
+    if (pendingUpdates.length !== 0) {
+      store.batchUpdates(() => {
+        pendingUpdates.reverse();
+        for (var update of pendingUpdates) {
+          update();
+        }
+      });
+    }
+  });
+  return {
+    state,
+    getState: store.getState,
+    setState: store.setState,
+    scheduleUpdate,
+    flushUpdates
+  };
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIl91c2VMYXRlc3RDYWxsYmFjayIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJfZGVlcEZyZWV6ZSIsImNyZWF0ZVN0b3JlIiwiZ2V0SW5pdGlhbFN0YXRlIiwibGlzdGVuZXJzIiwiaW5pdGlhbGl6ZWQiLCJzdGF0ZSIsImdldFN0YXRlIiwiZGVlcEZyZWV6ZSIsImlzQmF0Y2hpbmciLCJkaWRVcGRhdGUiLCJzZXRTdGF0ZSIsIm5ld1N0YXRlIiwiZm9yRWFjaCIsImxpc3RlbmVyIiwic3Vic2NyaWJlIiwiY2FsbGJhY2siLCJwdXNoIiwiaW5kZXgiLCJpbmRleE9mIiwic3BsaWNlIiwiYmF0Y2hVcGRhdGVzIiwidXNlU3luY1N0YXRlIiwic3RvcmUiLCJ1c2VSZWYiLCJjdXJyZW50IiwidXNlU3luY0V4dGVybmFsU3RvcmUiLCJ1c2VEZWJ1Z1ZhbHVlIiwicGVuZGluZ1VwZGF0ZXNSZWYiLCJzY2hlZHVsZVVwZGF0ZSIsInVzZUxhdGVzdENhbGxiYWNrIiwiZmx1c2hVcGRhdGVzIiwicGVuZGluZ1VwZGF0ZXMiLCJsZW5ndGgiLCJyZXZlcnNlIiwidXBkYXRlIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL3VzZVN5bmNTdGF0ZS50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7O0FBQUEsSUFBQUEsS0FBQSxHQUFBQyx1QkFBQSxDQUFBQyxPQUFBO0FBQ0EsSUFBQUMsa0JBQUEsR0FBQUMsc0JBQUEsQ0FBQUYsT0FBQTtBQUVBLElBQUFHLFdBQUEsR0FBQUgsT0FBQTtBQUVBLElBQU1JLFdBQVcsR0FBUUMsZUFBd0IsSUFBSztFQUNwRCxJQUFNQyxTQUF5QixHQUFHLEVBQUU7RUFFcEMsSUFBSUMsV0FBVyxHQUFHLEtBQUs7RUFDdkIsSUFBSUMsS0FBUTtFQUVaLElBQU1DLFFBQVEsR0FBR0EsQ0FBQSxLQUFNO0lBQ3JCLElBQUlGLFdBQVcs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

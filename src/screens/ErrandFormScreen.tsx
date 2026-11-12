@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -33,15 +34,14 @@ import StoreModeToggle, { type StoreMode } from '../components/pabili/StoreModeT
 import EstablishmentPicker from '../components/pabili/EstablishmentPicker';
 import type { Establishment } from '../services/establishments';
 import { toPickedStores } from '../services/pabiliDraft';
+import { useStoresAllowed } from '../services/storeLimit';
 import {
   FontFamily,
-  FontSizes,
   Spacing,
   BorderRadius,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   moderateScale,
   PortalFontSizes,
   scaledPortalFontSize,
@@ -61,6 +61,7 @@ const getCategoryIcon = (categoryName: string) => {
 };
 
 export default function ErrandFormScreen({ route, navigation }: RootStackScreenProps<'ErrandForm'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user, reorderFrom, initialMode } = route.params || {};
   const { colors, isDark } = useThemeColor();
   const { isTablet } = useResponsive();
@@ -123,17 +124,19 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
     };
   }, []);
 
+  const maxStores = useStoresAllowed();
+
   const toggleCategory = (catName: string) => {
     setPabiliError(null);
     setValidationError(null);
     if (selectedCats.includes(catName)) {
       setSelectedCats(selectedCats.filter((c) => c !== catName));
     } else {
-      if (selectedCats.length >= 3) {
-        const msg = 'You can select up to 3 merchant categories only for a single errand.';
+      if (selectedCats.length >= maxStores) {
+        const msg = `You can select up to ${maxStores} merchant categories only for a single errand.`;
         setPabiliError(msg);
         showAppAlert({
-          title: 'Category Limit (Max 3)',
+          title: `Category Limit (Max ${maxStores})`,
           message: msg,
           variant: 'warning',
         });
@@ -150,10 +153,10 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
       setPickedStores(pickedStores.filter((s) => s.key !== store.key));
       return;
     }
-    if (pickedStores.length >= 3) {
-      const msg = 'You can pick up to 3 stores for a single errand.';
+    if (pickedStores.length >= maxStores) {
+      const msg = `You can pick up to ${maxStores} stores for a single errand.`;
       setPabiliError(msg);
-      showAppAlert({ title: 'Store Limit (Max 3)', message: msg, variant: 'warning' });
+      showAppAlert({ title: `Store Limit (Max ${maxStores})`, message: msg, variant: 'warning' });
       return;
     }
     setPickedStores([...pickedStores, store]);
@@ -187,8 +190,8 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -203,13 +206,13 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
         <View style={styles.navHeaderRightPlaceholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
         <View style={styles.stepperContainer}>
           <View style={[styles.stepPillActive, { backgroundColor: colors.primary }]}>
             <View style={styles.stepNumCircleActive}>
-              <Text style={styles.stepNumActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>1</Text>
+              <Text style={[styles.stepNumActive, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>1</Text>
             </View>
-            <Text style={styles.stepTextActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Choose Stores</Text>
+            <Text style={[styles.stepTextActive, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Choose Stores</Text>
           </View>
           <View style={[styles.stepperLine, { backgroundColor: colors.border }]} />
           <View style={[styles.stepPillInactive, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray }]}>
@@ -262,7 +265,7 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
               ]}
               maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
             >
-              {chosenCount === 0 ? 'Pick up to 3' : `${chosenCount} of 3 chosen`}
+              {chosenCount === 0 ? `Pick up to ${maxStores}` : `${chosenCount} of ${maxStores} chosen`}
             </Text>
           </View>
         </View>
@@ -280,7 +283,7 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
         ) : categoriesLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.loadingText, { color: colors.textGray }]}>
               Loading merchant categories from server...
             </Text>
           </View>
@@ -329,7 +332,7 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
                         styles.categoryCardName,
                         { color: isSelected ? colors.primary : colors.textDark },
                       ]}
-                      numberOfLines={1}
+                      numberOfLines={2}
                       maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
                     >
                       {cat.name}
@@ -422,8 +425,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: PortalTouchTargets.compact,

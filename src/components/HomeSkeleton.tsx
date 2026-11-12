@@ -98,8 +98,8 @@ export function CategoriesBentoSkeleton() {
       <View style={styles.verticalCategoryListSkeleton}>
         {[1, 2, 3].map((item) => (
           <View key={item} style={styles.verticalCategoryItemSkeleton}>
-            <ShimmerWave width="100%" height={moderateScale(176, 0.25)} borderRadius={BorderRadius.lg} />
-            <ShimmerWave width="55%" height={16} borderRadius={4} style={{ marginTop: 8 }} />
+            <ShimmerWave width="100%" height={moderateScale(132, 0.25)} borderRadius={BorderRadius.lg} />
+            <ShimmerWave width="55%" height={16} borderRadius={4} style={{ marginTop: 10 }} />
             <ShimmerWave width="80%" height={12} borderRadius={4} style={{ marginTop: 5 }} />
           </View>
         ))}
@@ -129,7 +129,7 @@ export function RecentActivitySkeleton() {
           style={[
             styles.recentRowItemSkeleton,
             {
-              borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+              borderBottomColor: colors.border,
             },
           ]}
         >
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   verticalCategoryListSkeleton: {
-    gap: Spacing.lg,
+    gap: Spacing.xl,
   },
   verticalCategoryItemSkeleton: {
     width: '100%',
@@ -242,10 +242,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 14,
-    minHeight: 56,
-    borderBottomWidth: 1,
+    paddingVertical: Spacing.lg,
+    minHeight: 72,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   recentRowLeft: {
     flex: 1,

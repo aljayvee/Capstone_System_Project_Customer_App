@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { apiClient } from '../services/apiClient';
 import { toUserMessage } from '../services/errorMessages';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, AuthFontSizes, scaledAuthFontSize, getAuthLineHeight, FontSizes, FontFamily, Spacing } from '../config/theme';
 
 interface SessionExpiredSheetProps {
   visible: boolean;
@@ -109,22 +109,22 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
             <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
               Still you?
             </Text>
-            <Text style={[styles.description, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.description, { color: colors.textGray }]}>
               You have been away a while. Enter your password to pick up exactly where you left off.
             </Text>
 
             {/* User Chip */}
             <View style={[styles.userChip, { backgroundColor: colors.bgGray, borderColor: colors.border }]}>
               <View style={[styles.avatarBadge, { backgroundColor: colors.border }]}>
-                <Text style={[styles.avatarText, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.avatarText, { color: colors.textDark }]}>
                   {user?.firstName?.[0] || user?.name?.[0] || 'C'}
                 </Text>
               </View>
               <View style={styles.userTextCol}>
-                <Text style={[styles.userName, { color: colors.textDark }]} numberOfLines={1}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.userName, { color: colors.textDark }]} numberOfLines={1}>
                   {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.name || 'Customer'}
                 </Text>
-                <Text style={[styles.userSub, { color: colors.textLight }]} numberOfLines={1}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.userSub, { color: colors.textLight }]} numberOfLines={1}>
                   {user?.phone || user?.email || 'Logged in'}
                 </Text>
               </View>
@@ -132,8 +132,9 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
 
             {/* Input */}
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textDark }]}>Password</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.label, { color: colors.textDark }]}>Password</Text>
               <TextInput
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.input}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -154,7 +155,7 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
             {error ? (
               <View style={[styles.errorContainer, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
                 <AlertCircle size={13} color={colors.danger} />
-                <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
               </View>
             ) : null}
 
@@ -164,7 +165,7 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
                 onPress={handleFullLogout}
                 style={[styles.secondaryButton, { borderColor: colors.border }]}
               >
-                <Text style={[styles.secondaryButtonText, { color: colors.textGray }]}>Sign Out</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.secondaryButtonText, { color: colors.textGray }]}>Sign Out</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -173,11 +174,11 @@ export const SessionExpiredSheet: React.FC<SessionExpiredSheetProps> = ({
                 style={[styles.primaryButton, { backgroundColor: colors.primary }]}
               >
                 {isLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
                 ) : (
                   <>
-                    <LogIn size={15} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>Resume</Text>
+                    <LogIn size={15} color={colors.onPrimary} />
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Resume</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -227,13 +228,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: FontSizes.lg,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
     fontFamily: FontFamily.bold,
   },
   description: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     fontFamily: FontFamily.regular,
-    lineHeight: 18,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
   },
   userChip: {
     flexDirection: 'row',
@@ -259,26 +261,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: FontSizes.xs,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     fontFamily: FontFamily.semibold,
   },
   userSub: {
-    fontSize: 10,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     fontFamily: FontFamily.regular,
   },
   formGroup: {
     gap: 4,
   },
   label: {
-    fontSize: FontSizes.xs,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
     fontFamily: FontFamily.semibold,
   },
   input: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     height: 44,
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,
-    fontSize: FontSizes.sm,
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     fontFamily: FontFamily.regular,
   },
   errorContainer: {
@@ -290,7 +296,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: FontSizes.xs,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     fontFamily: FontFamily.medium,
     flex: 1,
   },
@@ -309,7 +316,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    fontSize: FontSizes.xs,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
     fontFamily: FontFamily.semibold,
   },
   primaryButton: {
@@ -322,8 +330,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   primaryButtonText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
     fontFamily: FontFamily.bold,
   },
 });

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +38,7 @@ import { LocationDraftPayload, SavedLocation } from './location/types';
 const MAX_LOCATIONS = 5;
 
 export default function CustomerLocationScreen({ route, navigation }: RootStackScreenProps<'CustomerLocation'> | any) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const user = route.params?.user || { id: 0, firstName: 'Customer' };
   const initialMode = route.params?.initialMode ?? 'list';
   const initialStep = (route.params?.initialStep as (1 | 2)) ?? 1;
@@ -170,9 +172,9 @@ export default function CustomerLocationScreen({ route, navigation }: RootStackS
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.responsiveWrapper}>
+      <View style={[styles.responsiveWrapper, pageLayout.frameStyle]}>
         {mode === 'list' && (
-          <View style={styles.navHeaderRow}>
+          <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
             <TouchableOpacity
               onPress={() => navigation?.goBack?.()}
               hitSlop={PortalTouchTargets.compactHitSlop}

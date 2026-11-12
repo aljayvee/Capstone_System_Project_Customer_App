@@ -242,11 +242,19 @@ describe('ForgotPasswordScreen', () => {
     expect(res.getByText('Forgot your password?')).toBeTruthy();
   });
 
-  it('returns to the login screen from the footer link', async () => {
+  it('returns to the login screen from the footer link by popping the stack', async () => {
     const res: any = await render(<ForgotPasswordScreen navigation={navigation} />);
 
     await fireEvent.press(res.getByTestId('forgot-login-link'));
 
-    expect(navigation.navigate).toHaveBeenCalledWith('Login');
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('returns to the login screen from the header back button at step 1', async () => {
+    const res: any = await render(<ForgotPasswordScreen navigation={navigation} />);
+
+    await fireEvent.press(res.getByTestId('forgot-back'));
+
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 });

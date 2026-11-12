@@ -21,6 +21,38 @@ export const Breakpoints = {
  */
 export const MAX_CONTENT_WIDTH = 580;
 
+/** Page margins are independent of spacing inside cards and controls. */
+export const PHONE_PAGE_GUTTER = 12;
+
+export interface PageLayoutOptions {
+  leftInset?: number;
+  rightInset?: number;
+  /** The enclosing SafeAreaView already consumes the horizontal insets. */
+  horizontalSafeAreaApplied?: boolean;
+  /** Preserve the screen's existing margin on tablets. */
+  tabletGutter?: number;
+}
+
+export function getPageLayout(width: number, options: PageLayoutOptions = {}) {
+  const leftInset = Math.max(0, options.leftInset ?? 0);
+  const rightInset = Math.max(0, options.rightInset ?? 0);
+  const safeWidth = Math.max(0, width - leftInset - rightInset);
+  const isPhone = width < Breakpoints.phablet;
+  const frameWidth = isPhone ? safeWidth : Math.min(safeWidth, MAX_CONTENT_WIDTH);
+  const gutter = isPhone ? PHONE_PAGE_GUTTER : (options.tabletGutter ?? 14);
+  return {
+    isPhone,
+    safeWidth,
+    frameWidth,
+    contentWidth: Math.max(0, frameWidth - gutter * 2),
+    gutter,
+    // A safe-area parent has already positioned the frame, but the physical
+    // safe width above still excludes its insets exactly once.
+    leftMargin: options.horizontalSafeAreaApplied ? 0 : leftInset,
+    rightMargin: options.horizontalSafeAreaApplied ? 0 : rightInset,
+  };
+}
+
 /**
  * Helper to clamp a number between min and max bounds.
  */

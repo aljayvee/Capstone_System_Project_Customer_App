@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, moderateScale } from '../config/theme';
 import { formatPeso } from '../utils/format';
 import type { FeeQuote, PaymentPlan } from '../services/quoteService';
 
@@ -211,14 +211,14 @@ const styles = StyleSheet.create({
     paddingTop: moderateScale(Spacing.xs + 2, 0.2),
     marginTop: moderateScale(Spacing.xs, 0.2),
   },
-  label: { fontFamily: FontFamily.regular, fontSize: scaledFontSize(FontSizes.xs + 0.5, 0.2), flexShrink: 1 },
-  value: { fontFamily: FontFamily.mono, fontSize: scaledFontSize(FontSizes.xs + 0.5, 0.2) },
-  totalLabel: { fontFamily: FontFamily.bold, fontSize: scaledFontSize(FontSizes.sm + 1, 0.2) },
-  totalValue: { fontFamily: FontFamily.monoBold, fontSize: scaledFontSize(FontSizes.sm + 1, 0.2) },
+  label: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.caption), flexShrink: 1 },
+  value: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.medium, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
+  totalLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
+  totalValue: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.price), 'price'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.price) },
   note: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(14, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     marginTop: Spacing.xs,
   },
   noteRow: { flexDirection: 'row' },

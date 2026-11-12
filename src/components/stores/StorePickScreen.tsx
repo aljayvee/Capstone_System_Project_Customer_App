@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +26,7 @@ import {
 } from '../../config/theme';
 
 /** A full-width card's photo: wide enough to read the shop front. */
-const IMAGE_HEIGHT = 150;
+const IMAGE_HEIGHT = 180;
 
 export interface StorePickScreenProps {
   user: any;
@@ -76,6 +77,7 @@ export function StorePickScreen({
   initialPicks,
   copy,
 }: StorePickScreenProps) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { colors, isDark } = useThemeColor();
   const { categories } = useMerchantCategories();
   const categoryImages = useCategoryImages(categories);
@@ -166,10 +168,10 @@ export function StorePickScreen({
   return (
     // The Proceed bar pads for the phone's navigation bar itself; without it the list does.
     <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.bgApp }]}
+      style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]}
       edges={picked.length > 0 ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
     >
-      <View style={styles.navHeaderRow}>
+      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -190,7 +192,7 @@ export function StorePickScreen({
 
       {limitError ? (
         <Text
-          style={[styles.limitErrorText, { color: colors.danger }]}
+          style={[styles.limitErrorText, { color: colors.danger }, pageLayout.gutterStyle]}
           maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
           testID={id('limit-error')}
         >
@@ -199,23 +201,22 @@ export function StorePickScreen({
       ) : null}
 
       {isLoading ? (
-        <View style={[styles.scrollContent, styles.list]} testID={id('screen-loading')}>
+        <View style={[styles.scrollContent, styles.list, pageLayout.gutterStyle]} testID={id('screen-loading')}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={styles.shimmerCard}>
               <ShimmerWave width="100%" height={IMAGE_HEIGHT} borderRadius={BorderRadius.lg} />
               <View style={styles.shimmerBody}>
-                <ShimmerWave height={15} width="60%" borderRadius={BorderRadius.sm} />
-                <ShimmerWave height={12} width="40%" borderRadius={BorderRadius.sm} />
+                <ShimmerWave height={12} width="60%" borderRadius={BorderRadius.sm} />
               </View>
             </View>
           ))}
         </View>
       ) : pages.status === 'error' ? (
-        <View style={styles.scrollContent}>
+        <View style={[styles.scrollContent, pageLayout.gutterStyle]}>
           {panel(id('screen-error'), copy.error, { label: 'Try again', onPress: pages.retry, Icon: RotateCw })}
         </View>
       ) : pages.items.length === 0 ? (
-        <View style={styles.scrollContent}>
+        <View style={[styles.scrollContent, pageLayout.gutterStyle]}>
           {pages.outsideServiceArea
             ? panel(id('screen-empty'), OUTSIDE_SERVICE_AREA_MESSAGE, {
                 label: 'Change location',
@@ -243,10 +244,11 @@ export function StorePickScreen({
               showRating={showRating}
               selectable
               selected={isPicked(item)}
+              presentation="photo-overlay"
             />
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
           showsVerticalScrollIndicator={false}
           // Near the end, the next page; not again on its own after a failure,
           // which waits for the footer's Try again.
@@ -289,8 +291,8 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   navHeaderRightPlaceholder: {
     width: PortalTouchTargets.compact,

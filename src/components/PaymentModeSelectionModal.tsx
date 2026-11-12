@@ -12,7 +12,7 @@ import {
   type PaymentMethodId,
 } from '../services/paymentMethodStrategy';
 import { canTransition, type PaymentSelectionState } from '../services/paymentSelectionState';
-import { FontSizes, FontWeights, Spacing, BorderRadius, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 
 interface BackendPaymentMode {
@@ -197,9 +197,9 @@ export const PaymentModeSelectionModal: React.FC<PaymentModeSelectionModalProps>
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <ActivityIndicator color={colors.onPrimary} size="small" />
                   ) : (
-                    <Text style={styles.primaryBtnText} maxFontSizeMultiplier={1.2}>Yes, this is final</Text>
+                    <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.2}>Yes, this is final</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -256,12 +256,12 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.xs },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  title: { fontSize: scaledFontSize(FontSizes.md, 0.2), fontWeight: FontWeights.bold },
-  subtitle: { fontSize: scaledFontSize(FontSizes.xs, 0.2), marginBottom: Spacing.md },
+  title: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'), fontSize: scaledPortalFontSize(PortalFontSizes.title), fontFamily: FontFamily.bold },
+  subtitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.caption), marginBottom: Spacing.md },
   confirmBox: { borderRadius: BorderRadius.md, padding: Spacing.md },
-  confirmLabel: { fontSize: scaledFontSize(FontSizes.xs, 0.2) },
-  confirmValue: { fontSize: scaledFontSize(FontSizes.lg, 0.2), fontWeight: FontWeights.extrabold, marginTop: 2, marginBottom: Spacing.xs },
-  confirmQuestion: { fontSize: scaledFontSize(FontSizes.xs + 1, 0.2), marginBottom: Spacing.sm },
+  confirmLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
+  confirmValue: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.price), 'price'), fontSize: scaledPortalFontSize(PortalFontSizes.price), fontFamily: FontFamily.bold, marginTop: 2, marginBottom: Spacing.xs },
+  confirmQuestion: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.body), marginBottom: Spacing.sm },
   confirmActions: { flexDirection: 'row', gap: Spacing.sm },
   secondaryBtn: {
     flex: 1,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(46, 0.2),
     justifyContent: 'center',
   },
-  secondaryBtnText: { fontWeight: FontWeights.semibold, fontSize: scaledFontSize(FontSizes.sm, 0.2) },
+  secondaryBtnText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
   primaryBtn: {
     flex: 1,
     paddingVertical: moderateScale(10, 0.2),
@@ -281,8 +281,8 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(46, 0.2),
     justifyContent: 'center',
   },
-  primaryBtnText: { color: '#FFFFFF', fontWeight: FontWeights.bold, fontSize: scaledFontSize(FontSizes.sm, 0.2) },
-  errorText: { fontSize: scaledFontSize(FontSizes.xs, 0.2), marginTop: Spacing.xs },
+  primaryBtnText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
+  errorText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.body), marginTop: Spacing.xs },
   loadingBox: { paddingVertical: Spacing.xl, alignItems: 'center' },
   failedBox: { gap: Spacing.sm, paddingVertical: Spacing.sm },
 });

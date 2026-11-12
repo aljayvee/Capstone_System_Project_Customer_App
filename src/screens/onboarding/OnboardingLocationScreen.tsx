@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -6,12 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MapPin, ArrowRight } from 'lucide-react-native';
+import { ArrowRight } from 'lucide-react-native';
+import KuyaSugoMascot from '../../components/KuyaSugoMascot';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { resolveCoordinateToAddress } from '../../hooks/useReverseGeocodedAddress';
 import {
@@ -25,7 +28,9 @@ import {
 } from '../../config/theme';
 
 export default function OnboardingLocationScreen({ navigation }: any) {
-  const { colors, isDark } = useThemeColor();
+  const pageLayout = usePageLayout();
+  const { height } = useWindowDimensions();
+  const { colors } = useThemeColor();
   const insets = useSafeAreaInsets();
   const { isTablet } = useResponsive();
   const [detecting, setDetecting] = useState(false);
@@ -108,24 +113,15 @@ export default function OnboardingLocationScreen({ navigation }: any) {
       style={[styles.safeArea, { backgroundColor: colors.bgApp }]}
       edges={['top', 'bottom']}
     >
-      <View style={[styles.container, isTablet && styles.tabletContainer]}>
+      <View style={[styles.container, isTablet && styles.tabletContainer, pageLayout.gutterStyle, pageLayout.frameStyle]}>
         {/* Top & Hero Section */}
         <View style={styles.contentSection}>
-          <View
-            style={[
-              styles.iconCircle,
-              {
-                backgroundColor: isDark
-                  ? 'rgba(246, 36, 89, 0.12)'
-                  : 'rgba(246, 36, 89, 0.08)',
-                borderColor: isDark
-                  ? 'rgba(246, 36, 89, 0.25)'
-                  : 'rgba(246, 36, 89, 0.18)',
-              },
-            ]}
-          >
-            <MapPin size={38} color={colors.primary} strokeWidth={2.2} />
-          </View>
+          {/* Kuya Sugo is the hero here: 35% of the height still leaves about 65 dp above Continue on a 320x640 phone. */}
+          <KuyaSugoMascot
+            action="wave"
+            height={Math.min(300, Math.max(150, Math.round(height * 0.35)))}
+            accessibilityHint="Tap Kuya Sugo to wave hello"
+          />
 
           <Text
             style={[styles.headline, { color: colors.textDark }]}
@@ -196,9 +192,9 @@ export default function OnboardingLocationScreen({ navigation }: any) {
           >
             {detecting ? (
               <View style={styles.buttonInnerRow}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.onPrimary} />
                 <Text
-                  style={styles.continueButtonText}
+                  style={[styles.continueButtonText, { color: colors.onPrimary }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
                 >
                   Finding your location...
@@ -207,12 +203,12 @@ export default function OnboardingLocationScreen({ navigation }: any) {
             ) : (
               <View style={styles.buttonInnerRow}>
                 <Text
-                  style={styles.continueButtonText}
+                  style={[styles.continueButtonText, { color: colors.onPrimary }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
                 >
                   Continue
                 </Text>
-                <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />
+                <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.4} />
               </View>
             )}
           </TouchableOpacity>
@@ -241,15 +237,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: Spacing.xl,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xxl,
   },
   headline: {
     fontFamily: FontFamily.bold,

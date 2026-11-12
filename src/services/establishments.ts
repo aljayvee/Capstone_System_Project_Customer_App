@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient';
 import { haversineDistanceKm } from '../utils/geo';
 import { isPabiliCategory } from './merchantCategories';
+import { getStoresAllowed } from './storeLimit';
 
 const NON_PABILI_STORE_PHRASES: ReadonlyArray<string> = [
   'motor trade',
@@ -520,33 +521,49 @@ export function isPabiliEstablishment(
 
 /**
  * Concise safeguard message shown whenever a customer's delivery location is
- * outside the Tacurong City service area.
+ * outside every service area (Tacurong City, Banga).
  */
 export const OUTSIDE_SERVICE_AREA_MESSAGE = "Sugo Express isn't in your area yet.";
+
+type Envelope = { minLat: number; maxLat: number; minLng: number; maxLng: number };
 
 /**
  * Tacurong City administrative boundary envelope (from tacurong-service-area.geojson)
  * with a ~150m perimeter highway buffer.
  */
-const TACURONG_ENVELOPE = {
+const TACURONG_ENVELOPE: Envelope = {
   minLat: 6.5665,
   maxLat: 6.761,
   minLng: 124.618,
   maxLng: 124.7295,
 };
 
-export function isWithinTacurongServiceArea(
+/**
+ * Banga, South Cotabato boundary envelope (from the server's
+ * banga-service-area.geojson, OSM relation 20011844) with a small buffer. The
+ * second service zone since 2026-11-09, where the rider app is field tested.
+ * A box, so it also holds western Koronadal: the server's polygon check is the
+ * real answer (outsideServiceArea), this only skips a request that cannot pass.
+ */
+const BANGA_ENVELOPE: Envelope = {
+  minLat: 6.28,
+  maxLat: 6.52,
+  minLng: 124.7,
+  maxLng: 124.925,
+};
+
+const SERVICE_ENVELOPES: Envelope[] = [TACURONG_ENVELOPE, BANGA_ENVELOPE];
+
+/** True when `point` is inside any service zone's envelope (or there is no point). */
+export function isWithinSupportedServiceArea(
   point: { latitude: number; longitude: number } | null | undefined
 ): boolean {
   if (!point) return true;
   const lat = Number(point.latitude);
   const lng = Number(point.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  return (
-    lat >= TACURONG_ENVELOPE.minLat &&
-    lat <= TACURONG_ENVELOPE.maxLat &&
-    lng >= TACURONG_ENVELOPE.minLng &&
-    lng <= TACURONG_ENVELOPE.maxLng
+  return SERVICE_ENVELOPES.some(
+    (box) => lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng
   );
 }
 
@@ -745,7 +762,7 @@ export async function searchEstablishments(
   signal?: AbortSignal,
   options: { maxAgeMs?: number } = {}
 ): Promise<EstablishmentResults> {
-  if (params.near && !isWithinTacurongServiceArea(params.near)) {
+  if (params.near && !isWithinSupportedServiceArea(params.near)) {
     return {
       items: [],
       google: 'ok',
@@ -816,7 +833,7 @@ export function getCachedEstablishments(
   },
   maxAgeMs: number
 ): EstablishmentResults | null {
-  if (params.near && !isWithinTacurongServiceArea(params.near)) return null;
+  if (params.near && !isWithinSupportedServiceArea(params.near)) return null;
   const page = params.offset || params.limit ? `:${params.offset ?? 0}:${params.limit ?? ''}` : '';
   const key = `${nearbyKey(params.near, Boolean(params.photos), params.categoryId, Boolean(params.featured))}${page}`;
   const cached = nearbyCache.get(key);
@@ -852,7 +869,7 @@ export async function fetchPopularEstablishments(
   signal?: AbortSignal,
   options: { maxAgeMs?: number } = {}
 ): Promise<PopularResults> {
-  if (params.near && !isWithinTacurongServiceArea(params.near)) {
+  if (params.near && !isWithinSupportedServiceArea(params.near)) {
     return {
       items: [],
       google: 'ok',
@@ -970,11 +987,12 @@ export function isSameStore(
  * A Location Store gets the key the server gives it, so the nearby list does
  * not list it a second time; any other stop is matched to the list by
  * isSameStore. Stops with no name or no position are left out, a shop pinned
- * twice counts once, and at most `limit` come back (one errand's three).
+ * twice counts once, and at most `limit` come back (one errand's store limit,
+ * services/storeLimit.ts).
  */
 export function establishmentsFromStops(
   stops: PastErrandStop[] | null | undefined,
-  limit = 3
+  limit = getStoresAllowed()
 ): Establishment[] {
   const stores: Establishment[] = [];
   for (const stop of Array.isArray(stops) ? stops : []) {

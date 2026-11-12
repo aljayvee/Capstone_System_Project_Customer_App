@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -48,6 +49,7 @@ export default function ErrandDetailsScreen({
   route,
   navigation,
 }: RootStackScreenProps<'ErrandDetails'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
   const { isTablet } = useResponsive();
@@ -66,7 +68,7 @@ export default function ErrandDetailsScreen({
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const rawId = String(errand?.orderId || errand?.id || passedId || '');
-  const errandId = formatErrandId(rawId);
+  const errandId = formatErrandId(rawId, errand?.referenceNo);
 
   // Fetch or refresh errand data
   const fetchErrandData = useCallback(async (showRefreshing = false) => {
@@ -144,7 +146,7 @@ export default function ErrandDetailsScreen({
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
       {/* 1. CLEAN NAVIGATION HEADER */}
-      <View style={[styles.navHeaderRow, { borderBottomColor: hairlineBorderColor, backgroundColor: colors.bgApp }]}>
+      <View style={[styles.navHeaderRow, { borderBottomColor: hairlineBorderColor, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -181,18 +183,18 @@ export default function ErrandDetailsScreen({
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textLight }]}>Loading errand summary...</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.loadingText, { color: colors.textLight }]}>Loading errand summary...</Text>
         </View>
       ) : fetchError && !errand ? (
         <View style={styles.errorContainer}>
           <AlertCircle size={32} color="#EF4444" strokeWidth={2} />
-          <Text style={[styles.errorText, { color: colors.textDark }]}>{fetchError}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.errorText, { color: colors.textDark }]}>{fetchError}</Text>
           <TouchableOpacity
             style={[styles.retryBtn, { backgroundColor: colors.primary }]}
             onPress={() => fetchErrandData()}
             activeOpacity={0.85}
           >
-            <Text style={styles.retryBtnText}>Try again</Text>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.retryBtnText, { color: colors.onPrimary }]}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -200,8 +202,7 @@ export default function ErrandDetailsScreen({
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' },
-          ]}
+            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' }, pageLayout.gutterStyle, pageLayout.frameStyle]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -513,8 +514,7 @@ export default function ErrandDetailsScreen({
             backgroundColor: colors.card,
             borderTopColor: hairlineBorderColor,
             paddingBottom: Math.max(insets.bottom + Spacing.xs, Spacing.md),
-          },
-        ]}
+          }, pageLayout.gutterStyle]}
       >
         {isErrandActive ? (
           <TouchableOpacity
@@ -525,9 +525,9 @@ export default function ErrandDetailsScreen({
             accessibilityLabel="Open live chat with dispatcher"
             testID="open-live-chat-button"
           >
-            <MessageCircle size={18} color="#FFFFFF" strokeWidth={2.2} />
+            <MessageCircle size={18} color={colors.onPrimary} strokeWidth={2.2} />
             <Text
-              style={styles.primaryActionBtnText}
+              style={[styles.primaryActionBtnText, { color: colors.onPrimary }]}
               maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
             >
               Open Live Chat
@@ -735,11 +735,11 @@ const styles = StyleSheet.create({
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   feeVal: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   feeValBold: {
-    fontFamily: FontFamily.monoBold,
+    fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   hairlineDivider: {
@@ -757,13 +757,14 @@ const styles = StyleSheet.create({
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   totalAmount: {
-    fontFamily: FontFamily.monoBold,
+    fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.subheading + 1),
   },
   cancelledNoteWrap: {
     paddingVertical: Spacing.xs,
   },
   cancelledNoteText: {
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     color: '#DC2626',
     fontStyle: 'italic',
@@ -778,6 +779,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
   },
   pendingNoteText: {
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     fontStyle: 'italic',
   },

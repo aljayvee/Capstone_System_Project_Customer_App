@@ -1,5 +1,7 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { ChevronLeft } from 'lucide-react-native';
 import { showAppAlert } from '../../services/alertModal';
 import { useThemeColor } from '../../hooks/useThemeColor';
@@ -39,7 +41,10 @@ export default function LocationWizard({
   onSave,
   onCancel,
 }: LocationWizardProps) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { colors, isDark } = useThemeColor();
+  // The screen hosting the wizard (Saved Locations), to know whether it is in front.
+  const navigation = useNavigation();
   const [step, setStep] = useState<1 | 2>(initialStep);
   const [pin, setPin] = useState<MapCoordinate | null>(
     initialValues && typeof initialValues.latitude === 'number' && typeof initialValues.longitude === 'number'
@@ -67,12 +72,17 @@ export default function LocationWizard({
   // back one wizard step instead of dropping the whole in-progress draft.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Only while Saved Locations is in front (2026-11-06). A chat opened
+      // from a push sits on top while this listener stays registered and is
+      // asked first; it stepped the hidden wizard back, or dropped the draft,
+      // and left the chat open.
+      if (navigation?.isFocused && !navigation.isFocused()) return false;
       handleBack();
       return true;
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, [step, navigation]);
 
   const handleStep1Next = (resolvedAddress: string | null) => {
     setStep(2);
@@ -120,7 +130,7 @@ export default function LocationWizard({
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bgApp }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }, pageLayout.gutterStyle]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={handleBack}

@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react-native';
 import TrueNativeModal from './transitions/TrueNativeModal';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, Shadows } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 
 interface CalendarPickerModalProps {
@@ -105,7 +105,7 @@ export default function CalendarPickerModal({
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
               <CalendarIcon size={20} color={colors.primary} />
-              <Text style={[styles.headerTitle, { color: colors.textDark }]}>Select Birthdate</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headerTitle, { color: colors.textDark }]}>Select Birthdate</Text>
             </View>
             <TouchableOpacity
               onPress={onClose}
@@ -123,14 +123,14 @@ export default function CalendarPickerModal({
             </TouchableOpacity>
 
             <View style={styles.monthYearSelector}>
-              <Text style={[styles.monthText, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.monthText, { color: colors.textDark }]}>
                 {MONTH_NAMES[selectedMonth]}
               </Text>
               <TouchableOpacity
                 onPress={() => setShowYearPicker((p) => !p)}
                 style={[styles.yearPill, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : colors.primaryLight }]}
               >
-                <Text style={[styles.yearText, { color: colors.primary }]}>{selectedYear}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.yearText, { color: colors.primary }]}>{selectedYear}</Text>
               </TouchableOpacity>
             </View>
 
@@ -142,7 +142,7 @@ export default function CalendarPickerModal({
           {/* YEAR PICKER OVERLAY */}
           {showYearPicker ? (
             <View style={[styles.yearPickerContainer, { backgroundColor: colors.card }]}>
-              <Text style={[styles.yearPickerTitle, { color: colors.textMedium }]}>Choose Birth Year</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.yearPickerTitle, { color: colors.textMedium }]}>Choose Birth Year</Text>
               <ScrollView style={styles.yearScroll} showsVerticalScrollIndicator={false}>
                 <View style={styles.yearGrid}>
                   {years.map((y) => (
@@ -158,10 +158,11 @@ export default function CalendarPickerModal({
                       }}
                     >
                       <Text
-                        style={[
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+                        style={[[
                           styles.yearOptionText,
                           { color: selectedYear === y ? '#FFFFFF' : colors.textDark },
-                        ]}
+                        ], { color: colors.onPrimary }]}
                       >
                         {y}
                       </Text>
@@ -175,7 +176,7 @@ export default function CalendarPickerModal({
               {/* DAYS OF WEEK */}
               <View style={styles.weekHeader}>
                 {DAYS_OF_WEEK.map((day) => (
-                  <Text key={day} style={[styles.weekDayText, { color: colors.textLight }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} key={day} style={[styles.weekDayText, { color: colors.textLight }]}>
                     {day}
                   </Text>
                 ))}
@@ -198,11 +199,12 @@ export default function CalendarPickerModal({
                       onPress={() => setSelectedDay(dayNum)}
                     >
                       <Text
-                        style={[
+                        maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+                        style={[[
                           styles.dayText,
                           { color: isSelected ? '#FFFFFF' : colors.textDark },
                           isSelected && { fontFamily: FontFamily.bold },
-                        ]}
+                        ], { color: colors.onPrimary }]}
                       >
                         {dayNum}
                       </Text>
@@ -216,8 +218,8 @@ export default function CalendarPickerModal({
           {/* PREVIEW & ACTIONS */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <View style={styles.selectedPreview}>
-              <Text style={[styles.previewLabel, { color: colors.textGray }]}>Selected Date:</Text>
-              <Text style={[styles.previewDate, { color: colors.primary }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.previewLabel, { color: colors.textGray }]}>Selected Date:</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.previewDate, { color: colors.primary }]}>
                 {selectedYear}-{String(selectedMonth + 1).padStart(2, '0')}-{String(selectedDay).padStart(2, '0')}
               </Text>
             </View>
@@ -227,13 +229,13 @@ export default function CalendarPickerModal({
                 style={[styles.cancelBtn, { borderColor: colors.border }]}
                 onPress={onClose}
               >
-                <Text style={[styles.cancelBtnText, { color: colors.textGray }]}>Cancel</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cancelBtnText, { color: colors.textGray }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
                 onPress={handleConfirm}
               >
-                <Text style={styles.confirmBtnText}>Set Birthdate</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmBtnText, { color: colors.onPrimary }]}>Set Birthdate</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -269,8 +271,9 @@ const styles = StyleSheet.create({
     gap: Spacing.xs + 2,
   },
   headerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   closeBtn: {
     width: 32,
@@ -295,8 +298,9 @@ const styles = StyleSheet.create({
     gap: Spacing.xs + 2,
   },
   monthText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   yearPill: {
     paddingHorizontal: Spacing.sm,
@@ -304,8 +308,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   yearText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   weekHeader: {
     flexDirection: 'row',
@@ -313,10 +318,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   weekDayText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     width: 38,
     textAlign: 'center',
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -335,8 +341,9 @@ const styles = StyleSheet.create({
     borderRadius: 19,
   },
   dayText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   yearPickerContainer: {
     height: 220,
@@ -344,8 +351,9 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
   yearPickerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
@@ -365,8 +373,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   yearOptionText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   footer: {
     marginTop: Spacing.md,
@@ -380,12 +389,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   previewLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   previewDate: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     letterSpacing: 0.5,
   },
   footerButtons: {
@@ -401,8 +412,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   confirmBtn: {
     flex: 1.5,
@@ -412,8 +424,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Wrench, AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius } from '../config/theme';
 import type { MaintenanceNoticeState } from '../hooks/useMaintenanceNotice';
 
 interface MaintenanceNoticeBannerProps {
@@ -126,24 +126,27 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   typeBadgeText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     fontFamily: FontFamily.bold,
     letterSpacing: 0.5,
   },
   liveIndicator: {
-    fontSize: 10,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     fontFamily: FontFamily.semibold,
   },
   headerTitle: {
-    fontSize: FontSizes.sm + 1,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     fontFamily: FontFamily.bold,
     letterSpacing: -0.2,
   },
   messageBody: {
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     marginTop: Spacing.xs,
   },
   footerRow: {
@@ -153,7 +156,8 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0,0,0,0.06)',
   },
   supportContactText: {
-    fontSize: 11,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.medium,
   },
 });

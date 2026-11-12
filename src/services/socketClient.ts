@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from '../config/api';
 import { isTokenExpired } from '../utils/jwt';
+import { rememberErrandReferences } from '../utils/formatErrandId';
 import {
   getCustomerToken,
   refreshCustomerSession,
@@ -113,6 +114,10 @@ export async function getSocket(): Promise<Socket> {
   socket.on('connect', () => {
     if (socket) resubscribeAll(socket);
   });
+
+  // An errand pushed by socket learns its number before any screen renders it
+  // (onAny runs before the named handlers; see formatErrandId).
+  socket.onAny((_event: string, ...args: unknown[]) => rememberErrandReferences(args));
 
   // Surfaces what used to be silent. A handshake that fails leaves every screen
   // waiting forever for events that will never arrive.

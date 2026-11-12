@@ -94,5 +94,9 @@ export async function getDeviceHeaders(): Promise<Record<string, string>> {
     'x-device-os': `${info.osName} ${info.osVersion || ''}`.trim(),
     'x-device-platform': info.platform,
     'x-device-physical': String(info.isPhysical),
+    // This build asks for the second sign-in factor itself, so the server holds
+    // the email code until POST /auth/resend-login-otp instead of sending it with
+    // the challenge. Builds without it are told to update.
+    'x-sugo-mfa': '1',
   };
 }

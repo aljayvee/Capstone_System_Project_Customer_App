@@ -1,0 +1,1 @@
+{"version":3,"names":["_createAsyncStorage","require","_AsyncStorageError","_default","exports","default","getLegacyStorage"],"sources":["../../src/index.tsx"],"sourcesContent":[null],"mappings":";;;;;;;;;;;;;;;;;;AAAA,IAAAA,mBAAA,GAAAC,OAAA;AAKA,IAAAC,kBAAA,GAAAD,OAAA;AAAuD,IAAAE,QAAA,GAAAC,OAAA,CAAAC,OAAA,GAGxC,IAAAC,oCAAgB,EAAC,CAAC","ignoreList":[]}

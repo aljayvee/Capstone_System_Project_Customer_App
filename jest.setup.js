@@ -196,6 +196,7 @@ jest.mock('@react-navigation/native', () => {
   const actualNav = jest.requireActual('@react-navigation/native');
   return {
     ...actualNav,
+    usePreventRemove: jest.fn(),
     useNavigation: () => ({
       navigate: jest.fn(),
       replace: jest.fn(),
@@ -234,6 +235,7 @@ jest.mock('firebase/database', () => ({
   }),
   set: jest.fn(() => Promise.resolve()),
   push: jest.fn(() => ({ key: 'mock-push-key' })),
+  runTransaction: jest.fn(() => Promise.resolve({ committed: true })),
 }));
 
 // Mirrors RiderMobileApp's mock. NetInfo is a native module with no JS
@@ -303,4 +305,35 @@ jest.mock('expo-blur', () => {
     // What an Android blur samples (components/glass/LiquidGlass.tsx): a plain View here.
     BlurTargetView: React.forwardRef((props, ref) => React.createElement(View, { ...props, ref }, props.children)),
   };
+});
+
+// Mock expo-updates
+jest.mock('expo-updates', () => ({
+  isEnabled: false,
+  updateId: null,
+  channel: null,
+  runtimeVersion: '1.2.0',
+  createdAt: null,
+  isEmbeddedLaunch: true,
+  isEmergencyLaunch: false,
+  emergencyLaunchReason: null,
+  checkForUpdateAsync: jest.fn(() => Promise.resolve({ isAvailable: false, isRollBackToEmbedded: false })),
+  fetchUpdateAsync: jest.fn(() => Promise.resolve({ isNew: false, isRollBackToEmbedded: false })),
+  reloadAsync: jest.fn(() => Promise.resolve()),
+  useUpdates: jest.fn(() => ({
+    isChecking: false,
+    isDownloading: false,
+    isUpdateAvailable: false,
+    isUpdatePending: false,
+  })),
+  addUpdatesStateChangeListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
+
+// The store limit (services/storeLimit.ts) re-reads GET /rate-config whenever a
+// store picker mounts, so every suite that counts apiClient calls would see one
+// more. The hook here reads the current limit without fetching; a suite can
+// still set it with setStoresAllowedFromRateConfig. storeLimit.test.ts unmocks.
+jest.mock('./src/services/storeLimit', () => {
+  const actual = jest.requireActual('./src/services/storeLimit');
+  return { ...actual, useStoresAllowed: () => actual.getStoresAllowed() };
 });

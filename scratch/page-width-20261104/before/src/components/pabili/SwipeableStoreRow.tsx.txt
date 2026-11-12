@@ -1,0 +1,81 @@
+import React, { useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ArrowRight, Trash2 } from 'lucide-react-native';
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { useThemeColor } from '../../hooks/useThemeColor';
+import { BorderRadius, FontFamily, PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize } from '../../config/theme';
+
+/** Swipe left to reveal Remove; swipe right to open the store's item editor. */
+export default function SwipeableStoreRow({
+  storeName,
+  disabled,
+  onOpen,
+  onRemove,
+  children,
+}: {
+  storeName: string;
+  disabled: boolean;
+  onOpen: () => void;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  const { colors } = useThemeColor();
+  const swipeable = useRef<SwipeableMethods>(null);
+  const [showRemove, setShowRemove] = useState(false);
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeable}
+      enabled={!disabled}
+      friction={1.5}
+      leftThreshold={64}
+      rightThreshold={40}
+      dragOffsetFromLeftEdge={20}
+      dragOffsetFromRightEdge={20}
+      overshootLeft={false}
+      overshootRight={false}
+      testID={`swipe-store-${storeName}`}
+      childrenContainerStyle={{ backgroundColor: colors.bgApp }}
+      onSwipeableWillOpen={(direction) => {
+        if (!disabled) setShowRemove(direction === 'left');
+      }}
+      onSwipeableWillClose={() => setShowRemove(false)}
+      onSwipeableOpen={(direction) => {
+        if (direction === 'right') {
+          swipeable.current?.reset();
+          if (!disabled) onOpen();
+        }
+      }}
+      renderLeftActions={() => (
+        <View style={[styles.action, { width: 104, backgroundColor: colors.primary }]} accessible={false} importantForAccessibility="no-hide-descendants">
+          <ArrowRight size={20} color={colors.onPrimary} />
+          <Text style={[styles.label, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Add items</Text>
+        </View>
+      )}
+      renderRightActions={() => (
+        <View style={[styles.action, { width: 80, backgroundColor: colors.danger }]}>
+          {showRemove && !disabled ? (
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={onRemove}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${storeName} from your list`}
+              testID={`remove-store-${storeName}`}
+            >
+              <Trash2 size={20} color="#FFFFFF" />
+              <Text style={[styles.label, { color: '#FFFFFF' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Remove</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
+    >
+      {children}
+    </ReanimatedSwipeable>
+  );
+}
+
+const styles = StyleSheet.create({
+  action: { alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: BorderRadius.md },
+  removeButton: { alignSelf: 'stretch', flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  label: { fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+});

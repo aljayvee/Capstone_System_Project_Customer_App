@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -5,13 +6,14 @@ import { apiClient } from '../services/apiClient';
 import { toUserMessage } from '../services/errorMessages';
 import InlineFieldError from '../components/InlineFieldError';
 import { useAuth } from '../context/AuthContext';
-import { FontFamily, FontSizes, Spacing, BorderRadius, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { AuthFontSizes, scaledAuthFontSize, getAuthLineHeight, FontFamily, Spacing, BorderRadius, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { RootStackScreenProps } from '../navigation/types';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function VerifyEmailScreen({ route, navigation }: RootStackScreenProps<'VerifyEmail'>) {
+  const pageLayout = usePageLayout();
   const { login } = useAuth();
   const { colors, isDark } = useThemeColor();
   const { customerId, email, pendingUser, pendingToken, pendingRefreshToken } = route.params;
@@ -69,7 +71,7 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
     // The content is centred, which put the Verify button under the number pad.
     // Padding by the keyboard's height re-centres it in the space left above.
     <KeyboardAvoidingView behavior="padding" style={[styles.root, { backgroundColor: colors.bgApp }]}>
-      <View style={styles.container}>
+      <View style={[styles.container, pageLayout.gutterStyle, pageLayout.frameStyle]}>
         <Text style={[styles.title, { color: colors.primary }]} maxFontSizeMultiplier={1.15}>Verify Your Email</Text>
         <Text style={[styles.subtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
           We sent a 6-digit code to {email}. Enter it below to finish creating your account.
@@ -108,9 +110,9 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
           disabled={isVerifying}
         >
           {isVerifying ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
-            <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>Verify Code</Text>
+            <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.15}>Verify Code</Text>
           )}
         </TouchableOpacity>
 
@@ -148,29 +150,32 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   title: {
-    fontSize: scaledFontSize(22, 0.2),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
     marginBottom: Spacing.lg,
-    lineHeight: 18,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
   },
   notice: {
-    fontSize: FontSizes.sm,
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     fontFamily: FontFamily.medium,
     marginTop: 4,
   },
   codeInput: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     paddingVertical: moderateScale(Spacing.md, 0.2),
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    fontSize: scaledFontSize(22, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     letterSpacing: 8,
@@ -183,16 +188,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.base, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
   resendButton: {
     marginTop: Spacing.md,
     alignItems: 'center',
   },
   linkText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
 });

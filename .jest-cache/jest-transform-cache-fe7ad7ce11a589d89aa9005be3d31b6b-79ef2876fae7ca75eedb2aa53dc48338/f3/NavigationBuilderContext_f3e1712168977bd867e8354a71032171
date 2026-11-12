@@ -1,0 +1,22 @@
+8a0342f82d98dac6181a7fc2d7c89e17
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.NavigationBuilderContext = void 0;
+var React = _interopRequireWildcard(require("react"));
+var NavigationBuilderContext = exports.NavigationBuilderContext = React.createContext({
+  onDispatchAction: () => undefined,
+  onEmitEvent: () => undefined,
+  onOptionsChange: () => undefined,
+  getIsStateEmitted: () => false,
+  scheduleUpdate: () => {
+    throw new Error("Couldn't find a context for scheduling updates.");
+  },
+  flushUpdates: () => {
+    throw new Error("Couldn't find a context for flushing updates.");
+  }
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIk5hdmlnYXRpb25CdWlsZGVyQ29udGV4dCIsImV4cG9ydHMiLCJjcmVhdGVDb250ZXh0Iiwib25EaXNwYXRjaEFjdGlvbiIsInVuZGVmaW5lZCIsIm9uRW1pdEV2ZW50Iiwib25PcHRpb25zQ2hhbmdlIiwiZ2V0SXNTdGF0ZUVtaXR0ZWQiLCJzY2hlZHVsZVVwZGF0ZSIsIkVycm9yIiwiZmx1c2hVcGRhdGVzIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL05hdmlnYXRpb25CdWlsZGVyQ29udGV4dC50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFLQSxJQUFBQSxLQUFBLEdBQUFDLHVCQUFBLENBQUFDLE9BQUE7QUFnRE8sSUFBTUMsd0JBQXdCLEdBQUFDLE9BQUEsQ0FBQUQsd0JBQUEsR0FBR0gsS0FBSyxDQUFDSyxhQUFhLENBaUJ4RDtFQUNEQyxnQkFBZ0IsRUFBRUEsQ0FBQSxLQUFNQyxTQUFTO0VBQ2pDQyxXQUFXLEVBQUVBLENBQUEsS0FBTUQsU0FBUztFQUM1QkUsZUFBZSxFQUFFQSxDQUFBLEtBQU1GLFNBQVM7RUFDaENHLGlCQUFpQixFQUFFQSxDQUFBLEtBQU0sS0FBSztFQUM5QkMsY0FBYyxFQUFFQSxDQUFBLEtBQU07SUFDcEIsTUFBTSxJQUFJQyxLQUFLLENBQUMsaURBQWlELENBQUM7RUFDcEUsQ0FBQztFQUNEQyxZQUFZLEVBQUVBLENBQUEsS0FBTTtJQUNsQixNQUFNLElBQUlELEtBQUssQ0FBQywrQ0FBK0MsQ0FBQztFQUNsRTtBQUNGLENBQUMsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

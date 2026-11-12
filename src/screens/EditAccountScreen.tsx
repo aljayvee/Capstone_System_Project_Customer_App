@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
@@ -21,8 +22,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import {
   ChevronLeft,
-  User,
-  Mail,
   Phone,
   Calendar as CalendarIcon,
   Save,
@@ -64,9 +63,11 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
 export default function EditAccountScreen({ route, navigation }: RootStackScreenProps<'EditAccount'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
   const { user, focusField } = route.params;
   const { updateUser } = useAuth();
   const { colors, isDark } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useResponsive();
 
@@ -204,6 +205,11 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
   // Hardware Android back button listener
   useEffect(() => {
     const onBackPress = () => {
+      // Only while this screen is in front (2026-11-06). A chat opened from a
+      // push sits on top while this listener stays registered and is asked
+      // first; with an edit pending it raised the discard dialog over the
+      // chat and left the chat open.
+      if (navigation.isFocused && !navigation.isFocused()) return false;
       if (modifiedCount > 0) {
         setShowUnsavedModal(true);
         return true;
@@ -212,7 +218,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [modifiedCount]);
+  }, [modifiedCount, navigation]);
 
   // Real-time inline field validation indicators
   const isFirstNameValid = firstName.trim().length > 0 && !errors.firstName;
@@ -406,9 +412,13 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
       setSuccessBanner(true);
       setTimeout(() => {
-        navigation.navigate('Account', {
-          user: updatedUser,
-        });
+        if (typeof navigation.canGoBack === 'function' ? navigation.canGoBack() : true) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Account', {
+            user: updatedUser,
+          });
+        }
       }, 700);
     } catch (err: any) {
       setGlobalError(toUserMessage(err, 'profile'));
@@ -425,7 +435,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.bgApp }]}
+      style={[styles.container, { backgroundColor: colors.card }]}
       edges={['top', 'left', 'right']}
     >
       {/* Keyboard-safe (2026-10-09). The padding KeyboardAvoidingView here
@@ -441,9 +451,8 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
             styles.navHeaderRow,
             {
               borderBottomColor: colors.border,
-              backgroundColor: colors.bgApp,
-            },
-          ]}
+              backgroundColor: colors.card,
+            }, pageLayout.gutterStyle]}
         >
           <TouchableOpacity
             onPress={handleBack}
@@ -464,8 +473,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
         <KeyboardAwareScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' },
-          ]}
+            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle, pageLayout.frameStyle]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           // The dock rides on the keyboard with its own bottom inset hidden
@@ -508,17 +516,8 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
               </View>
             ) : null}
 
-            {/* 2. AVATAR HERO CARD WITH SMART PHOTO PICKER */}
-            <View
-              style={[
-                styles.heroCard,
-                {
-                  backgroundColor: isDark ? colors.card : '#FFFFFF',
-                  borderColor: colors.border,
-                },
-                Shadows.soft,
-              ]}
-            >
+            {/* Profile photo */}
+            <View style={styles.heroCard}>
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.avatarPickerWrapper}
@@ -531,14 +530,14 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 <View
                   style={[
                     styles.avatarRing,
-                    { borderColor: isDark ? 'rgba(246, 36, 89, 0.35)' : colors.primary },
+                    { borderColor: colors.border },
                   ]}
                 >
                   {avatar ? (
                     <Image source={{ uri: avatar }} style={styles.avatarImage} />
                   ) : (
-                    <View style={[styles.avatarBadge, { backgroundColor: colors.primary }]}>
-                      <Text style={styles.avatarText}>{userInitials}</Text>
+                    <View style={[styles.avatarBadge, { backgroundColor: colors.bgGray }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.avatarText, { color: colors.textDark }]}>{userInitials}</Text>
                     </View>
                   )}
                   {uploadingPhoto && (
@@ -551,32 +550,20 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   style={[
                     styles.cameraBadge,
                     {
-                      backgroundColor: colors.primary,
-                      borderColor: isDark ? colors.card : '#FFFFFF',
+                      backgroundColor: brandColor,
+                      borderColor: colors.card,
                     },
                   ]}
                 >
-                  <Camera size={12} color="#FFFFFF" strokeWidth={2.4} />
+                  <Camera size={12} color={colors.onPrimary} strokeWidth={2.4} />
                 </View>
               </TouchableOpacity>
 
               <View style={styles.heroInfoCol}>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.heroDisplayName, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  <Text style={[styles.heroDisplayName, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                     {displayName}
                   </Text>
-                  <View
-                    style={[
-                      styles.verifiedBadge,
-                      {
-                        backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
-                        borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0',
-                      },
-                    ]}
-                  >
-                    <ShieldCheck size={11} color="#10B981" />
-                    <Text style={styles.verifiedText} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Verified</Text>
-                  </View>
                 </View>
 
                 <Text style={[styles.heroHandle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
@@ -588,41 +575,24 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   style={styles.changePhotoLink}
                   disabled={uploadingPhoto}
                 >
-                  <Text style={[styles.changePhotoText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
-                    {avatar ? 'Change Profile Photo' : 'Upload Profile Photo (.jpg, .png)'}
+                  <Text style={[styles.changePhotoText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                    {avatar ? 'Change photo' : 'Add a photo'}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* 3. BENTO CARD 1: PERSONAL IDENTITY */}
-            <View
-              style={[
-                styles.sectionCard,
-                {
-                  backgroundColor: isDark ? colors.card : '#FFFFFF',
-                  borderColor: colors.border,
-                },
-                Shadows.soft,
-              ]}
-            >
+            {/* Personal details */}
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
-                <View
-                  style={[
-                    styles.sectionIconPill,
-                    { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
-                  ]}
-                >
-                  <User size={15} color={colors.primary} strokeWidth={2.2} />
-                </View>
                 <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                   Personal Identity
                 </Text>
               </View>
 
-              {/* FIRST NAME */}
+              {/* First name */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>FIRST NAME *</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>First name *</Text>
                 {errors.firstName ? (
                   <View
                     style={[
@@ -641,14 +611,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                    borderTopColor: errors.firstName
-                      ? colors.danger
-                      : focusedField === 'firstName'
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.28)'
-                      : '#FFFFFF',
+                    backgroundColor: colors.bgGray,
                     borderColor: errors.firstName
                       ? colors.danger
                       : focusedField === 'firstName'
@@ -657,7 +620,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                       ? 'rgba(255, 255, 255, 0.12)'
                       : '#E2E8F0',
                     borderWidth: errors.firstName || focusedField === 'firstName' ? 1.5 : 1.2,
-                    shadowOpacity: isDark ? 0.22 : 0.06,
+                    shadowOpacity: 0,
                   },
                 ]}
                 testID="edit-first-name-wrapper"
@@ -686,26 +649,21 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
               {/* MIDDLE NAME */}
               <View style={styles.labelHeaderRow}>
                 <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                  MIDDLE NAME (OPTIONAL)
+                  Middle name (optional)
                 </Text>
               </View>
               <View
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                    borderTopColor: focusedField === 'middleName'
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.28)'
-                      : '#FFFFFF',
+                    backgroundColor: colors.bgGray,
                     borderColor: focusedField === 'middleName'
                       ? colors.primary
                       : isDark
                       ? 'rgba(255, 255, 255, 0.12)'
                       : '#E2E8F0',
                     borderWidth: focusedField === 'middleName' ? 1.5 : 1.2,
-                    shadowOpacity: isDark ? 0.22 : 0.06,
+                    shadowOpacity: 0,
                   },
                 ]}
               >
@@ -722,9 +680,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 />
               </View>
 
-              {/* LAST NAME */}
+              {/* Last name */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>LAST NAME *</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Last name *</Text>
                 {errors.lastName ? (
                   <View
                     style={[
@@ -743,14 +701,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                    borderTopColor: errors.lastName
-                      ? colors.danger
-                      : focusedField === 'lastName'
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.28)'
-                      : '#FFFFFF',
+                    backgroundColor: colors.bgGray,
                     borderColor: errors.lastName
                       ? colors.danger
                       : focusedField === 'lastName'
@@ -759,7 +710,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                       ? 'rgba(255, 255, 255, 0.12)'
                       : '#E2E8F0',
                     borderWidth: errors.lastName || focusedField === 'lastName' ? 1.5 : 1.2,
-                    shadowOpacity: isDark ? 0.22 : 0.06,
+                    shadowOpacity: 0,
                   },
                 ]}
               >
@@ -784,9 +735,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 )}
               </View>
 
-              {/* BIRTHDATE */}
+              {/* Birthdate */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>BIRTHDATE</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Birthdate</Text>
               </View>
               <TouchableOpacity
                 activeOpacity={0.7}
@@ -794,19 +745,14 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   styles.inputWrapper,
                   styles.calendarInputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                    borderTopColor: pointBirthdate && !birthdate
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.28)'
-                      : '#FFFFFF',
+                    backgroundColor: colors.bgGray,
                     borderColor: pointBirthdate && !birthdate
                       ? colors.primary
                       : isDark
                       ? 'rgba(255, 255, 255, 0.12)'
                       : '#E2E8F0',
                     borderWidth: pointBirthdate && !birthdate ? 1.5 : 1.2,
-                    shadowOpacity: isDark ? 0.22 : 0.06,
+                    shadowOpacity: 0,
                   },
                 ]}
                 onPress={() => setShowCalendarModal(true)}
@@ -827,26 +773,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
               </TouchableOpacity>
             </View>
 
-            {/* 4. BENTO CARD 2: CONTACT DETAILS */}
-            <View
-              style={[
-                styles.sectionCard,
-                {
-                  backgroundColor: isDark ? colors.card : '#FFFFFF',
-                  borderColor: colors.border,
-                },
-                Shadows.soft,
-              ]}
-            >
+            {/* Contact details */}
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
-                <View
-                  style={[
-                    styles.sectionIconPill,
-                    { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
-                  ]}
-                >
-                  <Mail size={15} color={colors.primary} strokeWidth={2.2} />
-                </View>
                 <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                   Contact Details
                 </Text>
@@ -854,7 +783,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
               {/* EMAIL */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>EMAIL ADDRESS</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Email address</Text>
                 {errors.email ? (
                   <View
                     style={[
@@ -871,14 +800,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                 style={[
                   styles.inputWrapper,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                    borderTopColor: errors.email
-                      ? colors.danger
-                      : focusedField === 'email'
-                      ? colors.primary
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.28)'
-                      : '#FFFFFF',
+                    backgroundColor: colors.bgGray,
                     borderColor: errors.email
                       ? colors.danger
                       : focusedField === 'email'
@@ -887,7 +809,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                       ? 'rgba(255, 255, 255, 0.12)'
                       : '#E2E8F0',
                     borderWidth: errors.email || focusedField === 'email' ? 1.5 : 1.2,
-                    shadowOpacity: isDark ? 0.22 : 0.06,
+                    shadowOpacity: 0,
                   },
                 ]}
               >
@@ -915,7 +837,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
 
               {/* PHONE */}
               <View style={styles.labelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>MOBILE PHONE</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Mobile phone</Text>
                 {isPhoneVerifiedCurrent ? (
                   <View style={[styles.phoneBadge, styles.phoneBadgeVerified]}>
                     <ShieldCheck size={11} color="#10B981" />
@@ -933,10 +855,9 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   style={[
                     styles.phonePrefixBox,
                     {
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                      borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
+                      backgroundColor: colors.bgGray,
                       borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
-                      shadowOpacity: isDark ? 0.22 : 0.06,
+                      shadowOpacity: 0,
                     },
                   ]}
                   testID="phone-prefix-box"
@@ -951,14 +872,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                   style={[
                     styles.phoneFieldWrapper,
                     {
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                      borderTopColor: errors.phone
-                        ? colors.danger
-                        : focusedField === 'phone'
-                        ? colors.primary
-                        : isDark
-                        ? 'rgba(255, 255, 255, 0.28)'
-                        : '#FFFFFF',
+                      backgroundColor: colors.bgGray,
                       borderColor: errors.phone
                         ? colors.danger
                         : focusedField === 'phone'
@@ -967,7 +881,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
                         ? 'rgba(255, 255, 255, 0.12)'
                         : '#E2E8F0',
                       borderWidth: errors.phone || focusedField === 'phone' ? 1.5 : 1.2,
-                      shadowOpacity: isDark ? 0.22 : 0.06,
+                      shadowOpacity: 0,
                     },
                   ]}
                   testID="phone-field-wrapper"
@@ -1045,11 +959,10 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
           style={[
             styles.stickyBottomDock,
             {
-              backgroundColor: colors.bgAppTranslucent,
+              backgroundColor: colors.card,
               borderTopColor: colors.border,
               paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.md,
-            },
-          ]}
+            }, pageLayout.gutterStyle]}
         >
           <TouchableOpacity
             activeOpacity={0.85}
@@ -1057,7 +970,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
               styles.stickySaveButton,
               { backgroundColor: colors.primary },
               saving && { opacity: 0.7 },
-              Shadows.liftedUp,
+
             ]}
             onPress={handleSave}
             disabled={saving}
@@ -1066,11 +979,11 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
             accessibilityLabel="Save profile changes"
           >
             {saving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
               <>
-                <Save size={17} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.stickySaveButtonText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+                <Save size={17} color={colors.onPrimary} strokeWidth={2.2} />
+                <Text style={[styles.stickySaveButtonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
                   {modifiedCount > 0
                     ? `Save ${modifiedCount} ${modifiedCount === 1 ? 'Change' : 'Changes'}`
                     : 'Save Profile Changes'}
@@ -1269,8 +1182,8 @@ const styles = StyleSheet.create({
     width: PortalTouchTargets.compact,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
     paddingBottom: 110,
   },
   successBanner: {
@@ -1301,14 +1214,12 @@ const styles = StyleSheet.create({
     fontSize: PortalFontSizes.caption,
   },
 
-  // Avatar Hero Card
+  // Profile identity
   heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.lg,
+    marginBottom: Spacing.xxl,
   },
   avatarPickerWrapper: {
     position: 'relative',
@@ -1369,22 +1280,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   heroDisplayName: {
-    fontFamily: FontFamily.bold,
-    fontSize: PortalFontSizes.subheading,
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  verifiedText: {
+    flex: 1,
     fontFamily: FontFamily.semibold,
-    fontSize: PortalFontSizes.micro,
-    color: '#10B981',
+    fontSize: PortalFontSizes.title,
+    lineHeight: 26,
   },
   heroHandle: {
     fontFamily: FontFamily.regular,
@@ -1392,32 +1291,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   changePhotoLink: {
-    paddingVertical: 2,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   changePhotoText: {
     fontFamily: FontFamily.semibold,
     fontSize: PortalFontSizes.caption,
   },
 
-  // Bento Section Cards
+  // Open form sections
   sectionCard: {
-    padding: Spacing.md,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xxl,
   },
   sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  sectionIconPill: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: Spacing.lg,
   },
   sectionTitle: {
     fontFamily: FontFamily.bold,
@@ -1425,14 +1313,15 @@ const styles = StyleSheet.create({
   },
   labelHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: Spacing.sm,
   },
   inputLabel: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: PortalFontSizes.caption,
-    letterSpacing: 0.3,
   },
   shoutBadgeTop: {
     flexDirection: 'row',
@@ -1447,20 +1336,16 @@ const styles = StyleSheet.create({
     fontSize: PortalFontSizes.micro,
   },
   inputWrapper: {
-    borderRadius: 14,
+    borderRadius: 10,
     minHeight: 52,
     paddingHorizontal: Spacing.md,
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1.2,
-    borderTopWidth: 1.5,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    elevation: 0,
   },
   input: {
     flex: 1,
@@ -1613,15 +1498,11 @@ const styles = StyleSheet.create({
   phonePrefixBox: {
     height: 52,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1.2,
-    borderTopWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    elevation: 0,
   },
   phonePrefixText: {
     fontFamily: FontFamily.bold,
@@ -1633,14 +1514,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 52,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1.2,
-    borderTopWidth: 1.5,
     paddingHorizontal: Spacing.sm,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    elevation: 0,
   },
   verifyPhoneBtn: {
     flexDirection: 'row',

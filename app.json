@@ -2,8 +2,9 @@
   "expo": {
     "name": "Sugo Express",
     "slug": "CustomerApp",
-    "version": "1.2.0",
+    "version": "1.4.0",
     "orientation": "portrait",
+    "primaryColor": "#F62459",
     "icon": "./assets/mascot/app-icon.png",
     "scheme": "customerapp",
     "userInterfaceStyle": "automatic",
@@ -76,6 +77,15 @@
     "experiments": {
       "reactCompiler": true
     },
+    "updates": {
+      "url": "https://u.expo.dev/b3e551d1-d422-4e09-8f27-d1d76237a1c4",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
+    "runtimeVersion": "1.4.0",
     "extra": {
       "eas": {
         "projectId": "b3e551d1-d422-4e09-8f27-d1d76237a1c4"

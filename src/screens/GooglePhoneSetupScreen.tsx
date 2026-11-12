@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState } from 'react';
 import {
   View,
@@ -20,20 +21,24 @@ import { toUserMessage } from '../services/errorMessages';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import {
+  AuthFontSizes,
+  scaledAuthFontSize,
+  getAuthLineHeight,
   FontFamily,
   Spacing,
   BorderRadius,
   Shadows,
   AuthFontSizeMultipliers,
-  scaledFontSize,
 } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import type { RootStackScreenProps } from '../navigation/types';
+import { saveMfaTrustToken } from '../services/mfaTrust';
 
 export default function GooglePhoneSetupScreen({
   navigation,
   route,
 }: RootStackScreenProps<'GooglePhoneSetup'>) {
+  const pageLayout = usePageLayout();
   const { googleIdToken, email, firstName, lastName, avatar } = route.params;
   const { login } = useAuth();
   const { colors, isDark } = useThemeColor();
@@ -120,6 +125,8 @@ export default function GooglePhoneSetupScreen({
           await AsyncStorage.setItem('@sugo_onboarding_location_draft', JSON.stringify(detLoc));
         } catch {}
       }
+      // Sign-up just verified the phone, so the server trusts this device for MFA.
+      await saveMfaTrustToken(data.mfaTrustToken);
       await login(userPayload, data.token, data.refreshToken);
       navigation.replace('CustomerPortal', {
         user: userPayload,
@@ -137,8 +144,8 @@ export default function GooglePhoneSetupScreen({
   const inputHairline = isDark ? 'rgba(255,255,255,0.08)' : '#ECEDF0';
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.card, paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
+    <View style={[styles.root, { backgroundColor: colors.card, paddingTop: insets.top }, pageLayout.frameStyle]}>
+      <View style={[styles.topBar, pageLayout.gutterStyle]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -151,7 +158,7 @@ export default function GooglePhoneSetupScreen({
 
       <KeyboardAwareScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl }, pageLayout.gutterStyle]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -169,7 +176,7 @@ export default function GooglePhoneSetupScreen({
             <Image source={{ uri: avatar }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
-              <Text style={styles.avatarInitials}>
+              <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.avatarInitials, { color: colors.onPrimary }]}>
                 {(firstName?.[0] || 'U').toUpperCase()}
               </Text>
             </View>
@@ -235,7 +242,7 @@ export default function GooglePhoneSetupScreen({
           {isPhoneVerified ? (
             <View style={styles.verifiedBadge}>
               <ShieldCheck size={12} color="#10B981" />
-              <Text style={styles.verifiedText}>VERIFIED</Text>
+              <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={styles.verifiedText}>VERIFIED</Text>
             </View>
           ) : null}
         </View>
@@ -251,7 +258,7 @@ export default function GooglePhoneSetupScreen({
         >
           <View style={styles.prefixBox}>
             <Phone size={16} color={colors.textGray} />
-            <Text style={[styles.prefixText, { color: colors.textDark }]}>+63</Text>
+            <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.prefixText, { color: colors.textDark }]}>+63</Text>
           </View>
           <TextInput
             style={[styles.phoneInput, { color: colors.textDark }]}
@@ -395,23 +402,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   identityName: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
   },
   identityEmail: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(13, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     marginTop: 2,
   },
   title: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xxl), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(22, 0.25),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xxl),
     letterSpacing: -0.3,
   },
   subtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(14, 0.2),
-    lineHeight: 20,
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     marginTop: Spacing.sm,
     marginBottom: Spacing.xl,
   },
@@ -425,8 +435,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   errorText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(12, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     flex: 1,
   },
   labelRow: {
@@ -436,8 +447,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   label: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
     letterSpacing: 0.6,
   },
   verifiedBadge: {
@@ -450,9 +462,10 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
   },
   verifiedText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xs), 'label'),
     color: '#10B981',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(10, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.xs),
   },
   inputContainer: {
     flexDirection: 'row',
@@ -471,13 +484,15 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(148, 163, 184, 0.2)',
   },
   prefixText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
   },
   phoneInput: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.base), 'body'),
     flex: 1,
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.base),
     paddingLeft: Spacing.md,
   },
   verifyButton: {
@@ -488,8 +503,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   verifyButtonText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(13, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
   submitButton: {
     height: 52,
@@ -504,7 +520,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   submitText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.md), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.md),
   },
 });

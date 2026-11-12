@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useMemo, useEffect } from 'react';
 import {
   FlatList,
@@ -35,24 +36,21 @@ import {
   Spacing,
   getPortalLineHeight,
   scaledPortalFontSize,
-  useResponsive,
 } from '../../config/theme';
 
-const VERTICAL_IMAGE_HEIGHT = 150;
+const VERTICAL_IMAGE_HEIGHT = 180;
 
 export default function MerchantCategoryStoresScreen({
   route,
   navigation,
 }: RootStackScreenProps<'MerchantCategoryStores'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user, category, selected } = route.params;
   const { colors, isDark } = useThemeColor();
-  const { width: windowWidth } = useResponsive();
-  const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
-  // Home's card width (2026-10-14). These rows still took 58% of the column,
-  // so every phone showed 1.7 oversized cards wall to wall, the cramped look
-  // Home had until it moved to a fixed width; now the two match.
-  const horizontalItemWidth = Math.round(Math.min(STORE_CARD_WIDTH, contentWidth * 0.58));
-  const horizontalImageHeight = Math.round(horizontalItemWidth * 0.5);
+  const contentWidth = pageLayout.contentWidth;
+  // Match Home's moderate card width and 4:3 photos, with a next-card preview.
+  const horizontalItemWidth = Math.round(Math.min(STORE_CARD_WIDTH, contentWidth * 0.68));
+  const horizontalImageHeight = Math.round(horizontalItemWidth * 0.75);
 
   const { location, loading: locationLoading } = useDefaultDeliveryLocation(user?.id);
   const near = location
@@ -113,7 +111,7 @@ export default function MerchantCategoryStoresScreen({
     [categoryStores, popularStores]
   );
 
-  // Store selection up to 3 stores, deduplicating across Google & catalogue keys while preserving placeId
+  // Store selection up to the store limit (services/storeLimit.ts), deduplicating across Google & catalogue keys while preserving placeId
   const { picked, toggle, isPicked, limitError } = useStorePicks(
     selected ? [selected] : [],
     cataloguePool
@@ -231,8 +229,8 @@ export default function MerchantCategoryStoresScreen({
             horizontal
             showsHorizontalScrollIndicator={false}
             scrollEnabled={false}
-            style={styles.bleed}
-            contentContainerStyle={styles.horizontalRow}
+            style={[styles.bleed, pageLayout.bleedStyle]}
+            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
             testID="category-popular-loading"
           >
             {[0, 1, 2].map((i) => (
@@ -243,8 +241,7 @@ export default function MerchantCategoryStoresScreen({
                   borderRadius={BorderRadius.lg}
                 />
                 <View style={styles.shimmerBody}>
-                  <ShimmerWave width="75%" height={14} borderRadius={BorderRadius.sm} />
-                  <ShimmerWave width="50%" height={11} borderRadius={BorderRadius.sm} />
+                  <ShimmerWave width="85%" height={11} borderRadius={BorderRadius.sm} />
                 </View>
               </View>
             ))}
@@ -269,8 +266,8 @@ export default function MerchantCategoryStoresScreen({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.bleed}
-            contentContainerStyle={styles.horizontalRow}
+            style={[styles.bleed, pageLayout.bleedStyle]}
+            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
             testID="category-popular-list"
           >
             {popularStores.map((store) => (
@@ -287,6 +284,7 @@ export default function MerchantCategoryStoresScreen({
                 showRating
                 selectable
                 selected={isPicked(store)}
+                presentation="photo-overlay"
               />
             ))}
           </ScrollView>
@@ -307,8 +305,8 @@ export default function MerchantCategoryStoresScreen({
             horizontal
             showsHorizontalScrollIndicator={false}
             scrollEnabled={false}
-            style={styles.bleed}
-            contentContainerStyle={styles.horizontalRow}
+            style={[styles.bleed, pageLayout.bleedStyle]}
+            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
             testID="category-nearby-loading"
           >
             {[0, 1, 2].map((i) => (
@@ -319,8 +317,7 @@ export default function MerchantCategoryStoresScreen({
                   borderRadius={BorderRadius.lg}
                 />
                 <View style={styles.shimmerBody}>
-                  <ShimmerWave width="75%" height={14} borderRadius={BorderRadius.sm} />
-                  <ShimmerWave width="50%" height={11} borderRadius={BorderRadius.sm} />
+                  <ShimmerWave width="85%" height={11} borderRadius={BorderRadius.sm} />
                 </View>
               </View>
             ))}
@@ -345,8 +342,8 @@ export default function MerchantCategoryStoresScreen({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.bleed}
-            contentContainerStyle={styles.horizontalRow}
+            style={[styles.bleed, pageLayout.bleedStyle]}
+            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
             testID="category-nearby-list"
           >
             {nearbyStores.map((store) => (
@@ -363,6 +360,7 @@ export default function MerchantCategoryStoresScreen({
                 showRating
                 selectable
                 selected={isPicked(store)}
+                presentation="photo-overlay"
               />
             ))}
           </ScrollView>
@@ -389,8 +387,7 @@ export default function MerchantCategoryStoresScreen({
                 borderRadius={BorderRadius.lg}
               />
               <View style={styles.shimmerBody}>
-                <ShimmerWave width="60%" height={15} borderRadius={BorderRadius.sm} />
-                <ShimmerWave width="40%" height={12} borderRadius={BorderRadius.sm} />
+                <ShimmerWave width="60%" height={12} borderRadius={BorderRadius.sm} />
               </View>
             </View>
           ))}
@@ -419,10 +416,10 @@ export default function MerchantCategoryStoresScreen({
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.bgApp }]}
+      style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]}
       edges={picked.length > 0 ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
     >
-      <View style={styles.navHeaderRow}>
+      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={PortalTouchTargets.compactHitSlop}
@@ -438,7 +435,7 @@ export default function MerchantCategoryStoresScreen({
         </TouchableOpacity>
         <Text
           style={[styles.navTitle, { color: colors.textDark }]}
-          numberOfLines={1}
+          numberOfLines={2}
           maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
         >
           {category.name}
@@ -485,10 +482,11 @@ export default function MerchantCategoryStoresScreen({
             showRating
             selectable
             selected={isPicked(item)}
+            presentation="photo-overlay"
           />
         )}
         ItemSeparatorComponent={() => <View style={styles.verticalSeparator} />}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
         showsVerticalScrollIndicator={false}
         extraData={picked}
         testID="merchant-category-stores-list"
@@ -529,8 +527,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: Spacing.sm,
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   limitErrorText: {
     paddingHorizontal: Spacing.md,

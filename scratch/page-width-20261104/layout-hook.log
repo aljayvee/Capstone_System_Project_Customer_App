@@ -1,0 +1,66 @@
+PASS src/__tests__/OfflineGate.test.tsx (45.426 s)
+FAIL src/__tests__/usePageLayout.test.tsx
+  ● page layout style ownership › positions a phone frame inside asymmetric safe areas and gives nested content only a gutter
+
+    expect(received).toMatchObject(expected)
+
+    Matcher error: received value must be a non-null object
+
+    Received has value: undefined
+
+      19 |     jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
+      20 |     const { result } = await renderHook(() => usePageLayout(), { wrapper });
+    > 21 |     expect(result.current.frameStyle).toMatchObject({ width: 330, marginLeft: 9, marginRight: 21 });
+         |                                       ^
+      22 |     expect(result.current.gutterStyle).toEqual({ paddingHorizontal: 12 });
+      23 |     expect(result.current.contentWidth).toBe(306);
+      24 |     expect(result.current.insetStyle).toEqual({ paddingLeft: 21, paddingRight: 33 });
+
+      at Object.toMatchObject (src/__tests__/usePageLayout.test.tsx:21:39)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+  ● page layout style ownership › does not consume safe areas again inside a horizontal SafeAreaView
+
+    expect(received).toMatchObject(expected)
+
+    Matcher error: received value must be a non-null object
+
+    Received has value: undefined
+
+      29 |     jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
+      30 |     const { result } = await renderHook(() => usePageLayout({ horizontalSafeAreaApplied: true }), { wrapper });
+    > 31 |     expect(result.current.frameStyle).toMatchObject({ width: 330, marginLeft: 0, marginRight: 0 });
+         |                                       ^
+      32 |     expect(result.current.contentWidth).toBe(306);
+      33 |     expect(result.current.safeAreaFrameStyle).toEqual({ width: '100%', maxWidth: '100%', alignSelf: 'stretch' });
+      34 |     expect(result.current.insetStyle).toEqual({ paddingLeft: 12, paddingRight: 12 });
+
+      at Object.toMatchObject (src/__tests__/usePageLayout.test.tsx:31:39)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+  ● page layout style ownership › removes phone overrides when the viewport becomes a tablet
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+      39 |     dimensions.mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
+      40 |     const { result, rerender } = await renderHook(() => usePageLayout({ tabletGutter: 24 }), { wrapper });
+    > 41 |     expect(result.current.gutterStyle).toBeDefined();
+         |                                        ^
+      42 |     dimensions.mockReturnValue({ width: 800, height: 1024, scale: 2, fontScale: 1 });
+      43 |     await rerender();
+      44 |     expect(result.current.frameWidth).toBe(580);
+
+      at Object.toBeDefined (src/__tests__/usePageLayout.test.tsx:41:40)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       3 failed, 6 passed, 9 total
+Snapshots:   0 total
+Time:        52.107 s
+Test results written to: scratch\page-width-20261104\layout-hook-results.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

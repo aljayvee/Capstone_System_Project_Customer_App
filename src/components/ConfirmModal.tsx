@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'rea
 import { X, Info, AlertTriangle, AlertCircle, CheckCircle2, Trash2, Lock } from 'lucide-react-native';
 import TrueNativeModal from './transitions/TrueNativeModal';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, FontSizes, Spacing, FontFamily, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, BorderRadius, Spacing, FontFamily, Shadows } from '../config/theme';
 
 export type ModalVariant = 'confirm' | 'info' | 'error' | 'warning' | 'success';
 export type ModalIcon = 'info' | 'error' | 'warning' | 'success' | 'trash' | 'lock' | null;
@@ -80,10 +80,11 @@ export default function ConfirmModal({
       accessibilityLabel={cancelLabel}
     >
       <Text
+        maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
         style={[
           styles.btnTextBase,
           isCancelPrimary
-            ? styles.primaryBtnText
+            ? [styles.primaryBtnText, { color: colors.onPrimary }]
             : [styles.secondaryBtnText, { color: isDark ? 'rgba(255,255,255,0.70)' : colors.textGray }],
         ]}
       >
@@ -155,16 +156,17 @@ export default function ConfirmModal({
     >
       {loading ? (
         <ActivityIndicator
-          color={isCancelPrimary ? (isDark ? '#FFFFFF' : colors.textDark) : '#FFFFFF'}
+          color={isCancelPrimary ? colors.textDark : destructive ? colors.onDanger : colors.onPrimary}
           size="small"
         />
       ) : (
         <Text
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
           style={[
             styles.btnTextBase,
             isCancelPrimary
               ? [styles.secondaryBtnText, { color: isDark ? 'rgba(255,255,255,0.70)' : colors.textGray }]
-              : styles.primaryBtnText,
+              : [styles.primaryBtnText, { color: destructive ? colors.onDanger : colors.onPrimary }],
           ]}
         >
           {effectiveConfirmLabel}
@@ -193,8 +195,8 @@ export default function ConfirmModal({
         {renderIcon()}
 
         {/* TITLE & MESSAGE */}
-        <Text style={[styles.title, { color: colors.textDark, marginTop: Spacing.xs }]}>{title}</Text>
-        <Text style={[styles.message, { color: colors.textGray }]}>{message}</Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.title, { color: colors.textDark, marginTop: Spacing.xs }]}>{title}</Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.message, { color: colors.textGray }]}>{message}</Text>
 
         {/* ACTION BUTTONS */}
         <View style={[styles.buttonContainer, singleButton ? styles.buttonRow : isVertical ? styles.buttonColumn : styles.buttonRow]}>
@@ -270,16 +272,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   title: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xl,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     textAlign: 'center',
     marginBottom: Spacing.xs + 2,
   },
   message: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     marginBottom: Spacing.xl,
     paddingHorizontal: Spacing.xs,
   },
@@ -310,7 +313,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   btnTextBase: {
-    fontSize: FontSizes.sm,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     textAlign: 'center',
   },
   primaryBtnText: {

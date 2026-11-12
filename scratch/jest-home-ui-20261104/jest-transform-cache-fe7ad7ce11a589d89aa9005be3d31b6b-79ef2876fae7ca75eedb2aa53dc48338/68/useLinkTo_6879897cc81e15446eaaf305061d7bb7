@@ -1,0 +1,24 @@
+42fea80c59f2d5b18080d18cbf4b1cc9
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useLinkTo = useLinkTo;
+var _core = require("@react-navigation/core");
+var React = _interopRequireWildcard(require("react"));
+var _useLinkBuilder = require("./useLinkBuilder.js");
+function useLinkTo() {
+  var navigation = React.useContext(_core.NavigationContainerRefContext);
+  var buildAction = (0, _useLinkBuilder.useBuildAction)();
+  var linkTo = React.useCallback(href => {
+    if (navigation === undefined) {
+      throw new Error("Couldn't find a navigation object. Is your component inside NavigationContainer?");
+    }
+    var action = buildAction(href);
+    navigation.dispatch(action);
+  }, [buildAction, navigation]);
+  return linkTo;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY29yZSIsInJlcXVpcmUiLCJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwiX3VzZUxpbmtCdWlsZGVyIiwidXNlTGlua1RvIiwibmF2aWdhdGlvbiIsInVzZUNvbnRleHQiLCJOYXZpZ2F0aW9uQ29udGFpbmVyUmVmQ29udGV4dCIsImJ1aWxkQWN0aW9uIiwidXNlQnVpbGRBY3Rpb24iLCJsaW5rVG8iLCJ1c2VDYWxsYmFjayIsImhyZWYiLCJ1bmRlZmluZWQiLCJFcnJvciIsImFjdGlvbiIsImRpc3BhdGNoIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL3VzZUxpbmtUby50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFBQSxJQUFBQSxLQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxLQUFBLEdBQUFDLHVCQUFBLENBQUFGLE9BQUE7QUFFQSxJQUFBRyxlQUFBLEdBQUFILE9BQUE7QUFPTyxTQUFTSSxTQUFTQSxDQUFBLEVBQUc7RUFDMUIsSUFBTUMsVUFBVSxHQUFHSixLQUFLLENBQUNLLFVBQVUsQ0FBQ0MsbUNBQTZCLENBQUM7RUFDbEUsSUFBTUMsV0FBVyxHQUFHLElBQUFDLDhCQUFjLEVBQUMsQ0FBQztFQUVwQyxJQUFNQyxNQUFNLEdBQUdULEtBQUssQ0FBQ1UsV0FBVyxDQUM3QkMsSUFBWSxJQUFLO0lBQ2hCLElBQUlQLFVBQVUsS0FBS1EsU0FBUyxFQUFFO01BQzVCLE1BQU0sSUFBSUMsS0FBSyxDQUNiLGtGQUNGLENBQUM7SUFDSDtJQUVBLElBQU1DLE1BQU0sR0FBR1AsV0FBVyxDQUFDSSxJQUFJLENBQUM7SUFFaENQLFVBQVUsQ0FBQ1csUUFBUSxDQUFDRCxNQUFNLENBQUM7RUFDN0IsQ0FBQyxFQUNELENBQUNQLFdBQVcsRUFBRUgsVUFBVSxDQUMxQixDQUFDO0VBRUQsT0FBT0ssTUFBTTtBQUNmIiwiaWdub3JlTGlzdCI6W119

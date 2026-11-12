@@ -537,7 +537,7 @@ describe('CustomerChatScreen (Messenger-Style Chat UI, Presence & New Message Pi
     });
 
     // Press Decline / Adjust
-    fireEvent.press(res.getByText('Decline / Adjust'));
+    await fireEvent.press(res.getByText('Decline / Adjust'));
 
     await waitFor(() => {
       expect(res.getByText('Decline or Request Adjustment')).toBeTruthy();

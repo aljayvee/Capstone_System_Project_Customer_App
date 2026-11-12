@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { apiClient } from '../services/apiClient';
 import { showAppAlert } from '../services/alertModal';
@@ -101,9 +102,18 @@ describe('the store search screen', () => {
     await res.findByTestId('establishment-g1');
 
     expect(res.getByTestId('establishment-photo-g1')).toBeTruthy();
+    // ImageBackground forwards its testID to the inner image; the title is
+    // its sibling inside the frame that owns the photo's layout.
+    const photoFrame = res.getByTestId('establishment-title-overlay-g1').parent!;
+    expect(StyleSheet.flatten(photoFrame.props.style).minHeight).toBe(180);
+    expect(within(photoFrame).getByText('Mercury Drug')).toBeTruthy();
+    expect(within(photoFrame).queryByTestId('establishment-distance-g1')).toBeNull();
+    expect(res.getByTestId('establishment-distance-g1').props.children).toBe('210 m');
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     expect(res.getByText('Photo: Juan')).toBeTruthy();
     // No photo of its own: the category icon stands in.
     expect(res.getByTestId('establishment-icon-g2')).toBeTruthy();
+    expect(within(res.getByTestId('establishment-icon-g2')).getByText('Rose Pharmacy')).toBeTruthy();
     expect(res.getByTestId('establishment-pick-g1')).toBeTruthy();
     expect(res.queryByText('Where should we shop?')).toBeNull();
     expect(res.queryByText('Pick up to 3')).toBeNull();
@@ -115,6 +125,8 @@ describe('the store search screen', () => {
     await fireEvent.press(res.getByTestId('establishment-g3'));
     expect(res.getByText('Proceed with these stores (2)')).toBeTruthy();
     expect(res.getByTestId('establishment-g1').props.accessibilityState).toEqual({ selected: true });
+    expect(within(res.getByTestId('picked-stores')).getByTestId('establishment-title-overlay-g1')).toBeTruthy();
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
 
     await fireEvent.press(res.getByTestId('store-search-proceed'));
     expect(navigation.navigate).toHaveBeenCalledWith('ErrandItems', {
@@ -161,6 +173,8 @@ describe('the store search screen', () => {
 
     await fireEvent.changeText(res.getByTestId('establishment-search-input'), 'mercury');
     expect(await res.findByTestId('establishment-m1', {}, { timeout: 2000 })).toBeTruthy();
+    expect(within(res.getByTestId('establishment-title-overlay-m1')).getByText('Mercury Drug Alunan')).toBeTruthy();
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     await waitFor(() =>
       expect(apiClient.get).toHaveBeenLastCalledWith(
         '/places/establishments',

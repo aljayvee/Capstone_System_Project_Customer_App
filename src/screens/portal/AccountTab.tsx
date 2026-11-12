@@ -89,6 +89,7 @@ export default function AccountTab({
 }: AccountTabProps) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, setThemeMode } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
   const [pinPickerVisible, setPinPickerVisible] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -286,7 +287,7 @@ export default function AccountTab({
               <Image source={{ uri: localUser.avatar }} style={styles.avatarImage} />
             ) : (
               <View style={[styles.avatarBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarText} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+                <Text style={[styles.avatarText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
                   {userInitials}
                 </Text>
               </View>
@@ -300,12 +301,12 @@ export default function AccountTab({
                 style={[
                   styles.avatarCameraBadge,
                   {
-                    backgroundColor: colors.primary,
+                    backgroundColor: brandColor,
                     borderColor: isDark ? colors.bgApp : '#FFFFFF',
                   },
                 ]}
               >
-                <Camera size={12} color="#FFFFFF" strokeWidth={2.4} />
+                <Camera size={12} color={colors.onPrimary} strokeWidth={2.4} />
               </View>
             )}
           </TouchableOpacity>
@@ -328,9 +329,9 @@ export default function AccountTab({
                 accessibilityRole="button"
                 accessibilityLabel="Edit Profile"
               >
-                <Pencil size={12} color={colors.primary} strokeWidth={2.2} />
+                <Pencil size={12} color={brandColor} strokeWidth={2.2} />
                 <Text
-                  style={[styles.inlineEditText, { color: colors.primary }]}
+                  style={[styles.inlineEditText, { color: brandColor }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                 >
                   Edit Profile
@@ -411,8 +412,8 @@ export default function AccountTab({
           accessibilityRole="button"
           accessibilityLabel="Delivery pinpoint"
         >
-          <View style={[styles.statsBentoIconBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF' }]}>
-            <MapPin size={17} color="#3B82F6" strokeWidth={2.2} />
+          <View style={[styles.statsBentoIconBadge, { backgroundColor: isDark ? colors.bgGray : colors.primarySurface }]}>
+            <MapPin size={17} color={brandColor} strokeWidth={2.2} />
           </View>
           <Text
             style={[styles.statsBentoNumber, { color: colors.textDark }]}
@@ -497,7 +498,7 @@ export default function AccountTab({
                 <View style={styles.radarRingOuter} />
                 <View style={styles.radarRingInner} />
                 <View style={[styles.radarPinBadge, { backgroundColor: colors.primary }]}>
-                  <MapPin size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  <MapPin size={18} color={colors.onPrimary} strokeWidth={2.4} />
                 </View>
                 <Text
                   style={[styles.radarLabelText, { color: colors.textDark }]}
@@ -614,7 +615,7 @@ export default function AccountTab({
             </Text>
             <View style={[styles.emptyAddressCTA, { backgroundColor: colors.primary }]}>
               <Text
-                style={styles.emptyAddressCTAText}
+                style={[styles.emptyAddressCTAText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
               >
                 View Delivery Pin on Map
@@ -852,7 +853,7 @@ export default function AccountTab({
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.photoModalHeader}>
-              <Text style={[styles.photoModalTitle, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalTitle, { color: colors.textDark }]}>
                 Profile Photo
               </Text>
               <TouchableOpacity
@@ -863,7 +864,7 @@ export default function AccountTab({
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.photoModalSub, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalSub, { color: colors.textGray }]}>
               {localUser.avatar
                 ? 'Update or remove your current profile photo.'
                 : 'Select an image from your device gallery to personalize your account.'}
@@ -880,7 +881,7 @@ export default function AccountTab({
                 accessibilityLabel="Choose from Gallery"
               >
                 <ImageIcon size={18} color={colors.primary} />
-                <Text style={[styles.photoOptionText, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
                   Choose from Gallery
                 </Text>
               </TouchableOpacity>
@@ -895,7 +896,7 @@ export default function AccountTab({
                 accessibilityLabel="Take a Photo"
               >
                 <Camera size={18} color={colors.primary} />
-                <Text style={[styles.photoOptionText, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
                   Take a Photo
                 </Text>
               </TouchableOpacity>
@@ -911,7 +912,7 @@ export default function AccountTab({
                   accessibilityLabel="Remove Current Photo"
                 >
                   <Trash2 size={18} color={colors.danger} />
-                  <Text style={[styles.photoOptionText, { color: colors.danger }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.danger }]}>
                     Remove Current Photo
                   </Text>
                 </TouchableOpacity>

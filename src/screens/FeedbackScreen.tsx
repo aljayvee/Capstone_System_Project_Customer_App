@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState } from 'react';
 import {
   View,
@@ -31,11 +32,13 @@ import { toUserMessage } from '../services/errorMessages';
 import { useAuth } from '../context/AuthContext';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
   FontFamily,
   Spacing,
   BorderRadius,
   AuthFontSizeMultipliers,
-  scaledFontSize,
 } from '../config/theme';
 import type { RootStackScreenProps } from '../navigation/types';
 
@@ -70,6 +73,7 @@ const RATING_LABELS: Record<number, string> = {
 };
 
 export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Feedback'>) {
+  const pageLayout = usePageLayout({ tabletGutter: 18 });
   const { user } = useAuth();
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
@@ -154,7 +158,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
   const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bgApp }]}>
+    <View style={[styles.root, { backgroundColor: colors.bgApp }, pageLayout.frameStyle]}>
       {/* HEADER */}
       <View
         style={[
@@ -163,8 +167,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
             paddingTop: insets.top + Spacing.sm,
             backgroundColor: colors.card,
             borderBottomColor: cardBorder,
-          },
-        ]}
+          }, pageLayout.gutterStyle]}
       >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -184,7 +187,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl + 24 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl + 24 }, pageLayout.gutterStyle]}
         keyboardShouldPersistTaps="handled"
         bottomOffset={Spacing.xxl + 16}
       >
@@ -205,8 +208,8 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
             </Text>
 
             <View style={[styles.ticketBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FEE2E2' }]}>
-              <Text style={styles.ticketLabel}>REFERENCE TICKET</Text>
-              <Text style={styles.ticketNumber}>{successRefCode}</Text>
+              <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={styles.ticketLabel}>REFERENCE TICKET</Text>
+              <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={styles.ticketNumber}>{successRefCode}</Text>
             </View>
 
             <Text style={[styles.directDevNote, { color: colors.textLight }]} maxFontSizeMultiplier={1.15}>
@@ -219,7 +222,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
               activeOpacity={0.85}
               testID="feedback-done-button"
             >
-              <Text style={styles.primaryButtonText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
+              <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                 Back to Home
               </Text>
             </TouchableOpacity>
@@ -348,6 +351,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
                 ]}
               >
                 <TextInput
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="feedback-subject-input"
                   style={[styles.textInput, { color: colors.textDark }]}
                   placeholder="e.g. Map pin jumped to another street"
@@ -367,7 +371,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
                 <Text style={[styles.inputLabel, { color: colors.textDark }]} maxFontSizeMultiplier={1.15}>
                   DETAILED FEEDBACK *
                 </Text>
-                <Text style={[styles.charCounter, { color: colors.textLight }]}>
+                <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.charCounter, { color: colors.textLight }]}>
                   {message.length} / 2000
                 </Text>
               </View>
@@ -382,6 +386,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
                 ]}
               >
                 <TextInput
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="feedback-message-input"
                   style={[styles.textArea, { color: colors.textDark }]}
                   placeholder="Tell us what happened, steps to reproduce, or suggestions..."
@@ -419,6 +424,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
                 ]}
               >
                 <TextInput
+                  maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                   testID="feedback-email-input"
                   style={[styles.textInput, { color: colors.textDark }]}
                   placeholder="Email address (e.g. you@example.com)"
@@ -468,11 +474,11 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
             >
               {submitting ? (
                 <View style={styles.buttonLoadingRow}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>Submitting Review...</Text>
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                  <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Submitting Review...</Text>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
+                <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                   Submit Feedback
                 </Text>
               )}
@@ -504,8 +510,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(17, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   scrollContent: {
     padding: Spacing.lg,
@@ -530,14 +537,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   introTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: 2,
   },
   introBody: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(12.5, 0.2),
-    lineHeight: 17,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   errorBanner: {
     flexDirection: 'row',
@@ -548,13 +556,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   errorBannerText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(12.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     flex: 1,
   },
   sectionHeading: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(14, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: Spacing.sm,
   },
   categoryWrap: {
@@ -572,7 +582,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   categoryLabel: {
-    fontSize: scaledFontSize(12, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   ratingCard: {
     borderWidth: 1,
@@ -582,8 +594,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   fieldLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(14, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginBottom: Spacing.sm,
   },
   starsRow: {
@@ -596,16 +609,18 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   ratingFeedbackText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(12.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginTop: Spacing.xs,
   },
   inputGroup: {
     marginBottom: Spacing.lg,
   },
   inputLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     letterSpacing: 0.5,
     marginBottom: Spacing.xs,
   },
@@ -615,8 +630,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   charCounter: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   textInputWrapper: {
     borderRadius: BorderRadius.md,
@@ -626,8 +642,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   textInput: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(14, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     height: '100%',
   },
   textAreaWrapper: {
@@ -638,8 +655,8 @@ const styles = StyleSheet.create({
   },
   textArea: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(14, 0.2),
-    lineHeight: 20,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     height: 100,
   },
   contactCard: {
@@ -650,8 +667,8 @@ const styles = StyleSheet.create({
   },
   contactHint: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(12, 0.2),
-    lineHeight: 16,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   telemetryCard: {
     borderWidth: 1,
@@ -665,14 +682,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   telemetryTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(13.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginBottom: 2,
   },
   telemetrySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(11.5, 0.2),
-    lineHeight: 15,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   primaryButton: {
     height: 52,
@@ -686,8 +704,9 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   primaryButtonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(15, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     color: '#FFFFFF',
   },
   disabledButton: {
@@ -710,15 +729,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   successTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(18, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     marginBottom: Spacing.xs,
     textAlign: 'center',
   },
   successSubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(13, 0.2),
-    lineHeight: 19,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     textAlign: 'center',
     marginBottom: Spacing.lg,
   },
@@ -730,20 +750,23 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   ticketLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     letterSpacing: 0.8,
     color: '#DC2626',
     marginBottom: 2,
   },
   ticketNumber: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(16, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     color: '#DC2626',
   },
   directDevNote: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     textAlign: 'center',
     marginBottom: Spacing.xl,
   },

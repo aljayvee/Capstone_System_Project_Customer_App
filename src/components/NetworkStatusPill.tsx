@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { WifiOff, CheckCircle2, Signal } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing } from '../config/theme';
 
 interface NetworkStatusPillProps {
   isOffline?: boolean;
@@ -72,7 +72,8 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   text: {
-    fontSize: FontSizes.xs,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.semibold,
   },
 });

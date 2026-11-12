@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { RETRY_LABEL } from '../services/errorMessages';
-import { FontFamily, FontSizes, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, Shadows, useResponsive, MAX_CONTENT_WIDTH, moderateScale } from '../config/theme';
 import { BackendMerchantCategory } from '../services/merchantCategories';
 import { useCategoryImages } from '../hooks/useCategoryImages';
 import { useMerchantCategories } from '../hooks/useMerchantCategories';
@@ -123,11 +123,11 @@ export default function MerchantCategoriesModal({
             <View style={styles.headerTextCol}>
               <View style={styles.headerTitleRow}>
                 <Sparkles size={18} color={colors.primary} />
-                <Text style={[styles.sheetTitle, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sheetTitle, { color: colors.textDark }]}>
                   Store & Merchant Categories
                 </Text>
               </View>
-              <Text style={[styles.sheetSubtitle, { color: colors.textGray }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sheetSubtitle, { color: colors.textGray }]}>
                 Select any category found in the system to add items to buy
               </Text>
             </View>
@@ -158,6 +158,7 @@ export default function MerchantCategoriesModal({
           >
             <Search size={16} color={colors.primary} />
             <TextInput
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.input}
               style={[styles.searchInput, { color: colors.textDark }]}
               placeholder="Search category (e.g. Grocery, Pharmacy, Food)..."
               placeholderTextColor={colors.textLight}
@@ -176,7 +177,7 @@ export default function MerchantCategoriesModal({
           {loading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.textGray }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.loadingText, { color: colors.textGray }]}>
                 Loading merchant categories from server...
               </Text>
             </View>
@@ -234,10 +235,10 @@ export default function MerchantCategoriesModal({
                       )}
 
                       <View style={styles.categoryInfoCol}>
-                        <Text style={[styles.categoryName, { color: colors.textDark }]} numberOfLines={1}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.categoryName, { color: colors.textDark }]} numberOfLines={2}>
                           {catName}
                         </Text>
-                        <Text style={[styles.categoryDesc, { color: colors.textGray }]} numberOfLines={2}>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.categoryDesc, { color: colors.textGray }]} numberOfLines={2}>
                           {cat.description || `Shop items from ${catName} stores`}
                         </Text>
                       </View>
@@ -248,18 +249,18 @@ export default function MerchantCategoriesModal({
                 })
               ) : (
                 <View style={styles.emptyBox}>
-                  <Text style={[styles.emptyTitle, { color: colors.textDark }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyTitle, { color: colors.textDark }]}>
                     No categories found
                   </Text>
-                  <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptySubtitle, { color: colors.textGray }]}>
                     Try another keyword, or load the list again.
                   </Text>
                   <TouchableOpacity
                     style={[styles.retryBtn, { backgroundColor: colors.primary }]}
                     onPress={loadBackendCategories}
                   >
-                    <RefreshCw size={14} color="#FFFFFF" />
-                    <Text style={styles.retryBtnText} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
+                    <RefreshCw size={14} color={colors.onPrimary} />
+                    <Text style={[styles.retryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -317,12 +318,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sheetTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.md + 1, 0.35),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
   },
   sheetSubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   closeButton: {
     width: 32,
@@ -342,9 +345,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   searchInput: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     flex: 1,
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     padding: 0,
   },
   loadingBox: {
@@ -353,8 +357,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loadingText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   scrollList: {
     gap: Spacing.sm,
@@ -387,14 +392,15 @@ const styles = StyleSheet.create({
     marginRight: Spacing.xs,
   },
   categoryName: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: 2,
   },
   categoryDesc: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.2),
-    lineHeight: 14,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
   },
   emptyBox: {
     paddingVertical: Spacing.lg,
@@ -402,13 +408,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     marginBottom: 2,
   },
   emptySubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   retryBtn: {
     flexDirection: 'row',
@@ -420,8 +428,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   retryBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
 });

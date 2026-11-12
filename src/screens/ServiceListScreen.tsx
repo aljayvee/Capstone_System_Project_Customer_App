@@ -1,10 +1,11 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, ShoppingBag, ArrowRight, ChevronLeft } from 'lucide-react-native';
 import { RootStackScreenProps } from '../navigation/types';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, Shadows } from '../config/theme';
 
 export const SERVICE_TYPES = [
   {
@@ -16,6 +17,7 @@ export const SERVICE_TYPES = [
 ];
 
 export default function ServiceListScreen({ route, navigation }: RootStackScreenProps<'ServiceList'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const { user } = route.params || {};
   const [selectedServices, setSelectedServices] = useState<string[]>(['Pabili']);
   const { colors, isDark } = useThemeColor();
@@ -35,7 +37,7 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.gutterStyle]} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.navHeaderRow}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -45,7 +47,7 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
         >
           <ChevronLeft size={22} color={colors.textDark} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.textDark }]}>Select Service</Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.navTitle, { color: colors.textDark }]}>Select Service</Text>
         <View style={styles.navHeaderRightPlaceholder} />
       </View>
 
@@ -53,8 +55,8 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
         <View style={[styles.iconBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' }]}>
           <ShoppingBag size={22} color={colors.primary} />
         </View>
-        <Text style={[styles.headerTitle, { color: colors.textDark }]}>Select Errand Service</Text>
-        <Text style={[styles.subTitle, { color: colors.textGray }]}>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headerTitle, { color: colors.textDark }]}>Select Errand Service</Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.subTitle, { color: colors.textGray }]}>
           Select Pabili Personal Shopper service to build your errand request
         </Text>
       </View>
@@ -81,6 +83,7 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
             >
               <View style={styles.cardHeader}>
                 <Text
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
                   style={[
                     styles.cardTitle,
                     { color: isSelected ? colors.primary : colors.textDark },
@@ -90,13 +93,13 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
                 </Text>
                 {isSelected && (
                   <View style={[styles.checkBadge, { backgroundColor: colors.primary }]} testID={`selected-badge-${service.id}`}>
-                    <Check size={12} color="#FFFFFF" strokeWidth={3} />
-                    <Text style={styles.checkBadgeText}>Selected</Text>
+                    <Check size={12} color={colors.onPrimary} strokeWidth={3} />
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.checkBadgeText, { color: colors.onPrimary }]}>Selected</Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.tagline, { color: colors.primary }]}>{service.tagline}</Text>
-              <Text style={[styles.desc, { color: colors.textMedium }]}>{service.desc}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.tagline, { color: colors.primary }]}>{service.tagline}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.desc, { color: colors.textMedium }]}>{service.desc}</Text>
             </TouchableOpacity>
           );
         })}
@@ -112,10 +115,10 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
           testID="summary-bar"
         >
           <View style={styles.summaryInfo}>
-            <Text style={[styles.summaryText, { color: '#FFFFFF' }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.summaryText, { color: '#FFFFFF' }]}>
               Selected: {selectedServices.join(', ')}
             </Text>
-            <Text style={[styles.summaryCount, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.summaryCount, { color: 'rgba(255, 255, 255, 0.7)' }]}>
               Pabili Shopper Service Active
             </Text>
           </View>
@@ -124,8 +127,8 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
             style={[styles.continueBtn, { backgroundColor: colors.primary }]}
             onPress={handleContinue}
           >
-            <Text style={styles.continueBtnText}>Continue</Text>
-            <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.continueBtnText, { color: colors.onPrimary }]}>Continue</Text>
+            <ArrowRight size={16} color={colors.onPrimary} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
       )}
@@ -149,8 +152,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   navHeaderRightPlaceholder: {
     width: 38,
@@ -165,14 +169,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   headerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xxl,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     marginBottom: Spacing.xs,
   },
   subTitle: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   scrollList: { flex: 1 },
   scrollContent: { paddingBottom: Spacing.xl },
@@ -189,8 +194,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   cardTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xl,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   checkBadge: {
     flexDirection: 'row',
@@ -201,19 +207,21 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   checkBadgeText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   tagline: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.semibold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginBottom: Spacing.xs,
   },
   desc: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   summaryBar: {
     borderRadius: BorderRadius.lg,
@@ -225,12 +233,14 @@ const styles = StyleSheet.create({
   },
   summaryInfo: { flex: 1, marginRight: Spacing.sm },
   summaryText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   summaryCount: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     marginTop: 2,
   },
   continueBtn: {
@@ -242,8 +252,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   continueBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
 });

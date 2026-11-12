@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within } from '@testing-library/react-native';
 import { apiClient } from '../services/apiClient';
 import { clearNearbyEstablishmentCache, isPabiliEstablishment, isPabiliSearchQuery, searchEstablishments } from '../services/establishments';
 import NearbyStoresRow from '../components/NearbyStoresRow';
@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 describe('Stores near you', () => {
-  it('lists the ranked stores as cards, distance in green, with a See all card at the end', async () => {
+  it('lists only ranked store cards, with green distances and no trailing See all card', async () => {
     (apiClient.get as jest.Mock).mockReturnValue(
       answer([
         store('g1', 'Mercury Drug Bonifacio', { orderedBefore: true }),
@@ -71,6 +71,9 @@ describe('Stores near you', () => {
     const res: any = await draw();
 
     expect(await res.findByTestId('nearby-store-g1')).toBeTruthy();
+    expect(within(res.getByTestId('nearby-store-title-overlay-g1')).getByText('Mercury Drug Bonifacio')).toBeTruthy();
+    expect(StyleSheet.flatten(res.getByTestId('nearby-store-icon-g1').props.style).minHeight).toBe(120);
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     // The Home row asks for photo addresses; step 1's list does not.
     expect(apiClient.get).toHaveBeenCalledWith(
       '/places/establishments',
@@ -82,7 +85,7 @@ describe('Stores near you', () => {
     expect(res.getByTestId('nearby-store-distance-g2').props.children).toBe('1.4 km');
     // Why a store may sit ahead of a closer one: this customer's own habit.
     expect(res.getAllByText('Ordered before')).toHaveLength(1);
-    expect(res.getByTestId('nearby-stores-see-all-card')).toBeTruthy();
+    expect(res.queryByTestId('nearby-stores-see-all-card')).toBeNull();
   });
 
   it('opens Stores near you with the tapped store already picked, as Popular Stores does (2026-10-11)', async () => {
@@ -105,18 +108,18 @@ describe('Stores near you', () => {
 
     expect(await res.findByTestId('nearby-store-g3')).toBeTruthy();
     expect(res.queryByTestId('nearby-store-g4')).toBeNull();
-    expect(res.getByTestId('nearby-stores-see-all-card')).toBeTruthy();
+    expect(res.queryByTestId('nearby-stores-see-all-card')).toBeNull();
   });
 
-  it('opens Stores near you from the arrow and the See all card, as Popular Stores does', async () => {
+  it('opens Stores near you from the smaller header See all link', async () => {
     (apiClient.get as jest.Mock).mockReturnValue(answer([store('g1', 'Mercury Drug')]));
     const res: any = await draw();
     await res.findByTestId('nearby-store-g1');
 
     await fireEvent.press(res.getByTestId('nearby-stores-see-all'));
     expect(navigation.navigate).toHaveBeenLastCalledWith('NearbyStores', { user });
-    await fireEvent.press(res.getByTestId('nearby-stores-see-all-card'));
-    expect(navigation.navigate).toHaveBeenCalledTimes(2);
+    expect(StyleSheet.flatten(res.getByText('See all').props.style).fontSize).toBe(12);
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
   });
 
   // 2026-10-13: the header's bare arrow became a "See all >" link, and a card
@@ -136,7 +139,7 @@ describe('Stores near you', () => {
 
     const onA04 = await widthAt(328); // 360 dp phone, 16 dp gutters
     const onBigPhone = await widthAt(380); // 412 dp phone
-    expect(onA04).toBe(150);
+    expect(onA04).toBe(160);
     expect(onBigPhone).toBe(onA04);
   });
 

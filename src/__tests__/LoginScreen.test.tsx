@@ -3,9 +3,22 @@ import { render, fireEvent, waitFor, cleanup } from '@testing-library/react-nati
 
 const mockPost = jest.fn();
 const mockLogin = jest.fn();
+const mockSecureGet = jest.fn((_key: string) => Promise.resolve<string | null>(null));
+const mockGoogleSignIn = jest.fn();
 
 jest.mock('../services/apiClient', () => ({
   apiClient: { post: (...args: any[]) => mockPost(...args) },
+}));
+
+// The MFA trust token lives in the keystore; none unless a test puts one there.
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: (key: string) => mockSecureGet(key),
+  setItemAsync: jest.fn(() => Promise.resolve()),
+  deleteItemAsync: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../services/googleAuth', () => ({
+  signInWithGoogleNative: (...args: any[]) => mockGoogleSignIn(...args),
 }));
 
 jest.mock('../context/AuthContext', () => ({
@@ -26,6 +39,9 @@ const navigation = { replace: jest.fn(), navigate: jest.fn() };
 beforeEach(() => {
   mockPost.mockReset();
   mockLogin.mockReset();
+  mockSecureGet.mockReset();
+  mockSecureGet.mockResolvedValue(null);
+  mockGoogleSignIn.mockReset();
   navigation.replace.mockReset();
   navigation.navigate.mockReset();
 });
@@ -196,6 +212,103 @@ describe('LoginScreen', () => {
     await waitFor(() => {
       expect(AsyncStorage.setItem).toHaveBeenCalledWith('@sugo_customer_onboarding_completed', 'true');
       expect(mockLogin).toHaveBeenCalled();
+    });
+  });
+
+  describe('second sign-in factor', () => {
+    const challengeReply = {
+      otpRequired: true,
+      mfaRequired: true,
+      reason: 'NEW_DEVICE',
+      factors: ['SMS', 'EMAIL'],
+      challengeToken: 'c1',
+      maskedEmail: 'ju****@gmail.com',
+      maskedPhone: '+63 9** *** 1234',
+      phoneHint: '1234',
+      role: 'Customer',
+      expiresInSeconds: 600,
+    };
+
+    it('sends the trust token this device was given', async () => {
+      mockSecureGet.mockResolvedValue('trust-1');
+      mockPost.mockResolvedValue({ data: { user: { id: 1 }, token: 't', refreshToken: 'rt' } });
+      const res: any = await render(<LoginScreen navigation={navigation} />);
+
+      await fireEvent.changeText(res.getByTestId('username-input'), 'juan@gmail.com');
+      await fireEvent.changeText(res.getByTestId('password-input'), 'secret123');
+      await fireEvent.press(res.getByTestId('login-button'));
+
+      await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+      expect(mockSecureGet).toHaveBeenCalledWith('sugo_customer_mfa_trust');
+      expect(mockPost).toHaveBeenCalledWith('/customers/login', {
+        username: 'juan@gmail.com',
+        password: 'secret123',
+        mfaTrustToken: 'trust-1',
+      });
+    });
+
+    it('opens the challenge screen on a password challenge and keeps what was typed', async () => {
+      mockPost.mockResolvedValue({ data: challengeReply });
+      const res: any = await render(<LoginScreen navigation={navigation} />);
+
+      await fireEvent.changeText(res.getByTestId('username-input'), 'juan@gmail.com');
+      await fireEvent.changeText(res.getByTestId('password-input'), 'secret123');
+      await fireEvent.press(res.getByTestId('login-button'));
+
+      await waitFor(() =>
+        expect(navigation.navigate).toHaveBeenCalledWith('MfaChallenge', {
+          challenge: {
+            challengeToken: 'c1',
+            factors: ['SMS', 'EMAIL'],
+            maskedEmail: 'ju****@gmail.com',
+            maskedPhone: '+63 9** *** 1234',
+            phoneHint: '1234',
+            expiresInSeconds: 600,
+          },
+        })
+      );
+      expect(mockLogin).not.toHaveBeenCalled();
+      expect(navigation.replace).not.toHaveBeenCalled();
+      expect(res.getByTestId('username-input').props.value).toBe('juan@gmail.com');
+      expect(res.getByTestId('password-input').props.value).toBe('secret123');
+    });
+
+    it('opens the challenge screen on a Google challenge, with the trust token sent', async () => {
+      mockSecureGet.mockResolvedValue('trust-1');
+      mockGoogleSignIn.mockResolvedValue({ firebaseIdToken: 'google-token', email: 'juan@gmail.com' });
+      mockPost.mockResolvedValue({
+        data: { ...challengeReply, otpRequired: undefined, mfaRequired: undefined, status: 'MFA_REQUIRED' },
+      });
+      const res: any = await render(<LoginScreen navigation={navigation} />);
+
+      await fireEvent.press(res.getByTestId('login-google-button'));
+
+      await waitFor(() =>
+        expect(navigation.navigate).toHaveBeenCalledWith(
+          'MfaChallenge',
+          expect.objectContaining({ challenge: expect.objectContaining({ challengeToken: 'c1' }) })
+        )
+      );
+      expect(mockPost).toHaveBeenCalledWith('/customers/google-login', {
+        idToken: 'google-token',
+        mfaTrustToken: 'trust-1',
+      });
+      expect(navigation.navigate).not.toHaveBeenCalledWith('GooglePhoneSetup', expect.anything());
+      expect(mockLogin).not.toHaveBeenCalled();
+    });
+
+    it('tells an old build to update', async () => {
+      mockPost.mockRejectedValue(
+        new ApiError('Update Sugo Express to sign in.', { status: 403, serverMessage: 'Update Sugo Express to sign in.' })
+      );
+      const res: any = await render(<LoginScreen navigation={navigation} />);
+
+      await fireEvent.changeText(res.getByTestId('username-input'), 'juandelacruz');
+      await fireEvent.changeText(res.getByTestId('password-input'), 'secret123');
+      await fireEvent.press(res.getByTestId('login-button'));
+
+      await waitFor(() => expect(res.getByText('Update Sugo Express to sign in.')).toBeTruthy());
+      expect(navigation.navigate).not.toHaveBeenCalled();
     });
   });
 });

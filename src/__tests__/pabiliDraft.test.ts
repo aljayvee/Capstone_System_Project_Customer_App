@@ -15,6 +15,7 @@ import {
   storeCategoryOf,
   storeKeyForCategory,
   storeKeysFor,
+  mergeStoreSelection,
   withStores,
   addChip,
   addTypedLines,
@@ -53,6 +54,62 @@ const BAKERY = 'Bakery & Snacks';
 const rowsOf = (draft: PabiliDraft, cat = GROCERY) => draft.rowsByCategory[cat];
 
 beforeEach(() => mockStorage.clear());
+
+describe('one shopping list while browsing Home', () => {
+  const shop = (key: string, latitude = 6.69) => ({
+    key, name: 'Mercury Drug', address: 'Mabini St', latitude, longitude: 124.68,
+    placeId: null, categoryId: 3, categoryName: 'Pharmacy',
+  });
+
+  it('adds categories without removing existing items or unfinished input', () => {
+    const current = { ...addChip(emptyDraft([GROCERY, PHARMACY]), PHARMACY, { name: 'Biogesic' }),
+      composeByCategory: { [GROCERY]: { text: 'Rice', quantity: 4 } },
+    };
+    const result = mergeStoreSelection(current, [BAKERY]);
+    expect(result.notice).toBeUndefined();
+    expect(result.draft.categories).toEqual([GROCERY, PHARMACY, BAKERY]);
+    expect(result.draft.rowsByCategory[PHARMACY]).toEqual(current.rowsByCategory[PHARMACY]);
+    expect(result.draft.composeByCategory[GROCERY]).toEqual({ text: 'Rice', quantity: 4 });
+  });
+
+  it('matches the same physical branch and preserves its saved key and items', () => {
+    const original = shop('Mercury Drug (2)');
+    const current = addChip(withStores(emptyDraft([]), [original]), original.key, { name: 'Biogesic' });
+    const result = mergeStoreSelection(current, ['Mercury Drug'], [shop('Mercury Drug')]);
+    expect(result.draft.categories).toEqual(['Mercury Drug (2)']);
+    expect(result.draft.rowsByCategory[original.key]).toEqual(current.rowsByCategory[original.key]);
+    expect(result.draft.stores?.[original.key]).toEqual(original);
+  });
+
+  it('keeps same-name branches separate when adding from different Home listings', () => {
+    const original = shop('Mercury Drug');
+    const current = addChip(withStores(emptyDraft([]), [original]), original.key, { name: 'Biogesic' });
+    const result = mergeStoreSelection(current, ['Mercury Drug'], [shop('Mercury Drug', 6.71)]);
+    expect(result.draft.categories).toEqual(['Mercury Drug', 'Mercury Drug (2)']);
+    expect(result.draft.stores?.['Mercury Drug (2)'].latitude).toBe(6.71);
+    expect(result.draft.rowsByCategory['Mercury Drug'][0].name).toBe('Biogesic');
+    expect(result.draft.rowsByCategory['Mercury Drug (2)']).toEqual([]);
+  });
+
+  it('refuses an over-limit addition without dropping or partially adding stores', () => {
+    const current = emptyDraft([GROCERY, PHARMACY]);
+    const result = mergeStoreSelection(current, [BAKERY, 'Restaurant']);
+    expect(result.draft).toBe(current);
+    expect(result.notice).toContain('up to 3 stores');
+  });
+
+  it('keeps a list intact when a different store mode is selected', () => {
+    const current = addChip(emptyDraft([GROCERY]), GROCERY, { name: 'Rice' });
+    expect(mergeStoreSelection(current, ['Mercury Drug'], [shop('Mercury Drug')]).draft).toBe(current);
+    const pinned = withStores(emptyDraft([]), [shop('Mercury Drug')]);
+    expect(mergeStoreSelection(pinned, [GROCERY]).draft).toBe(pinned);
+  });
+
+  it('never changes an unresolved submission while browsing', () => {
+    const current = { ...emptyDraft([GROCERY]), submission: { id: 'pending' } } as PabiliDraft;
+    expect(mergeStoreSelection(current, [PHARMACY]).draft).toBe(current);
+  });
+});
 
 describe('item names', () => {
   it.each([
@@ -174,11 +231,28 @@ describe("the model's readings", () => {
     expect(totalUnits(read)).toBe(3);
   });
 
-  it('applies an unsure reading too: the server already refused any that changed the words', () => {
+  it('preserves the request when the model is unsure', () => {
     const draft = addTypedLines(emptyDraft([GROCERY]), GROCERY, 'dalawang manok', 1);
     const id = rowsOf(draft)[0].id;
     const read = applyTidy(draft, [id], true, [{ id, confident: false, items: [{ name: 'manok', quantity: 2, size: null }] }]);
-    expect(rowsOf(read)[0]).toMatchObject({ name: 'Manok', quantity: 2 });
+    expect(rowsOf(read)[0]).toMatchObject({ name: 'Dalawang manok', quantity: 1, review: { tidy: 'kept' } });
+  });
+
+  it('does not overwrite a quantity changed during the request', () => {
+    const draft = flagged();
+    const original = rowsOf(draft)[0];
+    const edited = adjustQuantity(draft, GROCERY, original.id, 1);
+    const read = applyTidy(edited, [original.id], true,
+      [{ id: original.id, confident: true, items: [{ name: 'chicken', quantity: 2, size: null }] }], [original]);
+    expect(rowsOf(read)[0]).toMatchObject({ name: original.name, quantity: 2, review: { tidy: 'kept' } });
+  });
+
+  it('does not let a confident model override conflicting explicit counts', () => {
+    const draft = addTypedLines(emptyDraft([GROCERY]), GROCERY, 'Coke x2', 3);
+    const original = rowsOf(draft)[0];
+    const read = applyTidy(draft, [original.id], true,
+      [{ id: original.id, confident: true, items: [{ name: 'Coke', quantity: 2, size: null }] }]);
+    expect(rowsOf(read)[0]).toMatchObject({ name: 'Coke x2', quantity: 3, review: { tidy: 'kept' } });
   });
 
   it('keeps the rider instruction the model found in the line', () => {

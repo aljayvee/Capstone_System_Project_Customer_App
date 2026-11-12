@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../config/api';
 import { getDeviceHeaders } from '../utils/deviceInfo';
 import { isTokenExpired } from '../utils/jwt';
 import { ApiError, toApiError } from './ApiError';
+import { rememberErrandReferences } from '../utils/formatErrandId';
 
 export const SECURE_TOKEN_KEY = 'sugo_customer_jwt_token';
 export const STORAGE_KEY_TOKEN_FALLBACK = '@sugo_customer_jwt_token';
@@ -282,6 +283,9 @@ const CREDENTIAL_ENDPOINTS = new RegExp(
 apiClient.interceptors.response.use(
   (response) => {
     trackRequestEnd(response.config);
+    // Most screens show an errand from its id alone; this is where they learn
+    // its number (see formatErrandId).
+    rememberErrandReferences(response.data);
     return response;
   },
   async (error) => {

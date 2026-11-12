@@ -50,7 +50,7 @@ export function ActiveErrandsFab({
           <Bike size={26} color={colors.primary} strokeWidth={2.3} />
         </LiquidGlass>
         <View style={[styles.badge, { backgroundColor: colors.primary, borderColor: colors.bgApp }]} testID="active-errands-fab-count">
-          <Text style={styles.badgeText} maxFontSizeMultiplier={1.1}>
+          <Text style={[styles.badgeText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.1}>
             {count > 9 ? '9+' : String(count)}
           </Text>
         </View>

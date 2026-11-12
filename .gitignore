@@ -45,3 +45,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Local Blender review renders and automatic source backups
+/scratch/kuya-sugo-blender/
+/artwork/kuya-sugo/*.blend1
+/artwork/kuya-sugo/__pycache__/

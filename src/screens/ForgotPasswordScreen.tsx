@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -9,6 +10,7 @@ import {
   useWindowDimensions,
   Animated,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +61,7 @@ const RESEND_COOLDOWN_FALLBACK_SECONDS = 60;
 type Step = 1 | 2 | 3 | 4;
 
 export default function ForgotPasswordScreen({ navigation }: any) {
+  const pageLayout = usePageLayout();
   const { colors, isDark } = useThemeColor();
   const heroGradient = useAuthHeroGradient();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
@@ -267,8 +270,40 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     clearMessages();
     if (step === 2) return setStep(1);
     if (step === 3) return setStep(2);
-    navigation.navigate('Login');
+    if (typeof navigation.canGoBack === 'function' ? navigation.canGoBack() : true) {
+      navigation.goBack();
+    } else {
+      navigation.replace('Login');
+    }
   };
+
+  const handleGoToLogin = () => {
+    const routes = typeof navigation.getState === 'function' ? navigation.getState()?.routes : undefined;
+    const prevRoute = routes && routes.length >= 2 ? routes[routes.length - 2]?.name : null;
+    if (prevRoute === 'Login') {
+      navigation.goBack();
+    } else if (typeof navigation.canGoBack === 'function' ? navigation.canGoBack() : true) {
+      navigation.goBack();
+    } else {
+      navigation.replace('Login');
+    }
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (step === 2) {
+        setStep(1);
+        return true;
+      }
+      if (step === 3) {
+        setStep(2);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [step]);
 
   const heroTitle = [
     'Forgot your password?',
@@ -280,7 +315,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const heroSubtitle =
     step === 2 && maskedEmail ? (
       <>
-        We sent a 6-digit code to <Text style={styles.heroSubtitleStrong}>{maskedEmail}</Text>.
+        We sent a 6-digit code to <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={styles.heroSubtitleStrong}>{maskedEmail}</Text>.
       </>
     ) : (
       [
@@ -320,7 +355,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           colors={heroGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }]}
+          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }, pageLayout.insetStyle]}
         >
           <AuthHeroPattern width={screenWidth} height={heroHeight} />
 
@@ -350,8 +385,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               backgroundColor: colors.card,
               marginTop: -SHEET_OVERLAP,
               paddingBottom: insets.bottom + Spacing.xl,
-            },
-          ]}
+            }, pageLayout.gutterStyle, pageLayout.frameStyle]}
         >
           <View style={styles.grabber} />
 
@@ -408,6 +442,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                     can land on it. */}
                 <View style={styles.honeypot} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                   <TextInput
+                    maxFontSizeMultiplier={AuthFontSizeMultipliers.input}
                     value={website}
                     onChangeText={setWebsite}
                     autoComplete="off"
@@ -424,13 +459,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   testID="forgot-submit"
                 >
                   {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={colors.onPrimary} />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
+                      <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>
                         {codeSentTo === identifier.trim() && cooldown > 0 ? 'Back to Code' : 'Send Code'}
                       </Text>
-                      <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
+                      <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.5} />
                     </>
                   )}
                 </TouchableOpacity>
@@ -478,11 +513,11 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   testID="forgot-submit"
                 >
                   {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={colors.onPrimary} />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify Code</Text>
-                      <ShieldCheck size={18} color="#FFFFFF" strokeWidth={2.5} />
+                      <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Verify Code</Text>
+                      <ShieldCheck size={18} color={colors.onPrimary} strokeWidth={2.5} />
                     </>
                   )}
                 </TouchableOpacity>
@@ -591,11 +626,11 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   testID="forgot-submit"
                 >
                   {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={colors.onPrimary} />
                   ) : (
                     <>
-                      <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Update Password</Text>
-                      <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
+                      <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Update Password</Text>
+                      <CheckCircle2 size={18} color={colors.onPrimary} strokeWidth={2.5} />
                     </>
                   )}
                 </TouchableOpacity>
@@ -619,19 +654,19 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
                 <TouchableOpacity
                   style={[styles.primaryBtn, { backgroundColor: colors.primary }, Shadows.soft, { width: '100%' }]}
-                  onPress={() => navigation.navigate('Login')}
+                  onPress={handleGoToLogin}
                   activeOpacity={0.85}
                   testID="forgot-back-to-login"
                 >
-                  <Text style={styles.primaryBtnText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Back to Login</Text>
-                  <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={[styles.primaryBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Back to Login</Text>
+                  <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             )}
 
             {step < 4 ? (
               <TouchableOpacity
-                onPress={() => navigation.navigate('Login')}
+                onPress={handleGoToLogin}
                 style={styles.footerLink}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 testID="forgot-login-link"

@@ -8,6 +8,7 @@ export interface DispatcherAvatarProps {
   dispatcherId?: string | number | null;
   size?: number;
   iconSize?: number;
+  neutral?: boolean;
 }
 
 // Mirrors RiderMobileApp's riderApiService.fetchProfilePhoto: a 404 just means
@@ -24,7 +25,7 @@ async function fetchDispatcherPhoto(dispatcherId: string | number): Promise<stri
   }
 }
 
-export default function DispatcherAvatar({ dispatcherId, size = 44, iconSize }: DispatcherAvatarProps) {
+export default function DispatcherAvatar({ dispatcherId, size = 44, iconSize, neutral = false }: DispatcherAvatarProps) {
   const { colors, isDark } = useThemeColor();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
@@ -50,14 +51,14 @@ export default function DispatcherAvatar({ dispatcherId, size = 44, iconSize }: 
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3',
+          backgroundColor: neutral ? colors.bgGray : isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3',
         },
       ]}
     >
       {photoUri ? (
         <Image source={{ uri: photoUri }} style={[styles.image, { borderRadius: size / 2 }]} />
       ) : (
-        <Headphones size={resolvedIconSize} color={colors.primary} />
+        <Headphones size={resolvedIconSize} color={neutral ? colors.textGray : colors.primary} />
       )}
     </View>
   );

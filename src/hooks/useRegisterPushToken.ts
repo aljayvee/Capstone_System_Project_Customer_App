@@ -90,6 +90,37 @@ export interface PushTapPayload {
 }
 
 /**
+ * Taps already acted on, for the life of the app (2026-11-06).
+ *
+ * The native module keeps the last tapped notification and hands it to
+ * getLastNotificationResponseAsync() for as long as nobody clears it. This hook
+ * asked for it on every mount, as a cold-start check, and acted on it each
+ * time. So any later mount of the portal (the chat's back arrow pushed a fresh
+ * one) replayed a tap the customer had already followed and opened the chat
+ * again: Back "went back, then returned to the chat instantly".
+ */
+const handledTapKeys = new Set<string>();
+
+function tapKeyOf(response: Notifications.NotificationResponse | null | undefined): string | null {
+  const id = response?.notification?.request?.identifier;
+  return id ? `${id}:${response?.actionIdentifier ?? ''}` : null;
+}
+
+/** Test seam: the app starts over. */
+export function resetHandledPushTaps(): void {
+  handledTapKeys.clear();
+}
+
+/** Stop the native module handing this tap to the next mount. */
+function forgetStoredTap(): void {
+  try {
+    Notifications.clearLastNotificationResponse?.();
+  } catch {
+    // Not available on this platform; handledTapKeys still stops a replay.
+  }
+}
+
+/**
  * Ensures the device is registered with the backend for push notifications
  * targeting this customer.
  *
@@ -214,18 +245,32 @@ export function useRegisterPushToken(
     // The tap listener is registered regardless of whether a token could be
     // obtained — a notification delivered through any other route should still
     // open the right errand.
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    const actOnTap = (response: Notifications.NotificationResponse) => {
+      const key = tapKeyOf(response);
+      if (key) handledTapKeys.add(key);
+      forgetStoredTap();
       const data = (response?.notification?.request?.content?.data || {}) as PushTapPayload;
       tappedRef.current?.(data);
+    };
+
+    // A tap while the app runs. Always acted on: a live tap is always meant,
+    // even on a notification tapped before.
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      actOnTap(response);
     });
 
-    // Check cold-start notification response if opened from killed state
+    // Check cold-start notification response if opened from killed state.
+    // Only a tap not yet acted on: this runs on every mount, and the stored
+    // tap outlives the moment it was followed.
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
-        if (response && !cancelled) {
-          const data = (response?.notification?.request?.content?.data || {}) as PushTapPayload;
-          tappedRef.current?.(data);
+        if (!response || cancelled) return;
+        const key = tapKeyOf(response);
+        if (key && handledTapKeys.has(key)) {
+          forgetStoredTap();
+          return;
         }
+        actOnTap(response);
       })
       .catch(() => {});
 

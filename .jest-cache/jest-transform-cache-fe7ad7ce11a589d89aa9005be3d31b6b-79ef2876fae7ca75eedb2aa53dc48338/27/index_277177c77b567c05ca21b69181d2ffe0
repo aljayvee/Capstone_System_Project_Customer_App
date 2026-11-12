@@ -1,0 +1,23 @@
+5eadeea6970ef7107864189cc76525d9
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+Object.defineProperty(exports, "AsyncStorageError", {
+  enumerable: true,
+  get: function () {
+    return _AsyncStorageError.AsyncStorageError;
+  }
+});
+Object.defineProperty(exports, "createAsyncStorage", {
+  enumerable: true,
+  get: function () {
+    return _createAsyncStorage.createAsyncStorage;
+  }
+});
+exports.default = void 0;
+var _createAsyncStorage = require("./createAsyncStorage");
+var _AsyncStorageError = require("./AsyncStorageError.js");
+var _default = exports.default = (0, _createAsyncStorage.getLegacyStorage)();
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlQXN5bmNTdG9yYWdlIiwicmVxdWlyZSIsIl9Bc3luY1N0b3JhZ2VFcnJvciIsIl9kZWZhdWx0IiwiZXhwb3J0cyIsImRlZmF1bHQiLCJnZXRMZWdhY3lTdG9yYWdlIl0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL2luZGV4LnRzeCJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsSUFBQUEsbUJBQUEsR0FBQUMsT0FBQTtBQUtBLElBQUFDLGtCQUFBLEdBQUFELE9BQUE7QUFBdUQsSUFBQUUsUUFBQSxHQUFBQyxPQUFBLENBQUFDLE9BQUEsR0FHeEMsSUFBQUMsb0NBQWdCLEVBQUMsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

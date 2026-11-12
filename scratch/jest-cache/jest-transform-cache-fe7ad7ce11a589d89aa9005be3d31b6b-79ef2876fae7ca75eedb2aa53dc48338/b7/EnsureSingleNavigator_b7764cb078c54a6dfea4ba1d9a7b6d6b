@@ -1,0 +1,38 @@
+49af833ab89ec063d6dc8a29bf2d2c56
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.EnsureSingleNavigator = EnsureSingleNavigator;
+exports.SingleNavigatorContext = void 0;
+var React = _interopRequireWildcard(require("react"));
+var _jsxRuntime = require("react/jsx-runtime");
+var MULTIPLE_NAVIGATOR_ERROR = `Another navigator is already registered for this container. You likely have multiple navigators under a single "NavigationContainer" or "Screen". Make sure each navigator is under a separate "Screen" container. See https://reactnavigation.org/docs/nesting-navigators for a guide on nesting.`;
+var SingleNavigatorContext = exports.SingleNavigatorContext = React.createContext(undefined);
+function EnsureSingleNavigator(_ref) {
+  var children = _ref.children;
+  var navigatorKeyRef = React.useRef(undefined);
+  var value = React.useMemo(() => ({
+    register(key) {
+      var currentKey = navigatorKeyRef.current;
+      if (currentKey !== undefined && key !== currentKey) {
+        throw new Error(MULTIPLE_NAVIGATOR_ERROR);
+      }
+      navigatorKeyRef.current = key;
+    },
+    unregister(key) {
+      var currentKey = navigatorKeyRef.current;
+      if (key !== currentKey) {
+        return;
+      }
+      navigatorKeyRef.current = undefined;
+    }
+  }), []);
+  return (0, _jsxRuntime.jsx)(SingleNavigatorContext.Provider, {
+    value: value,
+    children: children
+  });
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIl9qc3hSdW50aW1lIiwiTVVMVElQTEVfTkFWSUdBVE9SX0VSUk9SIiwiU2luZ2xlTmF2aWdhdG9yQ29udGV4dCIsImV4cG9ydHMiLCJjcmVhdGVDb250ZXh0IiwidW5kZWZpbmVkIiwiRW5zdXJlU2luZ2xlTmF2aWdhdG9yIiwiY2hpbGRyZW4iLCJfcmVmIiwibmF2aWdhdG9yS2V5UmVmIiwidXNlUmVmIiwidmFsdWUiLCJ1c2VNZW1vIiwicmVnaXN0ZXIiLCJrZXkiLCJjdXJyZW50S2V5IiwiY3VycmVudCIsIkVycm9yIiwidW5yZWdpc3RlciIsIl9qc3giLCJQcm92aWRlciJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9FbnN1cmVTaW5nbGVOYXZpZ2F0b3IudHN4Il0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7OztBQUFBLElBQUFBLEtBQUEsR0FBQUMsdUJBQUEsQ0FBQUMsT0FBQTtBQUErQixJQUFBQyxXQUFBLEdBQUFELE9BQUE7QUFNL0IsSUFBTUUsd0JBQXdCLEdBQUcsb1NBQW9TO0FBRTlULElBQU1DLHNCQUFzQixHQUFBQyxPQUFBLENBQUFELHNCQUFBLEdBQUdMLEtBQUssQ0FBQ08sYUFBYSxDQU12REMsU0FBUyxDQUFDO0FBS0wsU0FBU0MscUJBQXFCQSxLQUFBLEVBQXNCO0VBQUEsSUFBbkJDLFFBQUEsR0FBQUMsSUFBQSxDQUFBRCxRQUFBO0VBQ3RDLElBQU1FLGVBQWUsR0FBR1osS0FBSyxDQUFDYSxNQUFNLENBQXFCTCxTQUFTLENBQUM7RUFFbkUsSUFBTU0sS0FBSyxHQUFHZCxLQUFLLENBQUNlLE9BQU8sQ0FDekIsT0FBTztJQUNMQyxRQUFRQSxDQUFDQyxHQUFXLEVBQUU7TUFDcEIsSUFBTUMsVUFBVSxHQUFHTixlQUFlLENBQUNPLE9BQU87TUFFMUMsSUFBSUQsVUFBVSxLQUFLVixTQUFTLElBQUlTLEdBQUcsS0FBS0MsVUFBVSxFQUFFO1FBQ2xELE1BQU0sSUFBSUUsS0FBSyxDQUFDaEIsd0JBQXdCLENBQUM7TUFDM0M7TUFFQVEsZUFBZSxDQUFDTyxPQUFPLEdBQUdGLEdBQUc7SUFDL0IsQ0FBQztJQUNESSxVQUFVQSxDQUFDSixHQUFXLEVBQUU7TUFDdEIsSUFBTUMsVUFBVSxHQUFHTixlQUFlLENBQUNPLE9BQU87TUFFMUMsSUFBSUYsR0FBRyxLQUFLQyxVQUFVLEVBQUU7UUFDdEI7TUFDRjtNQUVBTixlQUFlLENBQUNPLE9BQU8sR0FBR1gsU0FBUztJQUNyQztFQUNGLENBQUMsQ0FBQyxFQUNGLEVBQ0YsQ0FBQztFQUVELE9BQ0UsSUFBQWMsZUFBQSxFQUFDakIsc0JBQXNCLENBQUNrQixRQUFRO0lBQUNULEtBQUssRUFBRUEsS0FBTTtJQUFBSixRQUFBLEVBQzNDQTtFQUFRLENBQ3NCLENBQUM7QUFFdEMiLCJpZ25vcmVMaXN0IjpbXX0=

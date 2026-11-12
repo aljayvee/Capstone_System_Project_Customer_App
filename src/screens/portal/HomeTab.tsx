@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Image,
@@ -30,14 +31,15 @@ import NearbyStoresRow from '../../components/NearbyStoresRow';
 import PopularStoresRow from '../../components/PopularStoresRow';
 import AccountReminder from '../../components/home/AccountReminder';
 import { ActiveErrandsFab } from '../../components/home/ActiveErrandsFab';
+import ShoppingListFab from '../../components/home/ShoppingListFab';
 import { BlurTargetView } from 'expo-blur';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { searchFieldStyles, getSearchFieldSurface } from '../../config/searchField';
 import {
   BorderRadius,
   FontSizes,
   Spacing,
   FontFamily,
-  useResponsive,
   MAX_CONTENT_WIDTH,
   scaledFontSize,
   moderateScale,
@@ -159,7 +161,7 @@ function MerchantCategoryRow({
       <View
         style={[
           styles.categoryImageContainer,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' },
+          { backgroundColor: colors.bgGray },
         ]}
       >
         {showImage ? (
@@ -183,12 +185,12 @@ function MerchantCategoryRow({
               <View
                 style={[
                   styles.categoryBadge,
-                  { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.92)' : '#DC2626' },
+                  { backgroundColor: colors.primaryDark },
                 ]}
                 testID={`category-badge-recommended-${testIdSuffix}`}
               >
                 <Sparkles size={10} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.categoryBadgeText}>RECOMMENDED</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.categoryBadgeText}>RECOMMENDED</Text>
               </View>
             ) : null}
             {category.orderedBefore ? (
@@ -200,7 +202,7 @@ function MerchantCategoryRow({
                 testID={`category-badge-ordered-${testIdSuffix}`}
               >
                 <Clock size={10} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.categoryBadgeText}>ORDERED BEFORE</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.categoryBadgeText}>ORDERED BEFORE</Text>
               </View>
             ) : null}
           </View>
@@ -210,7 +212,7 @@ function MerchantCategoryRow({
       <View style={styles.categoryMetaBlock}>
         <Text
           style={[styles.categoryTitle, { color: colors.textDark }]}
-          numberOfLines={1}
+          numberOfLines={2}
           maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
         >
           {category.name}
@@ -248,6 +250,7 @@ export default function HomeTab({
   headerSpace = 0,
   headerOffset,
 }: HomeTabProps) {
+  const pageLayout = usePageLayout();
   // The search bar follows the header as it slides (2026-10-13). Moved by a
   // transform, like the header, so the page's frame never changes mid-drag;
   // the old docking resized it and shook a slow scroll.
@@ -257,8 +260,7 @@ export default function HomeTab({
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
   const maintenanceNotice = useMaintenanceNotice('customer');
-  const { width: windowWidth } = useResponsive();
-  const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
+  const contentWidth = pageLayout.contentWidth;
 
   // Active backend merchant categories. The hook keeps this in step with the
   // server over the socket, so a category deactivated in the owner portal
@@ -377,7 +379,7 @@ export default function HomeTab({
         contentContainerStyle={{
           // The page starts under the floating search bar.
           paddingTop: headerSpace + searchSlotHeight + Spacing.sm,
-          paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md,
+          paddingBottom: 160 + (activeList.length > 0 ? 74 : 0) + Math.max(insets.bottom, 16) + Spacing.md,
           alignItems: 'center',
         }}
         showsVerticalScrollIndicator={false}
@@ -387,13 +389,13 @@ export default function HomeTab({
         scrollEventThrottle={16}
       >
         {loading && !hasActiveOrders && recentErrands.length === 0 ? (
-          <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-skeleton">
+          <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-skeleton">
             <HomeSkeleton />
           </View>
         ) : (
           <>
             {/* ── CHILD 0: Top Header & Active Orders ── */}
-            <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-top">
+            <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-top">
               {/* Real-time SysAdmin Maintenance Notice Banner */}
               <MaintenanceNoticeBanner notice={maintenanceNotice} />
 
@@ -410,7 +412,7 @@ export default function HomeTab({
         </View>
 
         {/* ── CHILD 2: Stores, Categories & Transactions Stream ── */}
-        <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-content">
+        <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-content">
           <View style={styles.categoriesSectionWrapper}>
 
             {/* POPULAR STORES first (2026-10-10, the user's order): the best
@@ -446,13 +448,7 @@ export default function HomeTab({
                  can create, and it must explain itself and still offer a way
                  forward rather than leaving a blank band under the header. */
               <View
-                style={[
-                  styles.emptyCategories,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F9FAFB',
-                    borderColor: colors.border,
-                  },
-                ]}
+                style={styles.emptyCategories}
                 testID="categories-empty-state"
               >
                 <Store size={22} color={colors.textLight} />
@@ -499,6 +495,7 @@ export default function HomeTab({
                   hitSlop={PortalTouchTargets.compactHitSlop}
                   testID="navigate-my-errands"
                   accessibilityLabel="View All Errand History"
+                  accessibilityRole="button"
                 >
                   <ArrowRight size={18} color={colors.primary} strokeWidth={2.5} />
                 </TouchableOpacity>
@@ -515,7 +512,7 @@ export default function HomeTab({
                     style={[
                       styles.recentRowItem,
                       {
-                        borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+                        borderBottomColor: colors.border,
                       },
                     ]}
                     onPress={() =>
@@ -530,13 +527,13 @@ export default function HomeTab({
                     <View style={styles.recentRowLeft}>
                       <View style={styles.recentTitleRow}>
                         <Text style={[styles.recentErrandId, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                          {formatErrandId(item.orderId)}
+                          {formatErrandId(item.orderId, item.referenceNo)}
                         </Text>
                         <Text style={[styles.recentDateText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                           {formatRelativeDate(item.createdAt)}
                         </Text>
                       </View>
-                      <Text style={[styles.recentCategory, { color: colors.textMedium }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+                      <Text style={[styles.recentCategory, { color: colors.textMedium }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                         {formatItemSummary(item)}
                       </Text>
                     </View>
@@ -567,66 +564,40 @@ export default function HomeTab({
         style={[
           styles.floatingSearchSlot,
           { backgroundColor: colors.bgAppTranslucent },
-          searchSlotStyle,
-        ]}
+          searchSlotStyle, pageLayout.insetStyle]}
         onLayout={(e) => setSearchSlotHeight(e.nativeEvent.layout.height)}
         testID="home-sticky-search"
       >
         <TouchableOpacity
           activeOpacity={0.88}
           style={[
-            styles.liquidGlassSearchBar,
-            {
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
-              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
-            },
-          ]}
+            searchFieldStyles.surface,
+            styles.storeSearchBar,
+            getSearchFieldSurface(isDark), pageLayout.contentStyle]}
           onPress={openStoreSearch}
           testID="home-store-search"
           accessibilityRole="button"
           accessibilityLabel="Search stores"
           accessibilityHint="Find the stores to buy from in Tacurong"
         >
-          <View style={styles.searchIconBadge}>
-            <Search size={18} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.4} />
-          </View>
+          <Search size={16} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.2} />
           <Text
             style={[
-              styles.storeSearchPlaceholder,
-              { color: isDark ? '#94A3B8' : '#64748B' },
+              searchFieldStyles.input,
+              { color: colors.textLight },
             ]}
             numberOfLines={1}
             maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
           >
-            Search stores, groceries, medicine...
+            Search a store, e.g. Mercury Drug
           </Text>
-          <View
-            style={[
-              styles.liquidGlassSearchAction,
-              {
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.10)' : '#F1F5F9',
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : '#E2E8F0',
-              },
-            ]}
-            testID="home-store-search-action"
-          >
-            <Text
-              style={[
-                styles.storeSearchActionText,
-                { color: isDark ? '#F1F5F9' : '#1E293B' },
-              ]}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
-            >
-              Search
-            </Text>
-          </View>
         </TouchableOpacity>
       </Animated.View>
 
       {/* ACTIVE ERRANDS: a liquid glass button over the bottom bar's right end,
           only while an errand is under way. It opens Active Errands. */}
       <ActiveErrandsFab count={activeList.length} onPress={openActiveErrands} blurTarget={homeContentRef} />
+      <ShoppingListFab user={user} navigation={navigation} raised={activeList.length > 0} />
 
       <ConfirmModal
         visible={showUpdateWelcome}
@@ -665,7 +636,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm + 2,
     marginBottom: Spacing.xl,
   },
-  // Sticky Liquid Glass Search Bar (Child 1)
+  // The Home entry point matches the Find Stores search field.
   floatingSearchSlot: {
     position: 'absolute',
     top: 0,
@@ -676,52 +647,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     zIndex: 50,
   },
-  liquidGlassSearchBar: {
+  storeSearchBar: {
     width: '100%',
     maxWidth: MAX_CONTENT_WIDTH,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    minHeight: 50,
-    borderWidth: 1.2,
-    borderRadius: 25,
-    paddingLeft: 14,
-    paddingRight: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  searchIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storeSearchPlaceholder: {
-    flex: 1,
-    fontFamily: FontFamily.medium,
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-  },
-  liquidGlassSearchAction: {
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  storeSearchActionText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   subsectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   subsectionTitle: {
     fontFamily: FontFamily.bold,
@@ -729,14 +663,14 @@ const styles = StyleSheet.create({
     lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   categoriesVerticalList: {
-    gap: Spacing.lg,
+    gap: Spacing.xl,
   },
   categoryRow: {
     width: '100%',
   },
   categoryImageContainer: {
     width: '100%',
-    height: moderateScale(176, 0.25),
+    height: moderateScale(132, 0.25),
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
   },
@@ -773,27 +707,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   categoryMetaBlock: {
-    marginTop: Spacing.xs + 2,
-    gap: 2,
+    marginTop: 10,
+    gap: 4,
   },
   categoryTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.semibold,
     fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   categorySubtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'body'),
   },
   emptyCategories: {
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.xl,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    gap: 4,
+    gap: Spacing.sm,
   },
   emptyCategoriesTitle: {
     fontFamily: FontFamily.bold,
@@ -817,14 +748,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs + 2,
   },
   sectionHeader: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.semibold,
     fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   viewAllBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -832,10 +762,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 56,
-    paddingVertical: 14,
-    paddingHorizontal: Spacing.xs,
-    borderBottomWidth: 1,
+    minHeight: 72,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   recentRowLeft: {
     flex: 1,
@@ -843,13 +772,16 @@ const styles = StyleSheet.create({
   },
   recentTitleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    columnGap: Spacing.sm,
+    rowGap: 2,
+    marginBottom: 4,
   },
   recentErrandId: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   recentDateText: {
     fontFamily: FontFamily.regular,

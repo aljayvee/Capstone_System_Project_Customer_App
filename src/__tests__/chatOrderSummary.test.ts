@@ -1,4 +1,4 @@
-import { push } from 'firebase/database';
+import { runTransaction } from 'firebase/database';
 import { postOrderSubmitted } from '../services/chatSystemMessages';
 
 /**
@@ -18,7 +18,10 @@ it('writes each item with its size in the name, in the card and in the text', as
     deliveryFee: 60,
   });
 
-  const message = (push as jest.Mock).mock.calls.at(-1)[1];
+  // The card is written once, through a transaction on a fixed key, so a retried submit cannot post a second one.
+  const write = (runTransaction as jest.Mock).mock.calls.at(-1)[1];
+  expect(write({ text: 'already posted' })).toBeUndefined();
+  const message = write(null);
   expect(message.order.items).toEqual([
     { storeCategory: 'Retail', itemName: 'Chicken · 5 kg', quantity: 2 },
     { storeCategory: 'Retail', itemName: 'Eggs', quantity: 1 },

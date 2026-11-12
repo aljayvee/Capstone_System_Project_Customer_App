@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { ShieldAlert, ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing } from '../config/theme';
 
 interface AccessRestrictedModalProps {
   visible: boolean;
@@ -29,15 +29,15 @@ export const AccessRestrictedModal: React.FC<AccessRestrictedModalProps> = ({
             <ShieldAlert size={28} color={colors.danger} />
           </View>
 
-          <Text style={[styles.title, { color: colors.textDark }]}>{title}</Text>
-          <Text style={[styles.message, { color: colors.textGray }]}>{message}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.title, { color: colors.textDark }]}>{title}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.message, { color: colors.textGray }]}>{message}</Text>
 
           <TouchableOpacity
             onPress={onDismiss}
             style={[styles.button, { backgroundColor: colors.primary }]}
           >
-            <ArrowLeft size={16} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Go Back</Text>
+            <ArrowLeft size={16} color={colors.onPrimary} />
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.buttonText, { color: colors.onPrimary }]}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -72,15 +72,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   title: {
-    fontSize: FontSizes.lg,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
   },
   message: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   button: {
     width: '100%',
@@ -93,8 +94,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   buttonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.bold,
   },
 });

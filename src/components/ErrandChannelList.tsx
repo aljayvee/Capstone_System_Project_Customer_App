@@ -4,10 +4,8 @@ import { RotateCw, WifiOff } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { RETRY_LABEL } from '../services/errorMessages';
 import {
-  FontSizes,
   FontFamily,
   Spacing,
-  BorderRadius,
   PortalFontSizes,
   scaledPortalFontSize,
   getPortalLineHeight,
@@ -26,6 +24,7 @@ export interface ErrandChannelListProps {
   onRefresh?: () => void;
   onNewErrandPress?: () => void;
   emptyText?: string;
+  emptyTitle?: string;
 }
 
 export default function ErrandChannelList({
@@ -36,8 +35,10 @@ export default function ErrandChannelList({
   onRefresh,
   onNewErrandPress,
   emptyText,
+  emptyTitle = 'No Active Errand Chats',
 }: ErrandChannelListProps) {
   const { colors, isDark } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
   const [showCircularFallback, setShowCircularFallback] = useState(false);
 
   useEffect(() => {
@@ -59,14 +60,11 @@ export default function ErrandChannelList({
   if (error) {
     return (
       <View
-        style={[
-          styles.errorContainer,
-          { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' },
-        ]}
+        style={styles.errorContainer}
         testID="connection-error-banner"
       >
-        <WifiOff size={28} color={colors.danger} strokeWidth={2} />
-        <Text style={[styles.errorTitle, { color: colors.danger }]} maxFontSizeMultiplier={1.2}>
+        <WifiOff size={24} color={colors.textGray} strokeWidth={1.8} />
+        <Text style={[styles.errorTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
           We could not load your chats
         </Text>
         <Text style={[styles.errorSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
@@ -75,13 +73,15 @@ export default function ErrandChannelList({
         {onRefresh && (
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[styles.refreshBtn, { backgroundColor: colors.danger }]}
+            style={[styles.refreshBtn, { backgroundColor: brandColor }]}
             onPress={onRefresh}
             hitSlop={PortalTouchTargets.compactHitSlop}
             testID="tap-to-refresh-connection-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Try loading conversations again"
           >
-            <RotateCw size={14} color="#FFFFFF" strokeWidth={2.2} />
-            <Text style={styles.refreshBtnTextWhite} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>{RETRY_LABEL}</Text>
+            <RotateCw size={14} color={colors.onPrimary} strokeWidth={2.2} />
+            <Text style={[styles.refreshBtnTextWhite, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>{RETRY_LABEL}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -100,12 +100,12 @@ export default function ErrandChannelList({
           {onRefresh && (
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.refreshBtnOutline, { borderColor: colors.primary, marginTop: Spacing.md }]}
+              style={[styles.refreshBtnOutline, { borderColor: brandColor, marginTop: Spacing.md }]}
               onPress={onRefresh}
               hitSlop={PortalTouchTargets.compactHitSlop}
             >
-              <RotateCw size={14} color={colors.primary} />
-              <Text style={[styles.refreshBtnTextPrimary, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+              <RotateCw size={14} color={brandColor} />
+              <Text style={[styles.refreshBtnTextPrimary, { color: brandColor }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
                 {RETRY_LABEL}
               </Text>
             </TouchableOpacity>
@@ -119,19 +119,12 @@ export default function ErrandChannelList({
   // Case 3: Empty Channels List (No active errand chats)
   if (errands.length === 0) {
     return (
-      <View
-        style={[
-          styles.emptyCard,
-          {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC',
-          },
-        ]}
-      >
-        <Text style={[styles.emptyTitle, { color: colors.textDark }]}>
-          No Active Errand Chats
+      <View style={styles.emptyCard}>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyTitle, { color: colors.textDark }]}>
+          {emptyTitle}
         </Text>
         {emptyText ? (
-          <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptySubtitle, { color: colors.textGray }]}>
             {emptyText}
           </Text>
         ) : null}
@@ -145,22 +138,6 @@ export default function ErrandChannelList({
       {errands.map((errand) => (
         <ErrandChannelRow key={errand.id} errand={errand} onSelect={onSelect} />
       ))}
-      {onRefresh && (
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.bottomRefreshLink}
-          onPress={onRefresh}
-          hitSlop={PortalTouchTargets.compactHitSlop}
-        >
-          <RotateCw size={13} color={colors.textGray} />
-          <Text
-            style={[styles.bottomRefreshText, { color: colors.textGray }]}
-            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
-          >
-            Refresh Channel Status
-          </Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -176,11 +153,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorContainer: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.huge + Spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: Spacing.xs,
   },
   errorTitle: {
     fontFamily: FontFamily.bold,
@@ -199,18 +175,8 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xxl + 8,
-    borderRadius: BorderRadius.xl,
-    marginTop: Spacing.md,
-  },
-  emptyIconHalo: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.huge + Spacing.xl,
   },
   emptyTitle: {
     fontFamily: FontFamily.bold,
@@ -227,74 +193,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     maxWidth: 280,
   },
-  miniFlowContainer: {
-    width: '100%',
-    padding: Spacing.sm + 2,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.lg,
-  },
-  miniFlowTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  flowStepsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  flowStepItem: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  flowStepNum: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    textAlign: 'center',
-    lineHeight: 22,
-    backgroundColor: 'rgba(246, 36, 89, 0.1)',
-  },
-  flowStepText: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
-  },
-  flowArrow: {
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    opacity: 0.6,
-  },
-  emptyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: PortalTouchTargets.buttonHeight,
-    paddingVertical: 12,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.full,
-  },
-  emptyBtnText: {
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 1.2),
-  },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: PortalTouchTargets.compact,
+    gap: 8,
+    minHeight: 48,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.full,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
   refreshBtnTextWhite: {
     fontFamily: FontFamily.bold,
@@ -306,29 +213,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: PortalTouchTargets.compact,
+    gap: 8,
+    minHeight: 48,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.full,
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
   },
   refreshBtnTextPrimary: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
-  },
-  bottomRefreshLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: Spacing.xs,
-    paddingVertical: 8,
-    minHeight: 44,
-  },
-  bottomRefreshText: {
-    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
   },

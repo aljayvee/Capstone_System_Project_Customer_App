@@ -1,24 +1,20 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  Bike,
   MapPin,
   Store,
   User,
-  ShoppingBag,
-  ShieldCheck,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import {
   BorderRadius,
-  FontSizes,
   Spacing,
   FontFamily,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   moderateScale,
   PortalFontSizes,
   scaledPortalFontSize,
@@ -38,6 +34,8 @@ import { formatErrandId } from '../../utils/formatErrandId';
 import { useRiderLiveLocation } from '../../hooks/useRiderLiveLocation';
 import { useLiveRoute } from '../../hooks/useLiveRoute';
 import { getErrandProgressStage } from '../../utils/errandProgress';
+import { RatingModal } from '../../components/RatingModal';
+import { useDeliveryRatingPrompt } from '../../hooks/useDeliveryRatingPrompt';
 
 export interface TrackTabProps {
   user: any;
@@ -45,9 +43,35 @@ export interface TrackTabProps {
   activeErrands: any[];
   focusedErrandId?: string;
   onScroll?: (event: any) => void;
+  /**
+   * Every errand on the account, delivered ones included. `activeErrands`
+   * drops an errand the moment it is DELIVERED, which is exactly when the
+   * rating prompt is due (useDeliveryRatingPrompt.ts).
+   */
+  allErrands?: any[];
+  /** False while another screen or dialog is in front: holds the prompt back. */
+  canPromptRating?: boolean;
 }
 
-export default function TrackTab({ user, navigation, activeErrands, focusedErrandId, onScroll }: TrackTabProps) {
+export default function TrackTab({
+  user,
+  navigation,
+  activeErrands,
+  focusedErrandId,
+  onScroll,
+  allErrands,
+  canPromptRating = true,
+}: TrackTabProps) {
+  const ratingPrompt = useDeliveryRatingPrompt(allErrands, canPromptRating);
+  const ratingSheet = ratingPrompt.errandId ? (
+    <RatingModal
+      visible={ratingPrompt.visible}
+      errandId={ratingPrompt.errandId}
+      summary={ratingPrompt.summary}
+      onDone={ratingPrompt.finish}
+    />
+  ) : null;
+  const pageLayout = usePageLayout();
   const { colors, isDark } = useThemeColor();
   const { width: windowWidth, height: windowHeight, isTablet, isCompact, isTallAspect } = useResponsive();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -123,6 +147,8 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
     degraded: routeDegraded,
     lineEngine: routeLineEngine,
     unroutable: routeUnroutable,
+    routeKey,
+    routeUpdatedAt,
   } = useLiveRoute(riderLocation, customerCoordinate, waypoints, {
     // The route the rider is following, as the server decided it for them
     // (the fastest of OSRM and Google), reused for this errand so both apps
@@ -168,14 +194,19 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
     ? moderateScale(420, 0.2)
     : moderateScale(365, 0.2);
 
+  // The sheet sits beside the root view, second in a fragment, in both returns
+  // below. React then keeps the same sheet when the last live errand is
+  // delivered and this switches to the empty view, so a comment being typed
+  // survives it.
   if (count === 0) {
     return (
+      <>
       <View
         style={[
           styles.flex,
           {
-            backgroundColor: colors.bgApp,
-            paddingHorizontal: Spacing.xl,
+            backgroundColor: colors.card,
+            paddingHorizontal: pageLayout.isPhone ? 0 : Spacing.xl,
             paddingTop: insets.top > 0 ? insets.top + Spacing.md : Spacing.lg,
             paddingBottom: Spacing.xl,
             alignItems: 'center',
@@ -183,18 +214,21 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
           },
         ]}
       >
-        <View style={[styles.emptyContainer, { maxWidth: MAX_CONTENT_WIDTH }]}>
+        <View style={[styles.emptyContainer, { maxWidth: MAX_CONTENT_WIDTH }, pageLayout.frameStyle, pageLayout.gutterStyle]}>
           <Text style={[styles.emptyTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>All Caught Up!</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
             You have no active errands in progress.
           </Text>
         </View>
       </View>
+      {ratingSheet}
+      </>
     );
   }
 
   return (
-    <View style={[styles.rootContainer, { backgroundColor: colors.bgApp }]}>
+    <>
+    <View style={[styles.rootContainer, { backgroundColor: colors.card }]}>
       {/* 1. Top Section: The Single Universal Live Map (Root level View, outside any ScrollView) */}
       <View style={styles.mapSection}>
         {delivering ? (
@@ -217,6 +251,8 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
             phase="delivering"
             mapStyle={mapStyle}
             lineEngine={routeLineEngine}
+            routeKey={routeKey}
+            routeUpdatedAt={routeUpdatedAt}
           />
         ) : (
           <RiderToStorePanel
@@ -235,7 +271,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.switcherScroll}
+              contentContainerStyle={[styles.switcherScroll, pageLayout.insetStyle]}
             >
               {activeErrands.map((errand, idx) => {
                 const isSelected = idx === safeIndex;
@@ -247,24 +283,23 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
                     style={[
                       styles.switcherTab,
                       {
-                        backgroundColor: isSelected
-                          ? colors.primary
-                          : isDark
-                          ? 'rgba(31, 41, 55, 0.92)'
-                          : 'rgba(255, 255, 255, 0.95)',
-                        borderColor: isSelected ? colors.primary : colors.border,
+                        backgroundColor: isSelected ? (isDark ? colors.primary : colors.primaryStrong) : colors.card,
+                        borderColor: isSelected ? colors.primaryStrong : colors.border,
                       },
                       Shadows.soft,
                     ]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`Track order ${formatErrandId(errand.orderId, errand.referenceNo)}${isSelected ? ', selected' : ''}`}
                   >
                     <Text
                       style={[
                         styles.switcherText,
-                        { color: isSelected ? '#FFFFFF' : colors.textDark },
+                        { color: isSelected ? colors.onPrimary : colors.textDark },
                       ]}
                       maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                     >
-                      #{formatErrandId(errand.orderId)}
+                      #{formatErrandId(errand.orderId, errand.referenceNo)}
                       {errand.categories ? ` • ${errand.categories}` : ''}
                     </Text>
                   </TouchableOpacity>
@@ -282,43 +317,28 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
           {
             height: bottomPanelHeight,
             backgroundColor: colors.card,
-            borderTopColor: isDark ? colors.border : '#EDEFF2',
+            borderTopColor: colors.border,
           },
           Shadows.liftedUp,
         ]}
       >
         <ScrollView
           style={styles.panelScroll}
-          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
+          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
         >
-          {/* Header Row: ID, Category, Status Badge */}
+          {/* Store identity, reference and live signal */}
           <View style={styles.cardHeader}>
             <View style={styles.headerLeftCol}>
               <View style={styles.idRow}>
-                <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
-                  #{formatErrandId(selectedErrand.orderId)}
+                <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                  {pinpoints.map((pin: any) => pin.storeName).join(' & ') || selectedErrand.categories || 'Your delivery'}
                 </Text>
-                {selectedErrand.categories && (
-                  <View
-                    style={[
-                      styles.categoryPill,
-                      { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.bgGray },
-                    ]}
-                  >
-                    <ShoppingBag size={11} color={colors.textMedium} strokeWidth={2.2} />
-                    <Text
-                      style={[styles.categoryText, { color: colors.textMedium }]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                    >
-                      {selectedErrand.categories}
-                    </Text>
-                  </View>
-                )}
+                <Text style={[styles.categoryText, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+                  #{formatErrandId(selectedErrand.orderId, selectedErrand.referenceNo)}
+                </Text>
               </View>
 
               {/* Psychological Reassurance: Live Signal Status */}
@@ -346,7 +366,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
                   {!riderLocation
                     ? 'Connecting with rider GPS...'
                     : gpsFreshness === 'LIVE'
-                      ? 'Rider Live GPS Broadcast Active'
+                      ? 'Rider location is live'
                       : gpsLabel}
                 </Text>
               </View>
@@ -356,13 +376,13 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
                 <View style={styles.liveStatusRow}>
                   <View style={[styles.livePulseDot, { backgroundColor: colors.warning }]} />
                   <Text style={[styles.liveStatusText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                    Showing an approximate route — road directions are unavailable right now
+                    Approximate route. Road directions are unavailable right now.
                   </Text>
                 </View>
               )}
             </View>
 
-            <StatusBadge status={selectedErrand.status} />
+            <StatusBadge status={selectedErrand.status} readable />
           </View>
 
           {/* Errand Live Stepper & Active Stage Spotlight */}
@@ -371,24 +391,11 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
           <DeliveryHoldNote errand={selectedErrand} />
 
           {/* Structured Details Card (Chunked Information for low cognitive load) */}
-          <View
-            style={[
-              styles.infoSection,
-              {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.bgGray,
-                borderColor: isDark ? colors.border : '#F3F4F6',
-              },
-            ]}
-          >
+          <View style={styles.infoSection}>
             {/* Assigned Rider */}
-            <View style={styles.infoRow}>
-              <View
-                style={[
-                  styles.infoIconWrapper,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#EBF5FF' },
-                ]}
-              >
-                <User size={15} color={isDark ? '#93C5FD' : '#2563EB'} strokeWidth={2.2} />
+            <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.infoIconWrapper}>
+                <User size={19} color={colors.textGray} strokeWidth={1.8} />
               </View>
               <View style={styles.infoContentCol}>
                 <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Assigned Rider</Text>
@@ -396,23 +403,15 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
                   <Text style={[styles.infoValue, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
                     {selectedErrand.riderName || 'Assigning nearest rider...'}
                   </Text>
-                  {selectedErrand.riderName && (
-                    <ShieldCheck size={13} color={colors.success} strokeWidth={2.2} />
-                  )}
                 </View>
               </View>
             </View>
 
             {/* Store Stops */}
             {pinpoints.length > 0 && (
-              <View style={styles.infoRow}>
-                <View
-                  style={[
-                    styles.infoIconWrapper,
-                    { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFF7ED' },
-                  ]}
-                >
-                  <Store size={15} color={isDark ? '#FDBA74' : '#EA580C'} strokeWidth={2.2} />
+              <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.infoIconWrapper}>
+                  <Store size={19} color={colors.textGray} strokeWidth={1.8} />
                 </View>
                 <View style={styles.infoContentCol}>
                   <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
@@ -427,18 +426,13 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
 
             {/* Destination Address */}
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-              <View
-                style={[
-                  styles.infoIconWrapper,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FDF2F8' },
-                ]}
-              >
-                <MapPin size={15} color={colors.primary} strokeWidth={2.2} />
+              <View style={styles.infoIconWrapper}>
+                <MapPin size={19} color={colors.textGray} strokeWidth={1.8} />
               </View>
               <View style={styles.infoContentCol}>
                 <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>Delivery Destination</Text>
                 <Text style={[styles.infoValue, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
-                  {selectedErrand.deliveryAddress || 'Tacurong City'}
+                  {selectedErrand.deliveryAddress || 'Delivery address not provided'}
                 </Text>
               </View>
             </View>
@@ -447,13 +441,15 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
           {/* Financial Certainty Footer */}
           <View style={styles.footerRow}>
             <Text style={[styles.totalLabel, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>Total Errand Fee</Text>
-            <Text style={[styles.totalAmount, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+            <Text style={[styles.totalAmount, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
               ₱{Number(selectedErrand.grandTotal ?? selectedErrand.totalCost ?? 0).toFixed(2)}
             </Text>
           </View>
         </ScrollView>
       </View>
     </View>
+    {ratingSheet}
+    </>
   );
 }
 
@@ -519,49 +515,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   panelScrollContent: {
-    padding: Spacing.md,
+    padding: Spacing.xl,
     paddingBottom: 110,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   headerLeftCol: {
     flex: 1,
     paddingRight: Spacing.sm,
   },
   idRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-    flexWrap: 'nowrap',
-    overflow: 'hidden',
+    gap: 4,
+    marginBottom: Spacing.sm,
   },
   cardTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.semibold,
     fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-    letterSpacing: -0.2,
-  },
-  categoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-    flexShrink: 1,
-    maxWidth: '65%',
   },
   categoryText: {
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    textTransform: 'capitalize',
-    flexShrink: 1,
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
   },
   liveStatusRow: {
     flexDirection: 'row',
@@ -575,30 +555,25 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   liveStatusText: {
-    fontFamily: FontFamily.semibold,
+    flex: 1,
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   infoSection: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    marginVertical: Spacing.md,
+    marginVertical: Spacing.lg,
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm + 2,
-    paddingVertical: Spacing.sm + 2,
-    minHeight: 48,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.04)',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    minHeight: 64,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   infoIconWrapper: {
-    width: 28,
-    height: 28,
-    borderRadius: BorderRadius.full,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -607,16 +582,15 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   infoValue: {
-    fontFamily: FontFamily.bold,
+    flexShrink: 1,
+    fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
     lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
-    marginTop: 1,
+    marginTop: 4,
   },
   riderNameRow: {
     flexDirection: 'row',
@@ -625,8 +599,10 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.sm,
     paddingTop: Spacing.sm,
   },
   totalLabel: {

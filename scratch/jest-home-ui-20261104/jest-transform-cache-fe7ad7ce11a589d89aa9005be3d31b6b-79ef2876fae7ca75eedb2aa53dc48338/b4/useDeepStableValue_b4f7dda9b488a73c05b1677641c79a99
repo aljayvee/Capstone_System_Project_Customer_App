@@ -1,0 +1,19 @@
+aaf08b063cd5b0148115d2d366dd6dd5
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useDeepStableValue = useDeepStableValue;
+var _fastDeepEqual = _interopRequireDefault(require("fast-deep-equal"));
+var React = _interopRequireWildcard(require("react"));
+function useDeepStableValue(value) {
+  var valueRef = React.useRef(value);
+  if (!(0, _fastDeepEqual.default)(valueRef.current, value)) {
+    valueRef.current = value;
+  }
+  return valueRef.current;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZmFzdERlZXBFcXVhbCIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJyZXF1aXJlIiwiUmVhY3QiLCJfaW50ZXJvcFJlcXVpcmVXaWxkY2FyZCIsInVzZURlZXBTdGFibGVWYWx1ZSIsInZhbHVlIiwidmFsdWVSZWYiLCJ1c2VSZWYiLCJpc0VxdWFsIiwiY3VycmVudCJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy91c2VEZWVwU3RhYmxlVmFsdWUudHN4Il0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7OztBQUFBLElBQUFBLGNBQUEsR0FBQUMsc0JBQUEsQ0FBQUMsT0FBQTtBQUNBLElBQUFDLEtBQUEsR0FBQUMsdUJBQUEsQ0FBQUYsT0FBQTtBQUVPLFNBQVNHLGtCQUFrQkEsQ0FBSUMsS0FBUSxFQUFLO0VBQ2pELElBQU1DLFFBQVEsR0FBR0osS0FBSyxDQUFDSyxNQUFNLENBQUNGLEtBQUssQ0FBQztFQUVwQyxJQUFJLENBQUMsSUFBQUcsc0JBQU8sRUFBQ0YsUUFBUSxDQUFDRyxPQUFPLEVBQUVKLEtBQUssQ0FBQyxFQUFFO0lBQ3JDQyxRQUFRLENBQUNHLE9BQU8sR0FBR0osS0FBSztFQUMxQjtFQUVBLE9BQU9DLFFBQVEsQ0FBQ0csT0FBTztBQUN6QiIsImlnbm9yZUxpc3QiOltdfQ==

@@ -24,8 +24,10 @@ import {
 import TrueNativeModal from './transitions/TrueNativeModal';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
   BorderRadius,
-  FontSizes,
   Spacing,
   FontFamily,
   Shadows,
@@ -160,12 +162,12 @@ export default function AppUpdatesModal({
               {isSameVersion ? (
                 <View style={[styles.statusPill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
                   <CheckCircle2 size={13} color="#059669" />
-                  <Text style={[styles.statusPillText, { color: '#065F46' }]}>Up to Date</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.statusPillText, { color: '#065F46' }]}>Up to Date</Text>
                 </View>
               ) : (
                 <View style={[styles.statusPill, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
                   <ArrowUpCircle size={13} color="#DC2626" />
-                  <Text style={[styles.statusPillText, { color: '#991B1B' }]}>Update Ready</Text>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.statusPillText, { color: '#991B1B' }]}>Update Ready</Text>
                 </View>
               )}
             </View>
@@ -174,23 +176,23 @@ export default function AppUpdatesModal({
           {/* Version Indicators */}
           {isSameVersion ? (
             <View style={styles.singleVersionRow}>
-              <Text style={[styles.heroLabel, { color: colors.textGray }]}>Current Version</Text>
-              <Text style={[styles.heroVersionSingle, { color: colors.textDark }]}>v{installedVersion}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroLabel, { color: colors.textGray }]}>Current Version</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroVersionSingle, { color: colors.textDark }]}>v{installedVersion}</Text>
             </View>
           ) : (
             <View style={styles.heroRow}>
               <View>
-                <Text style={[styles.heroLabel, { color: colors.textGray }]}>Current Installed</Text>
-                <Text style={[styles.heroVersion, { color: colors.textDark }]}>v{installedVersion}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroLabel, { color: colors.textGray }]}>Current Installed</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroVersion, { color: colors.textDark }]}>v{installedVersion}</Text>
               </View>
 
               <View style={styles.arrowSeparator}>
-                <Text style={{ color: colors.textLight, fontSize: 16 }}>➔</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'), color: colors.textLight, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) }}>➔</Text>
               </View>
 
               <View>
-                <Text style={[styles.heroLabel, { color: colors.textGray }]}>Latest Available</Text>
-                <Text style={[styles.heroVersion, { color: colors.primary }]}>v{latestVersion}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroLabel, { color: colors.textGray }]}>Latest Available</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroVersion, { color: colors.primary }]}>v{latestVersion}</Text>
               </View>
             </View>
           )}
@@ -200,19 +202,19 @@ export default function AppUpdatesModal({
             <View style={styles.specsRow}>
               <View style={styles.specItem}>
                 <HardDrive size={12} color={colors.textLight} />
-                <Text style={[styles.specText, { color: colors.textGray }]}>{release.fileSize || '125 MB'}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.specText, { color: colors.textGray }]}>{release.fileSize || '125 MB'}</Text>
               </View>
               <View style={styles.specDivider} />
               <View style={styles.specItem}>
                 <Cpu size={12} color={colors.textLight} />
-                <Text style={[styles.specText, { color: colors.textGray }]}>{release.minAndroid || 'Android 8.0+'}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.specText, { color: colors.textGray }]}>{release.minAndroid || 'Android 8.0+'}</Text>
               </View>
               {release.updatedAt && (
                 <>
                   <View style={styles.specDivider} />
                   <View style={styles.specItem}>
                     <Calendar size={12} color={colors.textLight} />
-                    <Text style={[styles.specText, { color: colors.textGray }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.specText, { color: colors.textGray }]}>
                       {new Date(release.updatedAt).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -231,8 +233,8 @@ export default function AppUpdatesModal({
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
               <Sparkles size={15} color="#F59E0B" />
-              <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Features Added</Text>
-              <Text style={[styles.sectionCount, { color: colors.textLight }]}>({features.length})</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Features Added</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionCount, { color: colors.textLight }]}>({features.length})</Text>
             </View>
             <View style={styles.itemsList}>
               {features.map((item, idx) => (
@@ -254,8 +256,8 @@ export default function AppUpdatesModal({
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
               <Wrench size={15} color="#3B82F6" />
-              <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Fixes & Stability</Text>
-              <Text style={[styles.sectionCount, { color: colors.textLight }]}>({fixes.length})</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Fixes & Stability</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionCount, { color: colors.textLight }]}>({fixes.length})</Text>
             </View>
             <View style={styles.itemsList}>
               {fixes.map((item, idx) => (
@@ -275,8 +277,8 @@ export default function AppUpdatesModal({
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
               <FileText size={15} color="#10B981" />
-              <Text style={[styles.sectionTitle, { color: colors.textDark }]}>Release Logs & Engine</Text>
-              <Text style={[styles.sectionCount, { color: colors.textLight }]}>({logs.length})</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionTitle, { color: colors.textDark }]}>Release Logs & Engine</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.sectionCount, { color: colors.textLight }]}>({logs.length})</Text>
             </View>
             <View style={styles.itemsList}>
               {logs.map((item, idx) => (
@@ -306,7 +308,7 @@ export default function AppUpdatesModal({
             ]}
           >
             <CheckCircle2 size={18} color="#059669" />
-            <Text style={[styles.upToDateBannerText, { color: isDark ? '#34D399' : '#065F46' }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.upToDateBannerText, { color: isDark ? '#34D399' : '#065F46' }]}>
               You are on the latest version
             </Text>
           </View>
@@ -324,11 +326,11 @@ export default function AppUpdatesModal({
             accessibilityLabel="Update New Version"
           >
             {downloading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
-              <Download size={18} color="#FFFFFF" />
+              <Download size={18} color={colors.onPrimary} />
             )}
-            <Text style={styles.primaryCtaText}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.primaryCtaText, { color: colors.onPrimary }]}>
               {downloading ? 'Opening Download Manager...' : 'Update New Version'}
             </Text>
           </TouchableOpacity>
@@ -351,7 +353,7 @@ export default function AppUpdatesModal({
             accessibilityLabel="Check for Updates"
           >
             <RefreshCw size={14} color={colors.textGray} style={checking ? styles.spin : undefined} />
-            <Text style={[styles.secondaryBtnText, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.secondaryBtnText, { color: colors.textGray }]}>
               {checking ? 'Checking...' : 'Check Again'}
             </Text>
           </TouchableOpacity>
@@ -383,12 +385,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
-    lineHeight: 22,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
   },
   modalSubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginTop: 2,
   },
   closeBtn: {
@@ -418,8 +421,9 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   heroStatusHeadline: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     flex: 1,
   },
   singleVersionRow: {
@@ -429,9 +433,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   heroVersionSingle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.mono,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+
   },
   heroRow: {
     flexDirection: 'row',
@@ -441,15 +446,17 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   heroLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   heroVersion: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.mono,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+
     marginTop: 1,
   },
   arrowSeparator: {
@@ -468,8 +475,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusPillText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   specsRow: {
     flexDirection: 'row',
@@ -485,8 +493,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   specText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   specDivider: {
     width: 3,
@@ -503,12 +512,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   sectionCount: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.mono,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   itemsList: {
     gap: 6,
@@ -538,8 +549,8 @@ const styles = StyleSheet.create({
   itemText: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: FontSizes.xs + 1,
-    lineHeight: 18,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   footerBar: {
     padding: Spacing.md,
@@ -555,8 +566,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
   },
   primaryCtaText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     color: '#FFFFFF',
   },
   upToDateBanner: {
@@ -569,8 +581,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   upToDateBannerText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.sm,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   refreshBtn: {
     flexDirection: 'row',
@@ -583,8 +596,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   secondaryBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.medium,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
   },
   spin: {
     transform: [{ rotate: '45deg' }],

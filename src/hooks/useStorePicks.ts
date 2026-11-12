@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { isSameStore, type Establishment } from '../services/establishments';
 import { showAppAlert } from '../services/alertModal';
-
-/** One errand, at most this many stores: the rider visits them in one trip. */
-export const MAX_PICKED_STORES = 3;
+import { getStoresAllowed, useStoresAllowed } from '../services/storeLimit';
 
 export function matchesPickedStore(a: Establishment, b: Establishment): boolean {
   if (a.key === b.key) return true;
@@ -26,13 +24,14 @@ export function withCataloguePlaceId(store: Establishment, pool: Establishment[]
 
 /**
  * The stores picked on Find stores, Popular Stores, Nearby Stores, or a
- * Merchant Category's screen: a tap picks a store or unpicks it, and a fourth
- * is refused with the reason, in an alert and in `limitError` for the screen
+ * Merchant Category's screen: a tap picks a store or unpicks it, and one past
+ * the owner's store limit (services/storeLimit.ts) is refused with the reason, in an alert and in `limitError` for the screen
  * to show inline. Deduplicates across `google:<placeId>` and `catalogue:<uuid>`
  * using `isSameStore` and preserves verified `placeId` when a catalogue match exists.
  */
 export function useStorePicks(initial: Establishment[] = [], cataloguePool: Establishment[] = []) {
-  const [rawPicked, setRawPicked] = useState<Establishment[]>(() => initial.slice(0, MAX_PICKED_STORES));
+  const maxStores = useStoresAllowed();
+  const [rawPicked, setRawPicked] = useState<Establishment[]>(() => initial.slice(0, getStoresAllowed()));
   const [limitError, setLimitError] = useState<string | null>(null);
 
   const picked = useMemo(
@@ -53,16 +52,16 @@ export function useStorePicks(initial: Establishment[] = [], cataloguePool: Esta
       if (store.isOpen === false) {
         return;
       }
-      if (picked.length >= MAX_PICKED_STORES) {
-        const message = `You can pick up to ${MAX_PICKED_STORES} stores for a single errand.`;
+      if (picked.length >= maxStores) {
+        const message = `You can pick up to ${maxStores} ${maxStores === 1 ? 'store' : 'stores'} for a single errand.`;
         setLimitError(message);
-        showAppAlert({ title: `Store Limit (Max ${MAX_PICKED_STORES})`, message, variant: 'warning' });
+        showAppAlert({ title: `Store Limit (Max ${maxStores})`, message, variant: 'warning' });
         return;
       }
       const merged = withCataloguePlaceId(store, cataloguePool);
       setRawPicked([...rawPicked, merged]);
     },
-    [picked, rawPicked, cataloguePool]
+    [picked, rawPicked, cataloguePool, maxStores]
   );
 
   const isPicked = useCallback(
@@ -77,5 +76,5 @@ export function useStorePicks(initial: Establishment[] = [], cataloguePool: Esta
     [picked, cataloguePool]
   );
 
-  return { picked, toggle, isPicked, limitError };
+  return { picked, toggle, isPicked, limitError, maxStores };
 }

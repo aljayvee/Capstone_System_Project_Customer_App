@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetworkStatus } from '../context/NetworkContext';
+import { rememberErrandReferences } from '../utils/formatErrandId';
 
 /**
  * Stale-while-revalidate for the customer's own data (2026-10-14).
@@ -121,6 +122,8 @@ export function hydrateCache(key: string): Promise<void> {
       const entry = JSON.parse(raw) as CacheEntry<unknown>;
       if (entry && typeof entry.at === 'number' && 'data' in entry) {
         memory.set(key, entry);
+        // A list read from disk renders before any API answer arrives.
+        rememberErrandReferences(entry.data);
         notify(key);
       }
     } catch {

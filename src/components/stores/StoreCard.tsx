@@ -1,6 +1,7 @@
 import React from 'react';
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, type DimensionValue } from 'react-native';
 import { Check, Plus, Star } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { storeDistanceLabel, storePhotoSource, type Establishment } from '../../services/establishments';
 import { getCategoryIcon } from '../../constants/pabili';
@@ -16,12 +17,13 @@ import {
 
 /**
  * One store item (unboxed): rounded photo on top, then name, category and
- * distance (in green), then address. Shared by Home's "Popular Stores" and
+ * distance (in green), then address. The photo-overlay presentation places
+ * the name over the photo and hides the address. Shared by Home's "Popular Stores" and
  * "Stores near you" rows, the Popular Stores screen, Stores near you screen,
  * Merchant Category Stores screen, and the Find stores list, so a store looks
  * the same wherever it is.
  *
- * `selectable` (where up to 3 stores are picked) adds a pick mark beside the
+ * `selectable` (where stores are picked, up to the store limit) adds a pick mark beside the
  * name, a plus or a tick; the item then picks instead of starting an order.
  *
  * Test ids hang off `testIDPrefix`: `<prefix>-<key>` for the item, and
@@ -42,12 +44,14 @@ export interface StoreCardProps {
   testIDPrefix: string;
   /** Google's star rating on the photo: the popular lists, where it is the reason for the order. */
   showRating?: boolean;
-  /** The item picks the store (up to 3) instead of starting an order: it shows a pick mark. */
+  /** The item picks the store (up to the store limit) instead of starting an order: it shows a pick mark. */
   selectable?: boolean;
   /** Picked: primary name highlight and a tick. */
   selected?: boolean;
   /** What a tap does, for a screen reader, when it is not picking (Home's rows). */
   actionLabel?: string;
+  /** Place the name on the photo and omit the street address. */
+  presentation?: 'default' | 'photo-overlay';
 }
 
 export function StoreCard({
@@ -63,8 +67,10 @@ export function StoreCard({
   selectable = false,
   selected = false,
   actionLabel = 'Start an order here',
+  presentation = 'default',
 }: StoreCardProps) {
   const { colors, isDark } = useThemeColor();
+  const hasPhotoTitle = presentation === 'photo-overlay';
   const isClosed = store.isOpen === false;
   const closedNotice = isClosed ? (store.closedReason?.trim() || 'Temporarily Unavailable') : null;
   const category = store.categoryName ?? fallbackCategoryName ?? 'Store';
@@ -110,20 +116,20 @@ export function StoreCard({
         rating={rating?.shown ?? null}
         isClosed={isClosed}
         closedNotice={closedNotice}
+        showName={hasPhotoTitle}
       />
       <View style={styles.body}>
         <View style={styles.bodyText}>
           <View style={styles.nameRow}>
-            <Text
+            {!hasPhotoTitle ? <Text
               style={[
                 styles.name,
                 { color: isClosed ? colors.textGray : selected ? colors.primary : colors.textDark },
               ]}
-              numberOfLines={1}
               maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
             >
               {store.name}
-            </Text>
+            </Text> : null}
             {store.isVerified ? (
               <View
                 style={[
@@ -133,7 +139,7 @@ export function StoreCard({
                 testID={`${testIDPrefix}-verified-${store.key}`}
               >
                 <Check size={9} color={isDark ? '#34D399' : '#059669'} strokeWidth={2.8} />
-                <Text style={[styles.verifiedText, { color: isDark ? '#34D399' : '#059669' }]}>
+                <Text style={[styles.verifiedText, { color: isDark ? '#34D399' : '#059669' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                   VERIFIED
                 </Text>
               </View>
@@ -141,7 +147,7 @@ export function StoreCard({
           </View>
           <Text
             style={[styles.detail, { color: isClosed ? colors.textLight : colors.textGray }]}
-            numberOfLines={1}
+            numberOfLines={2}
             maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
           >
             {category}
@@ -157,8 +163,8 @@ export function StoreCard({
               </>
             ) : null}
           </Text>
-          {store.address ? (
-            <Text style={[styles.address, { color: colors.textLight }]} numberOfLines={1} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+          {!hasPhotoTitle && store.address ? (
+            <Text style={[styles.address, { color: colors.textLight }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
               {store.address}
             </Text>
           ) : null}
@@ -207,6 +213,7 @@ function StorePhoto({
   rating,
   isClosed,
   closedNotice,
+  showName,
 }: {
   store: Establishment;
   categoryImages?: Record<number, string>;
@@ -217,6 +224,7 @@ function StorePhoto({
   rating: string | null;
   isClosed: boolean;
   closedNotice: string | null;
+  showName: boolean;
 }) {
   const { colors, isDark } = useThemeColor();
   const [failedOwn, setFailedOwn] = React.useState(false);
@@ -224,6 +232,25 @@ function StorePhoto({
   const own = failedOwn ? null : storePhotoSource(store);
   const overlays = (
     <>
+      {showName ? (
+        <>
+          <View
+            style={[styles.photoTitle, { paddingBottom: own && store.photoAttribution ? 30 : 14 }]}
+            testID={`${testIDPrefix}-title-overlay-${store.key}`}
+            pointerEvents="none"
+          >
+            <LinearGradient
+              colors={['rgba(11,19,43,0)', 'rgba(11,19,43,0.58)', 'rgba(11,19,43,0.76)']}
+              locations={[0, 0.28, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <Text style={[styles.name, styles.photoName]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+              {store.name}
+            </Text>
+          </View>
+        </>
+      ) : null}
       {store.orderedBefore ? <OrderedBeforeChip testID={`${testIDPrefix}-ordered-before-${store.key}`} /> : null}
       {rating ? <RatingChip label={rating} testID={`${testIDPrefix}-rating-${store.key}`} /> : null}
       {isClosed ? (
@@ -242,19 +269,19 @@ function StorePhoto({
     return (
       <ImageBackground
         source={own}
-        style={[styles.image, { height, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}
+        style={[styles.image, showName ? styles.imageWithTitle : null, { height: showName ? undefined : height, minHeight: height, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}
         resizeMode="cover"
         onError={() => setFailedOwn(true)}
         accessibilityIgnoresInvertColors
         testID={`${testIDPrefix}-photo-${store.key}`}
       >
+        {overlays}
         {/* Google requires a photo's author shown with it. */}
         {store.photoAttribution ? (
           <Text style={styles.credit} numberOfLines={1} maxFontSizeMultiplier={1}>
             {`Photo: ${store.photoAttribution}`}
           </Text>
         ) : null}
-        {overlays}
       </ImageBackground>
     );
   }
@@ -264,11 +291,14 @@ function StorePhoto({
       style={[
         styles.image,
         styles.imageFallback,
-        { height, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : isClosed ? '#E2E8F0' : '#FFF1F4' },
+        showName ? styles.imageWithTitle : null,
+        { height: showName ? undefined : height, minHeight: height, justifyContent: showName ? 'flex-end' : 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : isClosed ? '#E2E8F0' : '#FFF1F4' },
       ]}
       testID={`${testIDPrefix}-icon-${store.key}`}
     >
-      <Icon size={30} color={isClosed ? colors.textLight : colors.primary} strokeWidth={2} />
+      <View style={showName ? styles.homeFallbackIcon : undefined}>
+        <Icon size={30} color={isClosed ? colors.textLight : colors.primary} strokeWidth={2} />
+      </View>
       {overlays}
     </View>
   );
@@ -306,6 +336,27 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  photoTitle: {
+    width: '100%',
+    paddingHorizontal: 14,
+    paddingTop: 24,
+  },
+  imageWithTitle: {
+    // Long names can grow the image without colliding with its top badges.
+    paddingTop: 36,
+  },
+  photoName: {
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(11,19,43,0.65)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  homeFallbackIcon: {
+    position: 'absolute',
+    top: 30,
+    alignSelf: 'center',
   },
   imageFallback: {
     alignItems: 'center',
@@ -338,7 +389,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.sm,
     paddingTop: Spacing.xs + 2,
     paddingBottom: 2,
@@ -356,15 +407,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    // Give the name the full column; the trust badge must not squeeze it.
+    alignItems: 'flex-start',
+    gap: 4,
   },
   name: {
-    flexShrink: 1,
+    alignSelf: 'stretch',
     fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'heading'),
   },
   verifiedBadge: {
     flexDirection: 'row',
@@ -375,14 +426,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   verifiedText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: 9,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     letterSpacing: 0.4,
   },
   detail: {
     fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.35),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 1.35),
     marginTop: 2,
   },
   distance: {
@@ -391,7 +443,7 @@ const styles = StyleSheet.create({
   address: {
     fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.35),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 1.35),
     marginTop: 2,
   },
   // Status chips on the photo: the one place a full pill belongs.
@@ -420,6 +472,7 @@ const styles = StyleSheet.create({
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   credit: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     position: 'absolute',
     right: 0,
     bottom: 0,
@@ -427,7 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     color: '#FFFFFF',
     fontFamily: FontFamily.medium,
-    fontSize: 9,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderTopLeftRadius: 4,

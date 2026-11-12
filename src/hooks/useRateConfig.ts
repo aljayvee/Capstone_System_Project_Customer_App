@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/apiClient';
 import { toUserMessage } from '../services/errorMessages';
+import { setStoresAllowedFromRateConfig } from '../services/storeLimit';
 
 export interface RateConfigData {
   id: number;
@@ -42,6 +43,7 @@ export function useRateConfig() {
       const res = await apiClient.get<RateConfigData>('/rate-config');
       if (res.data && typeof res.data.baseFee === 'number') {
         setRateConfig(res.data);
+        setStoresAllowedFromRateConfig(res.data);
       }
     } catch (err: any) {
       // Deliberately soft: a missing rate config falls back to the defaults

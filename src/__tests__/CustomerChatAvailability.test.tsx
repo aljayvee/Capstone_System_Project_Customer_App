@@ -166,13 +166,21 @@ describe('CustomerChatScreen — when the conversation stays open', () => {
     expect(res.queryByTestId('chat-text-input')).toBeNull();
   });
 
-  it('shows rating modal when errand is DELIVERED and unrated', async () => {
+  it('never asks for a rating in the dispatcher chat, even when DELIVERED and unrated', async () => {
+    // The prompt belongs to the Track tab (TrackTabRatingPrompt.test.tsx). It
+    // used to open here, the one place the customer was not rating the rider.
+    const { apiClient } = require('../services/apiClient');
+    apiClient.get.mockClear();
     const res: any = await renderAtStatus('DELIVERED');
 
     await waitFor(() => {
-      expect(res.getByText('How was your errand?')).toBeTruthy();
-      expect(res.getByText("Rate your rider's service for this delivery.")).toBeTruthy();
+      expect(res.getByText('This errand was delivered. Conversation is archived.')).toBeTruthy();
     });
+
+    expect(res.queryByText('How was your errand?')).toBeNull();
+    expect(res.queryByTestId('rating-submit')).toBeNull();
+    const askedForRating = apiClient.get.mock.calls.some(([url]: [string]) => String(url).includes('/rating'));
+    expect(askedForRating).toBe(false);
   });
 
   it('still freezes the order itself once a rider is assigned', async () => {

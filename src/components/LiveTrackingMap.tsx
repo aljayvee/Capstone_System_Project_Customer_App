@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE, UrlTile } from 'react-native-maps';
-import { Target, Radio, Navigation, Maximize2, Clock } from 'lucide-react-native';
+import { Target, Radio, Navigation, Maximize2, Clock, Check } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BorderRadius, FontSizes, FontWeights, Spacing, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, Spacing, FontFamily, PortalFontSizes, scaledPortalFontSize } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { formatDuration, formatDistance } from '../utils/format';
 import { MapCoordinate, toRegion } from '../utils/coords';
@@ -101,7 +101,23 @@ export interface LiveTrackingMapProps {
    * metres beside the roads painted under it. A dashed guess stands on either.
    */
   lineEngine?: string | null;
+  /**
+   * ADDITIVE, 2026-11-10 (useLiveRoute `routeKey`). Names the route being
+   * drawn. Given, the camera re-frames when it changes, not when the line
+   * loses a point: the rider's line is trimmed at the rider as they ride, and
+   * keying on its length moved the camera every few fixes.
+   */
+  routeKey?: string | null;
+  /**
+   * ADDITIVE, 2026-11-10 (useLiveRoute `routeUpdatedAt`). When the rider last
+   * left their route and was given a new one. The legend says so for a short
+   * while, quietly: a customer is not told "Recalculating".
+   */
+  routeUpdatedAt?: number | null;
 }
+
+/** How long the legend says the route was updated. */
+const ROUTE_UPDATED_NOTICE_MS = 2 * 60 * 1000;
 
 /** How the camera is framed. */
 type MapMode = 'full' | 'focus';
@@ -157,6 +173,8 @@ export default function LiveTrackingMap({
   phase = 'shopping',
   mapStyle = 'google',
   lineEngine,
+  routeKey = null,
+  routeUpdatedAt = null,
 }: LiveTrackingMapProps) {
   const showOsm = mapStyle === 'osm';
   const insets = useSafeAreaInsets();
@@ -199,7 +217,7 @@ export default function LiveTrackingMap({
       ? firstDrawable(deliveryLegCoordinates, routeCoordinates, pickupLegCoordinates)
       : firstDrawable(pickupLegCoordinates, routeCoordinates);
 
-  const routeColor = phase === 'delivering' ? colors.primary : '#F97316';
+  const routeColor = phase === 'delivering' ? colors.routeToCustomer : colors.routeToStore;
 
   // The badge describes the line being drawn. The shopping line is the run
   // through the stores, the delivery line the run in to the customer; each has
@@ -254,10 +272,14 @@ export default function LiveTrackingMap({
     customerCoordinate?.latitude,
     customerCoordinate?.longitude,
     pinpoints.length,
-    pickupLegCoordinates?.length ?? 0,
-    deliveryLegCoordinates?.length ?? 0,
-    routeCoordinates?.length ?? 0,
+    ...(routeKey
+      ? [routeKey]
+      : [pickupLegCoordinates?.length ?? 0, deliveryLegCoordinates?.length ?? 0, routeCoordinates?.length ?? 0]),
   ].join('|');
+
+  // Re-read by the legend; the notice ends on the next render after it lapses.
+  const routeRecentlyUpdated =
+    routeUpdatedAt != null && Date.now() - routeUpdatedAt < ROUTE_UPDATED_NOTICE_MS;
 
   useEffect(() => {
     if (mode !== 'full') return;
@@ -315,7 +337,7 @@ export default function LiveTrackingMap({
         testID="map-placeholder"
       >
         <ActivityIndicator color={colors.primary} />
-        <Text style={[styles.placeholderText, { color: colors.textGray }]}>Loading the map</Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.placeholderText, { color: colors.textGray }]}>Loading the map</Text>
       </View>
     );
   }
@@ -359,7 +381,7 @@ export default function LiveTrackingMap({
           />
         )}
 
-        <Marker coordinate={customerCoordinate} title="Delivery Address" pinColor={colors.primary} />
+        <Marker coordinate={customerCoordinate} title="Delivery Address" pinColor={colors.routeToCustomer} />
 
         {/* The arrival circle, drawn so the customer can see where "arrived at
             the store" is actually decided rather than having to trust a status
@@ -369,9 +391,9 @@ export default function LiveTrackingMap({
             key={`radius-${pin.id || idx}`}
             center={pin}
             radius={pin.geofenceRadiusMeters ?? DEFAULT_ARRIVAL_RADIUS_METERS}
-            strokeWidth={1.5}
-            strokeColor={pin.departedAt ? 'rgba(107,114,128,0.35)' : 'rgba(37,99,235,0.45)'}
-            fillColor={pin.departedAt ? 'rgba(107,114,128,0.06)' : 'rgba(37,99,235,0.10)'}
+            strokeWidth={2}
+            strokeColor={pin.departedAt ? colors.routePreview : colors.routeToStore}
+            fillColor={`${pin.departedAt ? colors.routePreview : colors.routeToStore}1A`}
           />
         ))}
 
@@ -381,16 +403,19 @@ export default function LiveTrackingMap({
             <Marker
               key={pin.id || `pin-${idx}`}
               coordinate={pin}
-              title={`Store #${idx + 1}: ${pin.storeName}${done ? ' — done' : ''}`}
+              title={`Store #${idx + 1}: ${pin.storeName}${done ? ' (completed)' : ''}`}
             >
               <View
                 style={[
                   styles.pinBadge,
-                  { backgroundColor: colors.primary },
-                  done && [styles.pinBadgeDone, { backgroundColor: colors.textLight }],
+                  { backgroundColor: done ? colors.success : colors.warning, borderColor: colors.card },
                 ]}
+                accessible
+                accessibilityLabel={`Store ${idx + 1}: ${pin.storeName}${done ? ', completed' : ', pickup stop'}`}
               >
-                <Text style={styles.pinBadgeText}>{done ? '✓' : idx + 1}</Text>
+                {done ? <Check size={14} color={colors.onSuccess} strokeWidth={3} /> : (
+                  <Text style={[styles.pinBadgeText, { color: colors.onWarning }]} maxFontSizeMultiplier={1}>{idx + 1}</Text>
+                )}
               </View>
             </Marker>
           );
@@ -421,9 +446,20 @@ export default function LiveTrackingMap({
         {routeLine.length > 1 && (
           <Polyline
             coordinates={routeLine}
+            strokeColor={colors.bgDark}
+            strokeWidth={8}
+            lineDashPattern={routeDashPattern}
+            zIndex={1}
+            testID="route-line-outline"
+          />
+        )}
+        {routeLine.length > 1 && (
+          <Polyline
+            coordinates={routeLine}
             strokeColor={routeColor}
             strokeWidth={4}
             lineDashPattern={routeDashPattern}
+            zIndex={2}
             testID={phase === 'delivering' ? 'route-line-delivering' : 'route-line-shopping'}
           />
         )}
@@ -442,62 +478,85 @@ export default function LiveTrackingMap({
 
       {/* The OpenStreetMap licence requires this wherever its map is shown. */}
       {showOsm && (
-        <Text style={styles.attribution} maxFontSizeMultiplier={1}>
+        <Text style={[styles.attribution, { backgroundColor: colors.card, color: colors.textGray }]} maxFontSizeMultiplier={1}>
           {OSM_ATTRIBUTION}
         </Text>
       )}
 
       {/* Floating Top Controls */}
-      <View style={[styles.floatingTopBar, { top: insets.top > 0 ? insets.top + 8 : 12 }]}>
-        {/* ETA & Distance Floating Badge */}
-        {hasEta ? (
-          <View style={styles.etaBadge} testID="map-eta-badge">
-            <Clock size={12} color="#FFFFFF" strokeWidth={2.4} />
-            <Text style={styles.etaText}>
-              {eta.label ? `${eta.label} · ` : ''}
-              {formatDuration(eta.seconds!)} • {formatDistance(eta.meters!)}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.livePill, { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}>
-            <Radio size={12} color={riderLocation ? colors.success : colors.warning} strokeWidth={2.4} />
-            <Text style={[styles.livePillText, { color: riderLocation ? colors.success : colors.warning }]}>
-              {riderLocation ? 'Live GPS' : 'Connecting...'}
+      <View style={[styles.controlsOverlay, { top: insets.top > 0 ? insets.top + 8 : 12 }]} pointerEvents="box-none">
+        <View style={styles.floatingTopBar}>
+          {/* ETA & Distance Floating Badge */}
+          {hasEta ? (
+            <View style={[styles.etaBadge, { backgroundColor: colors.card, borderColor: colors.border }]} testID="map-eta-badge">
+              <Clock size={15} color={colors.textDark} strokeWidth={2} />
+              <Text style={[styles.etaText, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
+                {eta.label ? `${eta.label} · ` : ''}
+                {formatDuration(eta.seconds!)} • {formatDistance(eta.meters!)}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.livePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Radio size={12} color={riderLocation ? colors.success : colors.warning} strokeWidth={2.4} />
+              <Text style={[styles.livePillText, { color: riderLocation ? colors.success : colors.warning }]} maxFontSizeMultiplier={1.2}>
+                {riderLocation ? 'Live GPS' : 'Connecting...'}
+              </Text>
+            </View>
+          )}
+
+          {/* Follow the rider, or step back and see the whole route. */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[
+              styles.recenterBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              mode === 'focus' && { backgroundColor: isDark ? colors.primary : colors.primaryStrong },
+            ]}
+            onPress={mode === 'focus' ? enterFull : enterFocus}
+            accessibilityLabel={mode === 'focus' ? 'Show the whole route' : 'Follow the rider'}
+            testID="map-mode-toggle"
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === 'focus' }}
+          >
+            {mode === 'focus' ? (
+              <Maximize2 size={18} color={colors.onPrimary} strokeWidth={2.2} />
+            ) : (
+              <Navigation size={18} color={colors.textDark} strokeWidth={2.2} />
+            )}
+          </TouchableOpacity>
+
+          {/* Re-frame the route without leaving Full. */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.recenterBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              enterFull();
+              fitAllPoints();
+            }}
+            testID="map-recenter-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Fit the route in the map"
+          >
+            <Target size={18} color={colors.textDark} strokeWidth={2.2} />
+          </TouchableOpacity>
+        </View>
+        {routeLine.length > 1 && (
+          <View
+            style={[styles.routeLegend, { backgroundColor: colors.card, borderColor: colors.border }]}
+            accessible
+            accessibilityLabel={`${phase === 'delivering' ? 'Delivery route to you' : 'Shopping route to the stores'}${degraded ? ', dashed line: approximate route' : ', solid line: road route'}`}
+          >
+            <View style={styles.routeLegendSample}>
+              {(degraded ? [0, 1, 2] : [0]).map((segment) => (
+                <View key={segment} style={[styles.routeLegendLine, { backgroundColor: routeColor, borderColor: colors.bgDark }]} />
+              ))}
+            </View>
+            <Text style={[styles.routeLegendText, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+              {degraded ? 'Approximate route (dashed)' : phase === 'delivering' ? 'Delivery route' : 'Store route'}
+              {!degraded && routeRecentlyUpdated ? ' · Route updated' : ''}
             </Text>
           </View>
         )}
-
-        {/* Follow the rider, or step back and see the whole route. */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.recenterBtn,
-            { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' },
-            mode === 'focus' && [styles.modeBtnActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
-          ]}
-          onPress={mode === 'focus' ? enterFull : enterFocus}
-          accessibilityLabel={mode === 'focus' ? 'Show the whole route' : 'Follow the rider'}
-          testID="map-mode-toggle"
-        >
-          {mode === 'focus' ? (
-            <Maximize2 size={18} color="#FFFFFF" strokeWidth={2.2} />
-          ) : (
-            <Navigation size={18} color={colors.textDark} strokeWidth={2.2} />
-          )}
-        </TouchableOpacity>
-
-        {/* Re-frame the route without leaving Full. */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[styles.recenterBtn, { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}
-          onPress={() => {
-            enterFull();
-            fitAllPoints();
-          }}
-          testID="map-recenter-btn"
-        >
-          <Target size={18} color={colors.textDark} strokeWidth={2.2} />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -509,15 +568,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   attribution: {
+    fontFamily: FontFamily.regular,
     position: 'absolute',
     left: 6,
     bottom: 4,
-    fontSize: 10,
-    color: '#1F2937',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    fontSize: PortalFontSizes.micro,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   wrapperFlex: {
     flex: 1,
@@ -528,77 +586,88 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   placeholderText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    fontFamily: FontFamily.semibold,
   },
   pinBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // A finished stop recedes rather than disappearing: still placed, clearly not
-  // part of the remaining trip.
-  pinBadgeDone: {
-    opacity: 0.75,
-  },
   pinBadgeText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.bold as any,
+    fontFamily: FontFamily.bold,
+    fontSize: PortalFontSizes.micro,
   },
-  floatingTopBar: {
+  controlsOverlay: {
     position: 'absolute',
-    top: 12,
     left: 12,
     right: 12,
+    gap: 10,
+  },
+  floatingTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     pointerEvents: 'box-none',
   },
   etaBadge: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(17, 24, 39, 0.85)',
+    minHeight: 48,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: BorderRadius.full,
-    ...Shadows.soft,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   etaText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    flexShrink: 1,
+    fontFamily: FontFamily.semibold,
+    fontSize: PortalFontSizes.caption,
+    lineHeight: 19,
   },
   livePill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    ...Shadows.soft,
+    gap: 6,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   livePillText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
+    flexShrink: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: PortalFontSizes.caption,
   },
-  modeBtnActive: {},
+  routeLegend: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  routeLegendSample: { width: 22, flexDirection: 'row', gap: 2 },
+  routeLegendLine: { flex: 1, height: 5, borderRadius: 2, borderWidth: 1 },
+  routeLegendText: { flexShrink: 1, fontFamily: FontFamily.regular, fontSize: PortalFontSizes.micro, lineHeight: 17 },
   recenterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.soft,
   },
 });
 

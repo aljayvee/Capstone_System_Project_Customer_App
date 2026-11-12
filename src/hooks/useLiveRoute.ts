@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapCoordinate } from '../utils/coords';
 import {
   fetchDrivingRoute,
@@ -6,8 +6,18 @@ import {
   type RouteSelection,
 } from '../services/directionsService';
 import { useNetworkStatus } from '../context/NetworkContext';
+import { useRiderLine, type RiderLine } from './useRiderLine';
+import { useRouteProgress, type RouteProgressState } from './useRouteProgress';
+import { pathFromDistance } from '../utils/routeGeometry';
 
 const REFRESH_INTERVAL_MS = 30000;
+
+/**
+ * Past this far from the rider's line, the line is not trimmed at the rider:
+ * they are off it (the server stops offering it at 250 m), and cutting it at
+ * the nearest point would draw a line starting somewhere they are not.
+ */
+const TRIM_MAX_OFF_LINE_METERS = 60;
 
 export interface LiveRouteResult {
   coordinates: MapCoordinate[] | null;
@@ -57,9 +67,28 @@ export interface LiveRouteResult {
    * straight-line guess, and the map may move (config/mapChoice.ts).
    */
   unroutable: 'osrm' | 'google' | null;
+  /**
+   * Where the line came from. 'rider': the very line Sugo Rider is following
+   * to this door, trimmed at the rider, its figures the part still ahead
+   * (hooks/useRiderLine.ts). 'own': calculated by this app, as before, while
+   * the rider is shopping or the server has no line to share.
+   */
+  source: 'rider' | 'own';
+  /** When the rider last left their route and was given a new one, epoch ms. 'rider' lines only. */
+  routeUpdatedAt: number | null;
+  /**
+   * Names the route, not its drawing: the same while the rider rides the same
+   * line, though the trimmed line loses points as they go. What the map
+   * re-frames on. Null for a line calculated here (the map then keys on the
+   * line's own length, as it always has).
+   */
+  routeKey: string | null;
 }
 
-const EMPTY_RESULT: LiveRouteResult = {
+/** What the hook calculates for itself; the rest is added on the way out. */
+type OwnRoute = Omit<LiveRouteResult, 'source' | 'routeUpdatedAt' | 'routeKey'>;
+
+const EMPTY_RESULT: OwnRoute = {
   coordinates: null,
   pickupLegCoordinates: null,
   deliveryLegCoordinates: null,
@@ -87,7 +116,7 @@ export function lineEngineOf(route: { selection?: RouteSelection | null; provide
 }
 
 type LegFigures = Pick<
-  LiveRouteResult,
+  OwnRoute,
   | 'pickupDistanceMeters'
   | 'pickupDurationSeconds'
   | 'deliveryDistanceMeters'
@@ -138,7 +167,7 @@ function buildFallbackRoute(
   origin: MapCoordinate | null,
   destination: MapCoordinate | null,
   waypoints: MapCoordinate[]
-): LiveRouteResult {
+): OwnRoute {
   const allPoints: MapCoordinate[] = [
     ...(origin ? [origin] : []),
     ...waypoints,
@@ -204,11 +233,22 @@ export function useLiveRoute(
   const originLat = origin ? origin.latitude.toFixed(4) : 'null';
   const originLng = origin ? origin.longitude.toFixed(4) : 'null';
 
-  const [result, setResult] = useState<LiveRouteResult>(EMPTY_RESULT);
+  const [result, setResult] = useState<OwnRoute>(EMPTY_RESULT);
 
   const originRef = useRef(origin);
   originRef.current = origin;
   const { isConnected, reconnectCount } = useNetworkStatus();
+
+  // The rider's own line, once no store is left ahead of them: the server only
+  // shares a line that ends at this customer's door. Taken only on the map's
+  // own roads, the same rule as every other line here (see `provider`).
+  const riderLine = useRiderLine(
+    errandId,
+    choose === 'fastest' && Boolean(errandId) && Boolean(origin) && waypoints.length === 0
+  );
+  const shownRiderLine = riderLine && (!provider || riderLine.lineEngine === provider) ? riderLine : null;
+  const riderLineInUse = Boolean(shownRiderLine);
+  const progress = useRouteProgress(shownRiderLine?.coordinates, origin);
 
   // The route on screen, and what it was last asked for with: naming the map
   // chosen from that very route must not fetch the same road again.
@@ -227,6 +267,13 @@ export function useLiveRoute(
     const effectiveWaypoints = hasRider ? currentWaypoints : currentWaypoints.slice(1);
 
     if (!effectiveOrigin || !effectiveDestination) {
+      return;
+    }
+
+    // The rider's line is on screen: nothing to calculate, and no timer
+    // redrawing the road under them. Should it go, this runs again and the
+    // line is calculated here as before.
+    if (riderLineInUse) {
       return;
     }
 
@@ -367,9 +414,42 @@ export function useLiveRoute(
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destination?.latitude, destination?.longitude, waypointsKey, originLat, originLng, isConnected, reconnectCount, choose, errandId, provider]);
+  }, [destination?.latitude, destination?.longitude, waypointsKey, originLat, originLng, isConnected, reconnectCount, choose, errandId, provider, riderLineInUse]);
 
-  return result;
+  const fromRider = useMemo(
+    () => (shownRiderLine ? riderLineResult(shownRiderLine, progress) : null),
+    [shownRiderLine, progress]
+  );
+
+  return fromRider ?? { ...result, source: 'own', routeUpdatedAt: null, routeKey: null };
+}
+
+/**
+ * The rider's line as this hook's result: the part still ahead of them, and
+ * the engine's own figures scaled to that part. Scaled rather than measured,
+ * so the distance on the badge stays the engine's road distance and never the
+ * length of the corner-rounded drawing.
+ */
+export function riderLineResult(line: RiderLine, progress: RouteProgressState | null): LiveRouteResult {
+  const onLine = progress != null && progress.offLineMeters <= TRIM_MAX_OFF_LINE_METERS && progress.totalMeters > 0;
+  const ahead = onLine ? pathFromDistance(line.coordinates, progress.cumulative, progress.alongMeters) : line.coordinates;
+  const share = onLine ? Math.max(0, Math.min(1, 1 - progress.alongMeters / progress.totalMeters)) : 1;
+  const distanceMeters = Math.round(line.distanceMeters * share);
+  const durationSeconds = Math.round(line.durationSeconds * share);
+
+  return {
+    ...EMPTY_RESULT,
+    coordinates: ahead,
+    deliveryLegCoordinates: ahead,
+    distanceMeters,
+    durationSeconds,
+    deliveryDistanceMeters: distanceMeters,
+    deliveryDurationSeconds: durationSeconds,
+    lineEngine: line.lineEngine || null,
+    source: 'rider',
+    routeUpdatedAt: line.reroutedAt,
+    routeKey: `rider:${line.version}`,
+  };
 }
 
 

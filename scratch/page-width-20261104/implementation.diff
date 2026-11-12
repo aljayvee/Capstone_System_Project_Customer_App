@@ -1,0 +1,2141 @@
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\LoginScreen.tsx.txt" b/src/screens/LoginScreen.tsx
+index aadd991..9fa1619 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\LoginScreen.tsx.txt"
++++ b/src/screens/LoginScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import {
+   View,
+@@ -54,6 +55,7 @@ const SUGO_MARK = require('../../assets/mascot/sugo-mark-white.png');
+ const SHEET_OVERLAP = 34;
+ 
+ export default function LoginScreen({ navigation }: any) {
++  const pageLayout = usePageLayout();
+   const { login } = useAuth();
+   const { colors, isDark } = useThemeColor();
+   const heroGradient = useAuthHeroGradient();
+@@ -302,7 +304,7 @@ export default function LoginScreen({ navigation }: any) {
+               colors={heroGradient}
+               start={{ x: 0, y: 0 }}
+               end={{ x: 1, y: 1 }}
+-              style={[styles.hero, { height: heroHeight, paddingTop: insets.top + Spacing.xl }]}
++              style={[styles.hero, { height: heroHeight, paddingTop: insets.top + Spacing.xl }, pageLayout.insetStyle]}
+             >
+               <AuthHeroPattern width={screenWidth} height={heroHeight} />
+ 
+@@ -335,8 +337,7 @@ export default function LoginScreen({ navigation }: any) {
+                 paddingBottom: insets.bottom + Spacing.xxl,
+                 opacity: introFade,
+                 transform: [{ translateY: sheetRise }],
+-              },
+-            ]}
++              }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+           >
+             <Text style={[styles.sheetTitle, { color: colors.textDark }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>Login</Text>
+             <Text style={[styles.sheetSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\RegisterScreen.tsx.txt" b/src/screens/RegisterScreen.tsx
+index b54b55e..53af38b 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\RegisterScreen.tsx.txt"
++++ b/src/screens/RegisterScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useRef, useState, useEffect, useMemo } from 'react';
+ import {
+   View,
+@@ -64,6 +65,7 @@ const RESEND_COOLDOWN_FALLBACK_SECONDS = 60;
+ type VerificationChannel = 'EMAIL' | 'PHONE';
+ 
+ export default function RegisterScreen({ navigation, route }: any) {
++  const pageLayout = usePageLayout();
+   const { login } = useAuth();
+   const { colors, isDark } = useThemeColor();
+   const heroGradient = useAuthHeroGradient();
+@@ -532,8 +534,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+               end={{ x: 1, y: 1 }}
+               style={[
+                 styles.hero,
+-                { minHeight: heroHeight, paddingTop: insets.top + Spacing.md },
+-              ]}
++                { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }, pageLayout.insetStyle]}
+             >
+               <AuthHeroPattern width={screenWidth} height={heroHeight} />
+ 
+@@ -584,8 +585,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+                 paddingBottom: insets.bottom + Spacing.xl,
+                 opacity: introFade,
+                 transform: [{ translateY: sheetRise }],
+-              },
+-            ]}
++              }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+           >
+             <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+               {/* GLOBAL API ERROR BANNER */}
+@@ -608,7 +608,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+                 {/* STEP 1: PERSONAL INFORMATION */}
+                 {/* ========================================================================= */}
+                 {currentStep === 1 && (
+-                  <View style={styles.stepContent}>
++                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
+                     {/* FIRST NAME */}
+                     <View style={styles.labelHeaderRow}>
+                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>FIRST NAME *</Text>
+@@ -707,7 +707,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+                 {/* STEP 2: CONTACT & VERIFICATION METHOD CHOICE */}
+                 {/* ========================================================================= */}
+                 {currentStep === 2 && (
+-                  <View style={styles.stepContent}>
++                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
+                     {/* EMAIL ADDRESS */}
+                     <View style={[styles.labelHeaderRow, { marginTop: Spacing.md }]}>
+                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>
+@@ -863,7 +863,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+                 {/* STEP 3: OTP VERIFICATION */}
+                 {/* ========================================================================= */}
+                 {currentStep === 3 && (
+-                  <View style={styles.stepContent}>
++                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
+                     {/* OTP INPUT */}
+                     <View style={styles.labelHeaderRow}>
+                       <Text style={[styles.inputLabel, { color: colors.textMedium }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>VERIFICATION CODE *</Text>
+@@ -932,7 +932,7 @@ export default function RegisterScreen({ navigation, route }: any) {
+                 {/* STEP 4: USERNAME & PASSWORD CREATION */}
+                 {/* ========================================================================= */}
+                 {currentStep === 4 && (
+-                  <View style={styles.stepContent}>
++                  <View style={[styles.stepContent, pageLayout.contentStyle]}>
+                     {phoneVerified ? (
+                       <View
+                         style={[
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ForgotPasswordScreen.tsx.txt" b/src/screens/ForgotPasswordScreen.tsx
+index 4a3608e..3cc8422 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ForgotPasswordScreen.tsx.txt"
++++ b/src/screens/ForgotPasswordScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import {
+   View,
+@@ -60,6 +61,7 @@ const RESEND_COOLDOWN_FALLBACK_SECONDS = 60;
+ type Step = 1 | 2 | 3 | 4;
+ 
+ export default function ForgotPasswordScreen({ navigation }: any) {
++  const pageLayout = usePageLayout();
+   const { colors, isDark } = useThemeColor();
+   const heroGradient = useAuthHeroGradient();
+   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+@@ -353,7 +355,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
+           colors={heroGradient}
+           start={{ x: 0, y: 0 }}
+           end={{ x: 1, y: 1 }}
+-          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }]}
++          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }, pageLayout.insetStyle]}
+         >
+           <AuthHeroPattern width={screenWidth} height={heroHeight} />
+ 
+@@ -383,8 +385,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
+               backgroundColor: colors.card,
+               marginTop: -SHEET_OVERLAP,
+               paddingBottom: insets.bottom + Spacing.xl,
+-            },
+-          ]}
++            }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+         >
+           <View style={styles.grabber} />
+ 
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\MfaChallengeScreen.tsx.txt" b/src/screens/MfaChallengeScreen.tsx
+index 741b158..d64a666 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\MfaChallengeScreen.tsx.txt"
++++ b/src/screens/MfaChallengeScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useRef, useState } from 'react';
+ import {
+   View,
+@@ -69,6 +70,7 @@ function lastFour(value: string | null | undefined): string {
+  * way on is to sign in again.
+  */
+ export default function MfaChallengeScreen({ navigation, route }: RootStackScreenProps<'MfaChallenge'>) {
++  const pageLayout = usePageLayout();
+   const { onboarding } = route.params;
+   const { login } = useAuth();
+   const { colors, isDark } = useThemeColor();
+@@ -315,7 +317,7 @@ export default function MfaChallengeScreen({ navigation, route }: RootStackScree
+           colors={heroGradient}
+           start={{ x: 0, y: 0 }}
+           end={{ x: 1, y: 1 }}
+-          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }]}
++          style={[styles.hero, { minHeight: heroHeight, paddingTop: insets.top + Spacing.md }, pageLayout.insetStyle]}
+         >
+           <AuthHeroPattern width={screenWidth} height={heroHeight} />
+           <TouchableOpacity
+@@ -338,8 +340,7 @@ export default function MfaChallengeScreen({ navigation, route }: RootStackScree
+         <View
+           style={[
+             styles.sheet,
+-            { backgroundColor: colors.card, marginTop: -SHEET_OVERLAP, paddingBottom: insets.bottom + Spacing.xxl },
+-          ]}
++            { backgroundColor: colors.card, marginTop: -SHEET_OVERLAP, paddingBottom: insets.bottom + Spacing.xxl }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+         >
+           {error ? (
+             <View
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\GooglePhoneSetupScreen.tsx.txt" b/src/screens/GooglePhoneSetupScreen.tsx
+index 168c53d..b278eb1 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\GooglePhoneSetupScreen.tsx.txt"
++++ b/src/screens/GooglePhoneSetupScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import {
+   View,
+@@ -37,6 +38,7 @@ export default function GooglePhoneSetupScreen({
+   navigation,
+   route,
+ }: RootStackScreenProps<'GooglePhoneSetup'>) {
++  const pageLayout = usePageLayout();
+   const { googleIdToken, email, firstName, lastName, avatar } = route.params;
+   const { login } = useAuth();
+   const { colors, isDark } = useThemeColor();
+@@ -142,8 +144,8 @@ export default function GooglePhoneSetupScreen({
+   const inputHairline = isDark ? 'rgba(255,255,255,0.08)' : '#ECEDF0';
+ 
+   return (
+-    <View style={[styles.root, { backgroundColor: colors.card, paddingTop: insets.top }]}>
+-      <View style={styles.topBar}>
++    <View style={[styles.root, { backgroundColor: colors.card, paddingTop: insets.top }, pageLayout.frameStyle]}>
++      <View style={[styles.topBar, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           style={styles.backButton}
+           onPress={() => navigation.goBack()}
+@@ -156,7 +158,7 @@ export default function GooglePhoneSetupScreen({
+ 
+       <KeyboardAwareScrollView
+         style={styles.scroll}
+-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl }]}
++        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl }, pageLayout.gutterStyle]}
+         keyboardShouldPersistTaps="handled"
+         showsVerticalScrollIndicator={false}
+       >
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\VerifyEmailScreen.tsx.txt" b/src/screens/VerifyEmailScreen.tsx
+index e32b82c..f37a52d 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\VerifyEmailScreen.tsx.txt"
++++ b/src/screens/VerifyEmailScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useState } from 'react';
+ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+@@ -12,6 +13,7 @@ import { RootStackScreenProps } from '../navigation/types';
+ const RESEND_COOLDOWN_SECONDS = 60;
+ 
+ export default function VerifyEmailScreen({ route, navigation }: RootStackScreenProps<'VerifyEmail'>) {
++  const pageLayout = usePageLayout();
+   const { login } = useAuth();
+   const { colors, isDark } = useThemeColor();
+   const { customerId, email, pendingUser, pendingToken, pendingRefreshToken } = route.params;
+@@ -69,7 +71,7 @@ export default function VerifyEmailScreen({ route, navigation }: RootStackScreen
+     // The content is centred, which put the Verify button under the number pad.
+     // Padding by the keyboard's height re-centres it in the space left above.
+     <KeyboardAvoidingView behavior="padding" style={[styles.root, { backgroundColor: colors.bgApp }]}>
+-      <View style={styles.container}>
++      <View style={[styles.container, pageLayout.gutterStyle, pageLayout.frameStyle]}>
+         <Text style={[styles.title, { color: colors.primary }]} maxFontSizeMultiplier={1.15}>Verify Your Email</Text>
+         <Text style={[styles.subtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.15}>
+           We sent a 6-digit code to {email}. Enter it below to finish creating your account.
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\onboarding\\OnboardingLocationScreen.tsx.txt" b/src/screens/onboarding/OnboardingLocationScreen.tsx
+index aa16c46..b94f8ea 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\onboarding\\OnboardingLocationScreen.tsx.txt"
++++ b/src/screens/onboarding/OnboardingLocationScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useState, useEffect } from 'react';
+ import {
+   StyleSheet,
+@@ -27,6 +28,7 @@ import {
+ } from '../../config/theme';
+ 
+ export default function OnboardingLocationScreen({ navigation }: any) {
++  const pageLayout = usePageLayout();
+   const { height } = useWindowDimensions();
+   const { colors } = useThemeColor();
+   const insets = useSafeAreaInsets();
+@@ -111,7 +113,7 @@ export default function OnboardingLocationScreen({ navigation }: any) {
+       style={[styles.safeArea, { backgroundColor: colors.bgApp }]}
+       edges={['top', 'bottom']}
+     >
+-      <View style={[styles.container, isTablet && styles.tabletContainer]}>
++      <View style={[styles.container, isTablet && styles.tabletContainer, pageLayout.gutterStyle, pageLayout.frameStyle]}>
+         {/* Top & Hero Section */}
+         <View style={styles.contentSection}>
+           {/* Kuya Sugo is the hero here: 35% of the height still leaves about 65 dp above Continue on a 320x640 phone. */}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\onboarding\\OnboardingAuthChoiceScreen.tsx.txt" b/src/screens/onboarding/OnboardingAuthChoiceScreen.tsx
+index 99bccaa..7f58476 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\onboarding\\OnboardingAuthChoiceScreen.tsx.txt"
++++ b/src/screens/onboarding/OnboardingAuthChoiceScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import {
+   StyleSheet,
+@@ -32,6 +33,7 @@ import {
+ } from '../../config/theme';
+ 
+ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
++  const pageLayout = usePageLayout();
+   const { height } = useWindowDimensions();
+   const { colors, isDark } = useThemeColor();
+   const { login } = useAuth();
+@@ -122,12 +124,12 @@ export default function OnboardingAuthChoiceScreen({ route, navigation }: any) {
+       style={[styles.safeArea, { backgroundColor: colors.bgApp }]}
+       edges={['top', 'bottom']}
+     >
+-      <View style={[styles.container, isTablet && styles.tabletContainer]}>
++      <View style={[styles.container, isTablet && styles.tabletContainer, pageLayout.gutterStyle, pageLayout.frameStyle]}>
+         {/* Hero Copy */}
+         <View style={styles.heroSection}>
+           {/* Kuya Sugo walks in from the left screen edge and out past the right one, so his lane bleeds into the side padding. */}
+           {!errorMessage && (
+-            <View style={styles.walkLane}>
++            <View style={[styles.walkLane, pageLayout.bleedStyle]}>
+               <KuyaSugoMascot action="delivery" height={Math.min(176, Math.max(48, height - 624))} />
+             </View>
+           )}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerPortalScreen.tsx.txt" b/src/screens/CustomerPortalScreen.tsx
+index 1534c49..2ce7529 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerPortalScreen.tsx.txt"
++++ b/src/screens/CustomerPortalScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useState, useRef, useCallback } from 'react';
+ import {
+   Image,
+@@ -56,6 +57,7 @@ import ChatTab from './portal/ChatTab';
+ import { StoreSearchView } from './StoreSearchScreen';
+ 
+ export default function CustomerPortalScreen({ route, navigation }: any) {
++  const pageLayout = usePageLayout();
+   const { user: authUser, logout } = useAuth();
+   const { syncActiveErrands } = useNotifications();
+   const insets = useSafeAreaInsets();
+@@ -775,8 +777,7 @@ export default function CustomerPortalScreen({ route, navigation }: any) {
+             style={[
+               styles.animatedHeaderRow,
+               { backgroundColor: colors.bgApp, height: TOP_BAR_ROW_HEIGHT },
+-              animatedHeaderStyle,
+-            ]}
++              animatedHeaderStyle, pageLayout.insetStyle]}
+             pointerEvents={headerVisible ? 'auto' : 'none'}
+             testID="home-collapsible-header"
+           >
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\HomeTab.tsx.txt" b/src/screens/portal/HomeTab.tsx
+index 42c60db..f9b4677 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\HomeTab.tsx.txt"
++++ b/src/screens/portal/HomeTab.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useState, useEffect, useMemo, useRef } from 'react';
+ import {
+   Image,
+@@ -39,7 +40,6 @@ import {
+   FontSizes,
+   Spacing,
+   FontFamily,
+-  useResponsive,
+   MAX_CONTENT_WIDTH,
+   scaledFontSize,
+   moderateScale,
+@@ -250,6 +250,7 @@ export default function HomeTab({
+   headerSpace = 0,
+   headerOffset,
+ }: HomeTabProps) {
++  const pageLayout = usePageLayout();
+   // The search bar follows the header as it slides (2026-10-13). Moved by a
+   // transform, like the header, so the page's frame never changes mid-drag;
+   // the old docking resized it and shook a slow scroll.
+@@ -259,8 +260,7 @@ export default function HomeTab({
+   const insets = useSafeAreaInsets();
+   const { colors, isDark } = useThemeColor();
+   const maintenanceNotice = useMaintenanceNotice('customer');
+-  const { width: windowWidth } = useResponsive();
+-  const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
++  const contentWidth = pageLayout.contentWidth;
+ 
+   // Active backend merchant categories. The hook keeps this in step with the
+   // server over the socket, so a category deactivated in the owner portal
+@@ -389,13 +389,13 @@ export default function HomeTab({
+         scrollEventThrottle={16}
+       >
+         {loading && !hasActiveOrders && recentErrands.length === 0 ? (
+-          <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-skeleton">
++          <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-skeleton">
+             <HomeSkeleton />
+           </View>
+         ) : (
+           <>
+             {/* ── CHILD 0: Top Header & Active Orders ── */}
+-            <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-top">
++            <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-top">
+               {/* Real-time SysAdmin Maintenance Notice Banner */}
+               <MaintenanceNoticeBanner notice={maintenanceNotice} />
+ 
+@@ -412,7 +412,7 @@ export default function HomeTab({
+         </View>
+ 
+         {/* ── CHILD 2: Stores, Categories & Transactions Stream ── */}
+-        <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }]} key="home-content">
++        <View style={[styles.contentContainerWrapper, { maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]} key="home-content">
+           <View style={styles.categoriesSectionWrapper}>
+ 
+             {/* POPULAR STORES first (2026-10-10, the user's order): the best
+@@ -564,8 +564,7 @@ export default function HomeTab({
+         style={[
+           styles.floatingSearchSlot,
+           { backgroundColor: colors.bgAppTranslucent },
+-          searchSlotStyle,
+-        ]}
++          searchSlotStyle, pageLayout.insetStyle]}
+         onLayout={(e) => setSearchSlotHeight(e.nativeEvent.layout.height)}
+         testID="home-sticky-search"
+       >
+@@ -574,8 +573,7 @@ export default function HomeTab({
+           style={[
+             searchFieldStyles.surface,
+             styles.storeSearchBar,
+-            getSearchFieldSurface(isDark),
+-          ]}
++            getSearchFieldSurface(isDark), pageLayout.contentStyle]}
+           onPress={openStoreSearch}
+           testID="home-store-search"
+           accessibilityRole="button"
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\ChatTab.tsx.txt" b/src/screens/portal/ChatTab.tsx
+index 583b9c5..d02f3c4 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\ChatTab.tsx.txt"
++++ b/src/screens/portal/ChatTab.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useCallback, useState, useMemo } from 'react';
+ import {
+   RefreshControl,
+@@ -36,6 +37,7 @@ export interface ChatTabProps {
+ }
+ 
+ export default function ChatTab({ user, navigation, onScroll }: ChatTabProps) {
++  const pageLayout = usePageLayout({ tabletGutter: 24 });
+   const insets = useSafeAreaInsets();
+   const { colors, isDark } = useThemeColor();
+   const brandColor = isDark ? colors.primary : colors.primaryStrong;
+@@ -88,11 +90,10 @@ export default function ChatTab({ user, navigation, onScroll }: ChatTabProps) {
+         {
+           backgroundColor: colors.card,
+           paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
+-        },
+-      ]}
++        }, pageLayout.frameStyle]}
+     >
+       {/* 1. FIXED TOP HEADER & CONTROLS (NON-SCROLLING) */}
+-      <View style={[styles.fixedTopSection, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl }]}>
++      <View style={[styles.fixedTopSection, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle]}>
+         {/* Header Row (No Left Icon) */}
+         <View style={styles.headerContainer}>
+           <View style={styles.headerTitleRow}>
+@@ -183,7 +184,7 @@ export default function ChatTab({ user, navigation, onScroll }: ChatTabProps) {
+       {/* 2. ONLY THIS SCROLLS: ITEMIZED CHAT CARDS LIST */}
+       <ScrollView
+         style={styles.scrollArea}
+-        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl, paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
++        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl, paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }, pageLayout.gutterStyle]}
+         // The search field above stays put while the keyboard covers the bottom
+         // of this list: a drag puts it away so every row can be reached, and a
+         // tap on a row works first time instead of only closing the keyboard.
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\ErrandsTab.tsx.txt" b/src/screens/portal/ErrandsTab.tsx
+index ead872d..c4380ee 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\ErrandsTab.tsx.txt"
++++ b/src/screens/portal/ErrandsTab.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useMemo, useState } from 'react';
+ import {
+   FlatList,
+@@ -155,6 +156,7 @@ export default function ErrandsTab({
+   onViewTrack,
+   onScroll,
+ }: ErrandsTabProps) {
++  const pageLayout = usePageLayout({ tabletGutter: 24 });
+   const insets = useSafeAreaInsets();
+   const { colors, isDark } = useThemeColor();
+   const pinkText = isDark ? colors.primary : colors.primaryStrong;
+@@ -495,11 +497,10 @@ export default function ErrandsTab({
+         {
+           backgroundColor: colors.card,
+           paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
+-        },
+-      ]}
++        }, pageLayout.frameStyle]}
+     >
+       {/* 1. FIXED TOP HEADER & CONTROLS (NON-SCROLLING) */}
+-      <View style={[styles.fixedTopSection, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl }]}>
++      <View style={[styles.fixedTopSection, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle]}>
+         {/* Header Row (Matching ChatTab) */}
+         <View style={styles.headerContainer}>
+           <View style={styles.headerTitleRow}>
+@@ -615,7 +616,7 @@ export default function ErrandsTab({
+       {/* 4. MAIN LIST / CARDS */}
+       <PendingOrderCard user={user} navigation={navigation} onConfirmed={onRefresh} />
+       {loading && errands.length === 0 ? (
+-        <ErrandsCardsSkeleton horizontalPadding={isCompact ? Spacing.lg : Spacing.xl} />
++        <ErrandsCardsSkeleton horizontalPadding={pageLayout.isPhone ? pageLayout.gutter : isCompact ? Spacing.lg : Spacing.xl} />
+       ) : (
+         <FlatList
+           style={{ backgroundColor: colors.bgApp }}
+@@ -626,7 +627,7 @@ export default function ErrandsTab({
+           // tap on a row works first time instead of only closing the keyboard.
+           keyboardShouldPersistTaps="handled"
+           keyboardDismissMode="on-drag"
+-          contentContainerStyle={[styles.listContent, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl, paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
++          contentContainerStyle={[styles.listContent, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl, paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }, pageLayout.gutterStyle]}
+           showsVerticalScrollIndicator={false}
+           onScroll={onScroll}
+           scrollEventThrottle={16}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\TrackTab.tsx.txt" b/src/screens/portal/TrackTab.tsx
+index a564819..3971039 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\portal\\TrackTab.tsx.txt"
++++ b/src/screens/portal/TrackTab.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import {
+@@ -43,6 +44,7 @@ export interface TrackTabProps {
+ }
+ 
+ export default function TrackTab({ user, navigation, activeErrands, focusedErrandId, onScroll }: TrackTabProps) {
++  const pageLayout = usePageLayout();
+   const { colors, isDark } = useThemeColor();
+   const { width: windowWidth, height: windowHeight, isTablet, isCompact, isTallAspect } = useResponsive();
+   const [selectedIndex, setSelectedIndex] = useState(0);
+@@ -170,7 +172,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
+           styles.flex,
+           {
+             backgroundColor: colors.card,
+-            paddingHorizontal: Spacing.xl,
++            paddingHorizontal: pageLayout.isPhone ? 0 : Spacing.xl,
+             paddingTop: insets.top > 0 ? insets.top + Spacing.md : Spacing.lg,
+             paddingBottom: Spacing.xl,
+             alignItems: 'center',
+@@ -178,7 +180,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
+           },
+         ]}
+       >
+-        <View style={[styles.emptyContainer, { maxWidth: MAX_CONTENT_WIDTH }]}>
++        <View style={[styles.emptyContainer, { maxWidth: MAX_CONTENT_WIDTH }, pageLayout.frameStyle, pageLayout.gutterStyle]}>
+           <Text style={[styles.emptyTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>All Caught Up!</Text>
+           <Text style={[styles.emptySubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+             You have no active errands in progress.
+@@ -230,7 +232,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
+             <ScrollView
+               horizontal
+               showsHorizontalScrollIndicator={false}
+-              contentContainerStyle={styles.switcherScroll}
++              contentContainerStyle={[styles.switcherScroll, pageLayout.insetStyle]}
+             >
+               {activeErrands.map((errand, idx) => {
+                 const isSelected = idx === safeIndex;
+@@ -283,7 +285,7 @@ export default function TrackTab({ user, navigation, activeErrands, focusedErran
+       >
+         <ScrollView
+           style={styles.panelScroll}
+-          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
++          contentContainerStyle={[styles.panelScrollContent, { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+           showsVerticalScrollIndicator={false}
+           onScroll={onScroll}
+           scrollEventThrottle={16}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ActiveChatsScreen.tsx.txt" b/src/screens/ActiveChatsScreen.tsx
+index fc5d6d5..98d986e 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ActiveChatsScreen.tsx.txt"
++++ b/src/screens/ActiveChatsScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+@@ -13,6 +14,7 @@ import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, Spacing, Bo
+ const PAGE_SIZE = 5;
+ 
+ export default function ActiveChatsScreen({ route, navigation }: RootStackScreenProps<'ActiveChats'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user } = route.params || ({} as any);
+   const { errands, loading } = useActiveErrands(user?.id);
+   const { colors, isDark } = useThemeColor();
+@@ -48,9 +50,9 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
+ 
+   return (
+     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+-      <View style={styles.responsiveWrapper}>
++      <View style={[styles.responsiveWrapper, pageLayout.frameStyle]}>
+         {/* iOS-STYLE TOP NAV HEADER */}
+-        <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }]}>
++        <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
+           <TouchableOpacity
+             onPress={() => navigation.goBack()}
+             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+@@ -65,7 +67,7 @@ export default function ActiveChatsScreen({ route, navigation }: RootStackScreen
+ 
+         <ScrollView
+           style={[styles.container, { backgroundColor: colors.bgApp }]}
+-          contentContainerStyle={styles.content}
++          contentContainerStyle={[styles.content, pageLayout.gutterStyle]}
+           showsVerticalScrollIndicator={false}
+           // The search field scrolls with the list, so a drag that reveals the
+           // rows hidden under the keyboard also puts the keyboard away, and a
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ActiveErrandsScreen.tsx.txt" b/src/screens/ActiveErrandsScreen.tsx
+index ce12aeb..087b36d 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ActiveErrandsScreen.tsx.txt"
++++ b/src/screens/ActiveErrandsScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useCallback, useEffect, useRef, useState } from 'react';
+ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -41,6 +42,7 @@ const errandIdOf = (errand: any): string => String(errand?.orderId || errand?.id
+  * that finished meanwhile drops off.
+  */
+ export default function ActiveErrandsScreen({ route, navigation }: RootStackScreenProps<'ActiveErrands'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user, errands: fromHome } = route.params || ({} as any);
+   const { colors, isDark } = useThemeColor();
+   const brandColor = isDark ? colors.primary : colors.primaryStrong;
+@@ -130,14 +132,14 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
+   );
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
+       {/* What the glass refracts: the page and two soft brand-coloured glows. */}
+       <BlurTargetView ref={backdropRef} style={[StyleSheet.absoluteFill, { backgroundColor: colors.bgApp }]} pointerEvents="none">
+         <View style={[styles.glow, styles.glowTop, { backgroundColor: colors.primary, opacity: isDark ? 0.22 : 0.16 }]} />
+         <View style={[styles.glow, styles.glowBottom, { backgroundColor: isDark ? '#3B82F6' : '#0B132B', opacity: isDark ? 0.16 : 0.1 }]} />
+       </BlurTargetView>
+ 
+-      <View style={styles.navHeaderRow}>
++      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -155,7 +157,7 @@ export default function ActiveErrandsScreen({ route, navigation }: RootStackScre
+       </View>
+ 
+       <ScrollView
+-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Spacing.xl + insets.bottom }]}
++        contentContainerStyle={[styles.scrollContent, { paddingBottom: Spacing.xl + insets.bottom }, pageLayout.gutterStyle]}
+         showsVerticalScrollIndicator={false}
+         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
+         testID="active-errands-screen"
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerChatScreen.tsx.txt" b/src/screens/CustomerChatScreen.tsx
+index 9e851a2..8db4c00 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerChatScreen.tsx.txt"
++++ b/src/screens/CustomerChatScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+ import {
+   View,
+@@ -296,6 +297,7 @@ export default function CustomerChatScreen({
+   route,
+   navigation,
+ }: RootStackScreenProps<'CustomerChat'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user, errandId, initialStatus } = (route.params || {
+     user: { id: 'test-user', username: 'testuser', firstName: 'Customer', lastName: 'User' },
+     errandId: 'PABILI-123456',
+@@ -1036,7 +1038,7 @@ export default function CustomerChatScreen({
+   }, [messages]);
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.card }]} edges={['top', 'left', 'right']}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.card }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
+       <KeyboardAvoidingView
+         style={{ flex: 1 }}
+         // "padding" on both platforms: this component reads the IME frame itself
+@@ -1053,8 +1055,7 @@ export default function CustomerChatScreen({
+             {
+               borderBottomColor: colors.border,
+               backgroundColor: colors.card,
+-            },
+-          ]}
++            }, pageLayout.gutterStyle]}
+         >
+           {/* Back Action */}
+           <TouchableOpacity
+@@ -1169,8 +1170,7 @@ export default function CustomerChatScreen({
+                 {
+                   backgroundColor: colors.card,
+                   borderBottomColor: colors.border,
+-                },
+-              ]}
++                }, pageLayout.gutterStyle]}
+               accessibilityRole="button"
+               accessibilityLabel="Toggle order summary"
+               accessibilityState={{ expanded: isOrderSummaryExpanded }}
+@@ -1203,8 +1203,7 @@ export default function CustomerChatScreen({
+                   {
+                     backgroundColor: colors.card,
+                     borderBottomColor: colors.border,
+-                  },
+-                ]}
++                  }, pageLayout.gutterStyle]}
+               >
+                 {/* Store Pinpoints / Route chips */}
+                 {latestPinpoints.length > 0 ? (
+@@ -1282,8 +1281,7 @@ export default function CustomerChatScreen({
+                   {
+                     backgroundColor: colors.bgGray,
+                     borderBottomColor: colors.border,
+-                  },
+-                ]}
++                  }, pageLayout.gutterStyle]}
+                 testID="half-payment-banner"
+               >
+                 <View style={styles.ribbonLeft}>
+@@ -1310,7 +1308,7 @@ export default function CustomerChatScreen({
+         {/* 3. MESSAGES FEED */}
+         {connectionError ? (
+           <View
+-            style={styles.errorContainer}
++            style={[styles.errorContainer, pageLayout.gutterStyle]}
+             testID="chat-connection-error-banner"
+           >
+             <WifiOff size={24} color={colors.textGray} strokeWidth={1.8} />
+@@ -1338,7 +1336,7 @@ export default function CustomerChatScreen({
+           </View>
+         ) : loading ? (
+           showCircularFallback ? (
+-            <View style={styles.centerContainer}>
++            <View style={[styles.centerContainer, pageLayout.gutterStyle]}>
+               <ActivityIndicator size="large" color={colors.primary} />
+               <Text style={[styles.loadingText, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
+                 Slow connection. Still opening this chat...
+@@ -1361,7 +1359,7 @@ export default function CustomerChatScreen({
+             <ChatMessagesSkeleton />
+           )
+         ) : messages.length === 0 ? (
+-          <View style={styles.centerContainer}>
++          <View style={[styles.centerContainer, pageLayout.gutterStyle]}>
+             <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyText, { color: colors.textDark }]}>Start the conversation</Text>
+             <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptySubtext, { color: colors.textGray }]}>
+               Send a message below to clarify items, prices, or store preferences.
+@@ -1374,7 +1372,7 @@ export default function CustomerChatScreen({
+             data={messageClusters}
+             keyExtractor={(item) => item.id}
+             keyboardShouldPersistTaps="handled"
+-            contentContainerStyle={styles.messagesList}
++            contentContainerStyle={[styles.messagesList, pageLayout.gutterStyle]}
+             onScroll={handleScroll}
+             scrollEventThrottle={16}
+             keyboardDismissMode="on-drag"
+@@ -2222,6 +2220,7 @@ export default function CustomerChatScreen({
+           <View
+             style={[
+               styles.readOnlyNotice,
++              pageLayout.gutterStyle,
+               {
+                 backgroundColor: colors.card,
+                 borderTopColor: colors.border,
+@@ -2241,6 +2240,7 @@ export default function CustomerChatScreen({
+           <View
+             style={[
+               styles.readOnlyNotice,
++              pageLayout.gutterStyle,
+               {
+                 backgroundColor: colors.card,
+                 borderTopColor: colors.border,
+@@ -2265,8 +2265,7 @@ export default function CustomerChatScreen({
+                 backgroundColor: colors.card,
+                 borderTopColor: colors.border,
+                 paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom, 8),
+-              },
+-            ]}
++              }, pageLayout.gutterStyle]}
+           >
+             <View
+               style={[
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandDetailsScreen.tsx.txt" b/src/screens/ErrandDetailsScreen.tsx
+index f210364..3362ddd 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandDetailsScreen.tsx.txt"
++++ b/src/screens/ErrandDetailsScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useEffect, useCallback } from 'react';
+ import {
+   View,
+@@ -48,6 +49,7 @@ export default function ErrandDetailsScreen({
+   route,
+   navigation,
+ }: RootStackScreenProps<'ErrandDetails'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const insets = useSafeAreaInsets();
+   const { colors, isDark } = useThemeColor();
+   const { isTablet } = useResponsive();
+@@ -144,7 +146,7 @@ export default function ErrandDetailsScreen({
+   return (
+     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
+       {/* 1. CLEAN NAVIGATION HEADER */}
+-      <View style={[styles.navHeaderRow, { borderBottomColor: hairlineBorderColor, backgroundColor: colors.bgApp }]}>
++      <View style={[styles.navHeaderRow, { borderBottomColor: hairlineBorderColor, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -200,8 +202,7 @@ export default function ErrandDetailsScreen({
+           style={styles.scrollView}
+           contentContainerStyle={[
+             styles.scrollContent,
+-            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' },
+-          ]}
++            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%' }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+           showsVerticalScrollIndicator={false}
+           refreshControl={
+             <RefreshControl
+@@ -513,8 +514,7 @@ export default function ErrandDetailsScreen({
+             backgroundColor: colors.card,
+             borderTopColor: hairlineBorderColor,
+             paddingBottom: Math.max(insets.bottom + Spacing.xs, Spacing.md),
+-          },
+-        ]}
++          }, pageLayout.gutterStyle]}
+       >
+         {isErrandActive ? (
+           <TouchableOpacity
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\StoreSearchScreen.tsx.txt" b/src/screens/StoreSearchScreen.tsx
+index dc77689..6158430 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\StoreSearchScreen.tsx.txt"
++++ b/src/screens/StoreSearchScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useMemo, useState, useEffect } from 'react';
+ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -90,6 +91,7 @@ export function StoreSearchView({
+   onBack: () => void;
+   inTab?: boolean;
+ }) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const initialCategory =
+     openedCategory && isPabiliCategory(openedCategory.name) ? openedCategory : null;
+   const [category, setCategory] = useState<{ id: number; name: string } | null>(initialCategory);
+@@ -137,8 +139,8 @@ export function StoreSearchView({
+   const dockCovers = count > 0 ? Math.max(0, dockHeight - dockPadding) : 0;
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'left', 'right']}>
+-      <View style={styles.navHeaderRow}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'left', 'right']}>
++      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={onBack}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -160,6 +162,7 @@ export function StoreSearchView({
+         contentContainerStyle={[
+           styles.scrollContent,
+           { paddingBottom: Spacing.lg + (count > 0 ? 0 : inTab ? navSpace : insets.bottom) },
++          pageLayout.gutterStyle,
+         ]}
+         showsVerticalScrollIndicator={false}
+         // A tap on a store picks it, even with the keyboard up.
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\errand\\MerchantCategoryStoresScreen.tsx.txt" b/src/screens/errand/MerchantCategoryStoresScreen.tsx
+index b00ea40..fb3ca9d 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\errand\\MerchantCategoryStoresScreen.tsx.txt"
++++ b/src/screens/errand/MerchantCategoryStoresScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useMemo, useEffect } from 'react';
+ import {
+   FlatList,
+@@ -35,7 +36,6 @@ import {
+   Spacing,
+   getPortalLineHeight,
+   scaledPortalFontSize,
+-  useResponsive,
+ } from '../../config/theme';
+ 
+ const VERTICAL_IMAGE_HEIGHT = 180;
+@@ -44,10 +44,10 @@ export default function MerchantCategoryStoresScreen({
+   route,
+   navigation,
+ }: RootStackScreenProps<'MerchantCategoryStores'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user, category, selected } = route.params;
+   const { colors, isDark } = useThemeColor();
+-  const { width: windowWidth } = useResponsive();
+-  const contentWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
++  const contentWidth = pageLayout.contentWidth;
+   // Match Home's moderate card width and 4:3 photos, with a next-card preview.
+   const horizontalItemWidth = Math.round(Math.min(STORE_CARD_WIDTH, contentWidth * 0.68));
+   const horizontalImageHeight = Math.round(horizontalItemWidth * 0.75);
+@@ -229,8 +229,8 @@ export default function MerchantCategoryStoresScreen({
+             horizontal
+             showsHorizontalScrollIndicator={false}
+             scrollEnabled={false}
+-            style={styles.bleed}
+-            contentContainerStyle={styles.horizontalRow}
++            style={[styles.bleed, pageLayout.bleedStyle]}
++            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
+             testID="category-popular-loading"
+           >
+             {[0, 1, 2].map((i) => (
+@@ -266,8 +266,8 @@ export default function MerchantCategoryStoresScreen({
+           <ScrollView
+             horizontal
+             showsHorizontalScrollIndicator={false}
+-            style={styles.bleed}
+-            contentContainerStyle={styles.horizontalRow}
++            style={[styles.bleed, pageLayout.bleedStyle]}
++            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
+             testID="category-popular-list"
+           >
+             {popularStores.map((store) => (
+@@ -305,8 +305,8 @@ export default function MerchantCategoryStoresScreen({
+             horizontal
+             showsHorizontalScrollIndicator={false}
+             scrollEnabled={false}
+-            style={styles.bleed}
+-            contentContainerStyle={styles.horizontalRow}
++            style={[styles.bleed, pageLayout.bleedStyle]}
++            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
+             testID="category-nearby-loading"
+           >
+             {[0, 1, 2].map((i) => (
+@@ -342,8 +342,8 @@ export default function MerchantCategoryStoresScreen({
+           <ScrollView
+             horizontal
+             showsHorizontalScrollIndicator={false}
+-            style={styles.bleed}
+-            contentContainerStyle={styles.horizontalRow}
++            style={[styles.bleed, pageLayout.bleedStyle]}
++            contentContainerStyle={[styles.horizontalRow, pageLayout.gutterStyle]}
+             testID="category-nearby-list"
+           >
+             {nearbyStores.map((store) => (
+@@ -416,10 +416,10 @@ export default function MerchantCategoryStoresScreen({
+ 
+   return (
+     <SafeAreaView
+-      style={[styles.container, { backgroundColor: colors.bgApp }]}
++      style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]}
+       edges={picked.length > 0 ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
+     >
+-      <View style={styles.navHeaderRow}>
++      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -486,7 +486,7 @@ export default function MerchantCategoryStoresScreen({
+           />
+         )}
+         ItemSeparatorComponent={() => <View style={styles.verticalSeparator} />}
+-        contentContainerStyle={styles.scrollContent}
++        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
+         showsVerticalScrollIndicator={false}
+         extraData={picked}
+         testID="merchant-category-stores-list"
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandFormScreen.tsx.txt" b/src/screens/ErrandFormScreen.tsx
+index 89bdc1a..7afdf4b 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandFormScreen.tsx.txt"
++++ b/src/screens/ErrandFormScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useState } from 'react';
+ import {
+   View,
+@@ -60,6 +61,7 @@ const getCategoryIcon = (categoryName: string) => {
+ };
+ 
+ export default function ErrandFormScreen({ route, navigation }: RootStackScreenProps<'ErrandForm'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user, reorderFrom, initialMode } = route.params || {};
+   const { colors, isDark } = useThemeColor();
+   const { isTablet } = useResponsive();
+@@ -188,8 +190,8 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
+   };
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+-      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }]}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
++      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border }, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -204,7 +206,7 @@ export default function ErrandFormScreen({ route, navigation }: RootStackScreenP
+         <View style={styles.navHeaderRightPlaceholder} />
+       </View>
+ 
+-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+         <View style={styles.stepperContainer}>
+           <View style={[styles.stepPillActive, { backgroundColor: colors.primary }]}>
+             <View style={styles.stepNumCircleActive}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliHubScreen.tsx.txt" b/src/screens/pabili/PabiliHubScreen.tsx
+index 089e0ac..a0ea8e9 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliHubScreen.tsx.txt"
++++ b/src/screens/pabili/PabiliHubScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, BackHandler } from 'react-native';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -52,6 +53,7 @@ const RECENT_SEND_MS = 2 * 60 * 1000;
+  * nothing and needs no "discard?" prompt; Clear list is the explicit way out.
+  */
+ export default function PabiliHubScreen({ route, navigation }: RootStackScreenProps<'ErrandItems'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user } = route.params || ({} as any);
+   const userId = String(user?.id ?? '');
+   const routeCats = useMemo(() => {
+@@ -190,7 +192,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
+ 
+   if (restoreError) {
+     return (
+-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp, justifyContent: 'center', padding: Spacing.lg, gap: Spacing.lg }]}>
++      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp, justifyContent: 'center', padding: Spacing.lg, gap: Spacing.lg }, pageLayout.safeAreaFrameStyle]}>
+         <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.title} style={{ color: colors.textDark, fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) }}>
+           We couldn’t restore your shopping list
+         </Text>
+@@ -210,8 +212,8 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
+   }
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+-      <View style={styles.navRow}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
++      <View style={[styles.navRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={browseStores}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -228,7 +230,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
+       </View>
+ 
+       <View style={styles.listArea}>
+-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+         <StepPills step={2} storeCount={categories.length} />
+ 
+         {ready && categories.length > 0 && !draft?.submission ? (
+@@ -389,7 +391,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
+           accessibilityLabel="Add stores"
+           onPress={addStores}
+           activeOpacity={0.85}
+-          style={[styles.addStoresFab, Shadows.liftedUp, { backgroundColor: colors.card, borderColor: colors.border }]}
++          style={[styles.addStoresFab, Shadows.liftedUp, { backgroundColor: colors.card, borderColor: colors.border }, pageLayout.isPhone && { right: pageLayout.gutter }]}
+         >
+           <Plus size={21} color={colors.textDark} />
+           <Text style={[styles.addStoresText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+@@ -407,8 +409,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
+             borderTopColor: colors.border,
+             paddingBottom: Math.max(insets.bottom, Spacing.md),
+           },
+-          Shadows.liftedUp,
+-        ]}
++          Shadows.liftedUp, pageLayout.gutterStyle]}
+       >
+         <Text style={[styles.summary, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+           {units === 0
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliStoreEditorScreen.tsx.txt" b/src/screens/pabili/PabiliStoreEditorScreen.tsx
+index c8cec5f..e78f066 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliStoreEditorScreen.tsx.txt"
++++ b/src/screens/pabili/PabiliStoreEditorScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useEffect, useState } from 'react';
+ import {
+   View,
+@@ -68,6 +69,7 @@ import {
+  * ("Rose Pharmacy Lozartan 5mg") is taken out of the item, with a warning.
+  */
+ export default function PabiliStoreEditorScreen({ route, navigation }: RootStackScreenProps<'PabiliStoreEditor'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { category } = route.params;
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+@@ -150,7 +152,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
+   if (!draft) {
+     // Reached without the hub (a stale deep link, or the list was just sent).
+     return (
+-      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }]} testID="editor-no-list">
++      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} testID="editor-no-list">
+         <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+           This list isn't open
+         </Text>
+@@ -162,9 +164,9 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
+   }
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
+       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
+-        <View style={styles.navRow}>
++        <View style={[styles.navRow, pageLayout.gutterStyle]}>
+           <TouchableOpacity
+             onPress={() => navigation.goBack()}
+             hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -193,7 +195,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
+           </TouchableOpacity>
+         </View>
+ 
+-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
++        <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+           {picked ? (
+             <Text
+               style={[styles.caption, styles.pickedStoreLine, { color: colors.textGray }]}
+@@ -255,8 +257,7 @@ export default function PabiliStoreEditorScreen({ route, navigation }: RootStack
+               borderTopColor: colors.border,
+               paddingBottom: Math.max(insets.bottom, Spacing.md),
+             },
+-            Shadows.liftedUp,
+-          ]}
++            Shadows.liftedUp, pageLayout.gutterStyle]}
+         >
+           {/* Top Row: What to buy (expanded) + Quantity Stepper on the right */}
+           <View style={styles.composeRow}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliReviewScreen.tsx.txt" b/src/screens/pabili/PabiliReviewScreen.tsx
+index 7e63508..7ebd1fd 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\pabili\\PabiliReviewScreen.tsx.txt"
++++ b/src/screens/pabili/PabiliReviewScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useEffect, useRef, useState } from 'react';
+ import { usePreventRemove } from '@react-navigation/native';
+ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, BackHandler } from 'react-native';
+@@ -52,6 +53,7 @@ const ROWS_BEFORE_FOLD = 5;
+  * is exactly how every order went before this.
+  */
+ export default function PabiliReviewScreen({ route, navigation }: RootStackScreenProps<'PabiliReview'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { user } = route.params;
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+@@ -166,7 +168,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
+   // ── empty: nothing to review ──────────────────────────────────────────
+   if (!draft || units === 0) {
+     return (
+-      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }]} testID="review-empty">
++      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} testID="review-empty">
+         <ShoppingBag size={32} color={colors.textLight} />
+         <Text style={[styles.title, { color: colors.textDark, textAlign: 'center' }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+           Your list is empty
+@@ -195,8 +197,8 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
+     : 'ready';
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+-      <View style={styles.navRow}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
++      <View style={[styles.navRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -213,7 +215,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
+         <View style={{ width: 44 }} />
+       </View>
+ 
+-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+         <StepPills step={3} storeCount={draft.categories.length} />
+ 
+         <DeliveryLocationCard
+@@ -310,8 +312,7 @@ export default function PabiliReviewScreen({ route, navigation }: RootStackScree
+             borderTopColor: colors.border,
+             paddingBottom: Math.max(insets.bottom, Spacing.md),
+           },
+-          Shadows.liftedUp,
+-        ]}
++          Shadows.liftedUp, pageLayout.gutterStyle]}
+       >
+         <View style={styles.summaryRow}>
+           <Text style={[styles.summary, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\StorePickScreen.tsx.txt" b/src/components/stores/StorePickScreen.tsx
+index ec3149a..26274f3 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\StorePickScreen.tsx.txt"
++++ b/src/components/stores/StorePickScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React from 'react';
+ import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+@@ -76,6 +77,7 @@ export function StorePickScreen({
+   initialPicks,
+   copy,
+ }: StorePickScreenProps) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { colors, isDark } = useThemeColor();
+   const { categories } = useMerchantCategories();
+   const categoryImages = useCategoryImages(categories);
+@@ -166,10 +168,10 @@ export function StorePickScreen({
+   return (
+     // The Proceed bar pads for the phone's navigation bar itself; without it the list does.
+     <SafeAreaView
+-      style={[styles.container, { backgroundColor: colors.bgApp }]}
++      style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]}
+       edges={picked.length > 0 ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
+     >
+-      <View style={styles.navHeaderRow}>
++      <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -190,7 +192,7 @@ export function StorePickScreen({
+ 
+       {limitError ? (
+         <Text
+-          style={[styles.limitErrorText, { color: colors.danger }]}
++          style={[styles.limitErrorText, { color: colors.danger }, pageLayout.gutterStyle]}
+           maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+           testID={id('limit-error')}
+         >
+@@ -199,7 +201,7 @@ export function StorePickScreen({
+       ) : null}
+ 
+       {isLoading ? (
+-        <View style={[styles.scrollContent, styles.list]} testID={id('screen-loading')}>
++        <View style={[styles.scrollContent, styles.list, pageLayout.gutterStyle]} testID={id('screen-loading')}>
+           {[0, 1, 2].map((i) => (
+             <View key={i} style={styles.shimmerCard}>
+               <ShimmerWave width="100%" height={IMAGE_HEIGHT} borderRadius={BorderRadius.lg} />
+@@ -210,11 +212,11 @@ export function StorePickScreen({
+           ))}
+         </View>
+       ) : pages.status === 'error' ? (
+-        <View style={styles.scrollContent}>
++        <View style={[styles.scrollContent, pageLayout.gutterStyle]}>
+           {panel(id('screen-error'), copy.error, { label: 'Try again', onPress: pages.retry, Icon: RotateCw })}
+         </View>
+       ) : pages.items.length === 0 ? (
+-        <View style={styles.scrollContent}>
++        <View style={[styles.scrollContent, pageLayout.gutterStyle]}>
+           {pages.outsideServiceArea
+             ? panel(id('screen-empty'), OUTSIDE_SERVICE_AREA_MESSAGE, {
+                 label: 'Change location',
+@@ -246,7 +248,7 @@ export function StorePickScreen({
+             />
+           )}
+           ItemSeparatorComponent={() => <View style={styles.separator} />}
+-          contentContainerStyle={styles.scrollContent}
++          contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
+           showsVerticalScrollIndicator={false}
+           // Near the end, the next page; not again on its own after a failure,
+           // which waits for the footer's Try again.
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\ProceedDock.tsx.txt" b/src/components/stores/ProceedDock.tsx
+index 75351a1..114b0ad 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\ProceedDock.tsx.txt"
++++ b/src/components/stores/ProceedDock.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React from 'react';
+ import { StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -45,6 +46,7 @@ export function ProceedDock({
+    */
+   bottomPadding?: number;
+ }) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+   if (count <= 0) return null;
+@@ -58,8 +60,7 @@ export function ProceedDock({
+           backgroundColor: colors.bgAppTranslucent,
+           borderTopColor: colors.border,
+           paddingBottom: bottomPadding ?? (insets.bottom > 0 ? insets.bottom : Spacing.md),
+-        },
+-      ]}
++        }, pageLayout.gutterStyle]}
+     >
+       <TouchableOpacity
+         activeOpacity={0.85}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\StoreCardRow.tsx.txt" b/src/components/stores/StoreCardRow.tsx
+index 8b02682..743ce60 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\stores\\StoreCardRow.tsx.txt"
++++ b/src/components/stores/StoreCardRow.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React from 'react';
+ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { ChevronRight, RotateCw, Store } from 'lucide-react-native';
+@@ -76,6 +77,7 @@ export function StoreCardRow({
+   maxCards,
+   cardActionLabel,
+ }: StoreCardRowProps) {
++  const pageLayout = usePageLayout();
+   const { colors } = useThemeColor();
+ 
+   // Moderate 4:3 photos, with the next card still visible on narrow phones.
+@@ -137,8 +139,8 @@ export function StoreCardRow({
+           horizontal
+           showsHorizontalScrollIndicator={false}
+           scrollEnabled={false}
+-          style={styles.bleed}
+-          contentContainerStyle={styles.row}
++          style={[styles.bleed, pageLayout.bleedStyle]}
++          contentContainerStyle={[styles.row, pageLayout.gutterStyle]}
+           testID={`${testID}-loading`}
+         >
+           {[0, 1, 2].map((i) => (
+@@ -165,8 +167,8 @@ export function StoreCardRow({
+         <ScrollView
+           horizontal
+           showsHorizontalScrollIndicator={false}
+-          style={styles.bleed}
+-          contentContainerStyle={styles.row}
++          style={[styles.bleed, pageLayout.bleedStyle]}
++          contentContainerStyle={[styles.row, pageLayout.gutterStyle]}
+           testID={`${testID}-list`}
+         >
+           {shown.map((store) => (
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\AccountScreen.tsx.txt" b/src/screens/AccountScreen.tsx
+index 762a3e8..d8c88dc 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\AccountScreen.tsx.txt"
++++ b/src/screens/AccountScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useEffect, useState, useCallback } from 'react';
+ import {
+   Image,
+@@ -68,11 +69,11 @@ function fieldOrPlaceholder(value: string | undefined) {
+ }
+ 
+ export default function AccountScreen({ route, navigation }: RootStackScreenProps<'Account'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
+   const { user: authUser, logout, updateUser } = useAuth();
+   const { colors, isDark, setThemeMode } = useThemeColor();
+   const brandColor = isDark ? colors.primary : colors.primaryStrong;
+   const { width: windowWidth } = useResponsive();
+-  const contentMaxWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
+ 
+   const initialUser =
+     route.params?.user || authUser || {
+@@ -328,8 +329,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
+           {
+             borderBottomColor: colors.border,
+             backgroundColor: colors.card,
+-          },
+-        ]}
++          }, pageLayout.gutterStyle]}
+       >
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+@@ -364,8 +364,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
+       <ScrollView
+         contentContainerStyle={[
+           styles.scrollContent,
+-          { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl },
+-        ]}
++          { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+         showsVerticalScrollIndicator={false}
+       >
+         {/* 1. APP UPDATE ALERT BANNER */}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\EditAccountScreen.tsx.txt" b/src/screens/EditAccountScreen.tsx
+index 0b9496d..21e099e 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\EditAccountScreen.tsx.txt"
++++ b/src/screens/EditAccountScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useRef, useMemo, useEffect } from 'react';
+ import {
+   View,
+@@ -62,6 +63,7 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+ 
+ export default function EditAccountScreen({ route, navigation }: RootStackScreenProps<'EditAccount'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
+   const { user, focusField } = route.params;
+   const { updateUser } = useAuth();
+   const { colors, isDark } = useThemeColor();
+@@ -445,8 +447,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
+             {
+               borderBottomColor: colors.border,
+               backgroundColor: colors.card,
+-            },
+-          ]}
++            }, pageLayout.gutterStyle]}
+         >
+           <TouchableOpacity
+             onPress={handleBack}
+@@ -467,8 +468,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
+         <KeyboardAwareScrollView
+           contentContainerStyle={[
+             styles.scrollContent,
+-            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl },
+-          ]}
++            { maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center', width: '100%', paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+           showsVerticalScrollIndicator={false}
+           keyboardShouldPersistTaps="handled"
+           // The dock rides on the keyboard with its own bottom inset hidden
+@@ -957,8 +957,7 @@ export default function EditAccountScreen({ route, navigation }: RootStackScreen
+               backgroundColor: colors.card,
+               borderTopColor: colors.border,
+               paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.md,
+-            },
+-          ]}
++            }, pageLayout.gutterStyle]}
+         >
+           <TouchableOpacity
+             activeOpacity={0.85}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\SettingsScreen.tsx.txt" b/src/screens/SettingsScreen.tsx
+index 9ce5609..866af68 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\SettingsScreen.tsx.txt"
++++ b/src/screens/SettingsScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useEffect, useCallback } from 'react';
+ import {
+   View,
+@@ -63,6 +64,7 @@ import {
+ } from '../services/appUpdateService';
+ 
+ export default function SettingsScreen({ route, navigation }: RootStackScreenProps<'Settings'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
+   const { user } = route.params;
+   const { themeMode, setThemeMode, colors, isDark } = useThemeColor();
+ 
+@@ -322,7 +324,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
+   return (
+     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+       {/* 1. TOP NAV HEADER */}
+-      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }]}>
++      <View style={[styles.navHeaderRow, { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+           hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -337,7 +339,7 @@ export default function SettingsScreen({ route, navigation }: RootStackScreenPro
+         <View style={styles.navHeaderRightPlaceholder} />
+       </View>
+ 
+-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]} showsVerticalScrollIndicator={false}>
+         <SettingsSection title="Appearance" unboxed>
+           <View accessibilityRole="radiogroup" accessibilityLabel="App appearance">
+             {([
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\Notification.tsx.txt" b/src/screens/Notification.tsx
+index 3ce8860..dffe712 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\Notification.tsx.txt"
++++ b/src/screens/Notification.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useCallback, useMemo, useState } from 'react';
+ import {
+   FlatList,
+@@ -151,6 +152,7 @@ function formatTime(iso: string, bucket: ReturnType<typeof dayBucket>): string {
+ }
+ 
+ export default function NotificationScreen({ navigation, route }: RootStackScreenProps<'Notification'>) {
++  const pageLayout = usePageLayout({ tabletGutter: 18 });
+   const insets = useSafeAreaInsets();
+   const { colors, isDark } = useThemeColor();
+   const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, refreshNotifications } =
+@@ -210,8 +212,7 @@ export default function NotificationScreen({ navigation, route }: RootStackScree
+     <View
+       style={[
+         styles.root,
+-        { backgroundColor: colors.bgApp, paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md },
+-      ]}
++        { backgroundColor: colors.bgApp, paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md }, pageLayout.gutterStyle, pageLayout.frameStyle]}
+     >
+       {/* Header: one only, with the unread count inline (AGENTS.md). */}
+       <View style={styles.headerRow}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\FeedbackScreen.tsx.txt" b/src/screens/FeedbackScreen.tsx
+index b3a1202..8275898 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\FeedbackScreen.tsx.txt"
++++ b/src/screens/FeedbackScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import {
+   View,
+@@ -72,6 +73,7 @@ const RATING_LABELS: Record<number, string> = {
+ };
+ 
+ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Feedback'>) {
++  const pageLayout = usePageLayout({ tabletGutter: 18 });
+   const { user } = useAuth();
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+@@ -156,7 +158,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
+   const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0';
+ 
+   return (
+-    <View style={[styles.root, { backgroundColor: colors.bgApp }]}>
++    <View style={[styles.root, { backgroundColor: colors.bgApp }, pageLayout.frameStyle]}>
+       {/* HEADER */}
+       <View
+         style={[
+@@ -165,8 +167,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
+             paddingTop: insets.top + Spacing.sm,
+             backgroundColor: colors.card,
+             borderBottomColor: cardBorder,
+-          },
+-        ]}
++          }, pageLayout.gutterStyle]}
+       >
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+@@ -186,7 +187,7 @@ export default function FeedbackScreen({ navigation }: RootStackScreenProps<'Fee
+ 
+       <KeyboardAwareScrollView
+         style={{ flex: 1 }}
+-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl + 24 }]}
++        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xxl + 24 }, pageLayout.gutterStyle]}
+         keyboardShouldPersistTaps="handled"
+         bottomOffset={Spacing.xxl + 16}
+       >
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\LegalDocumentScreen.tsx.txt" b/src/screens/LegalDocumentScreen.tsx
+index 8836964..218fc98 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\LegalDocumentScreen.tsx.txt"
++++ b/src/screens/LegalDocumentScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useRef } from 'react';
+ import {
+   Linking,
+@@ -43,6 +44,7 @@ const BODY_LINE = getPortalLineHeight(BODY_SIZE, 'body');
+ const HEADING_SIZE = scaledPortalFontSize(PortalFontSizes.subheading);
+ 
+ export default function LegalDocumentScreen({ route, navigation }: any) {
++  const pageLayout = usePageLayout({ tabletGutter: 18 });
+   const { colors } = useThemeColor();
+   const scrollRef = useRef<ScrollView>(null);
+   const sectionOffsets = useRef<Record<string, number>>({});
+@@ -51,7 +53,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
+   const doc = docId ? LEGAL_DOCUMENTS[docId] : undefined;
+ 
+   const header = (
+-    <View style={styles.navHeaderRow}>
++    <View style={[styles.navHeaderRow, pageLayout.insetStyle]}>
+       <TouchableOpacity
+         onPress={() => navigation.goBack()}
+         hitSlop={PortalTouchTargets.compactHitSlop}
+@@ -80,7 +82,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
+     return (
+       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom']}>
+         {header}
+-        <View style={styles.errorWrap} testID="legal-document-missing">
++        <View style={[styles.errorWrap, pageLayout.gutterStyle, pageLayout.frameStyle]} testID="legal-document-missing">
+           <Text style={[styles.errorTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+             This document could not be opened
+           </Text>
+@@ -157,10 +159,10 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
+       {header}
+       <ScrollView
+         ref={scrollRef}
+-        contentContainerStyle={styles.scrollContent}
++        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]}
+         testID={`legal-document-${doc.id}`}
+       >
+-        <View style={styles.inner}>
++        <View style={[styles.inner, pageLayout.contentStyle]}>
+           <Text style={[styles.meta, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+             Effective {LEGAL_EFFECTIVE_DATE}
+           </Text>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\WaitingForDispatcherScreen.tsx.txt" b/src/screens/WaitingForDispatcherScreen.tsx
+index c002590..f54cd96 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\WaitingForDispatcherScreen.tsx.txt"
++++ b/src/screens/WaitingForDispatcherScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useEffect, useRef } from 'react';
+ import {
+   View,
+@@ -47,6 +48,7 @@ export default function WaitingForDispatcherScreen({
+   route,
+   navigation,
+ }: RootStackScreenProps<'WaitingForDispatcher'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
+   const { user, errandId } = route.params || {
+     user: { id: 1, username: 'testuser', firstName: 'Customer', lastName: 'User' },
+     errandId: 'PABILI-123456',
+@@ -231,7 +233,7 @@ export default function WaitingForDispatcherScreen({
+     >
+       <ScrollView
+         style={{ flex: 1 }}
+-        contentContainerStyle={styles.scrollContent}
++        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]}
+         showsVerticalScrollIndicator={false}
+       >
+         <View style={styles.centerSection}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandConfirmationScreen.tsx.txt" b/src/screens/ErrandConfirmationScreen.tsx
+index 01f9c19..c2068d3 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ErrandConfirmationScreen.tsx.txt"
++++ b/src/screens/ErrandConfirmationScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useEffect } from 'react';
+ import {
+   View,
+@@ -41,6 +42,7 @@ export default function ErrandConfirmationScreen({
+   route,
+   navigation,
+ }: RootStackScreenProps<'ErrandConfirmation'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { user, finalErrand } = route.params || {
+     user: { id: 'test-user', username: 'testuser', firstName: 'Test', lastName: 'User' },
+     finalErrand: {
+@@ -91,8 +93,7 @@ export default function ErrandConfirmationScreen({
+       <View
+         style={[
+           styles.navHeaderRow,
+-          { borderBottomColor: colors.border, backgroundColor: colors.bgApp },
+-        ]}
++          { borderBottomColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}
+       >
+         <TouchableOpacity
+           onPress={() =>
+@@ -110,7 +111,7 @@ export default function ErrandConfirmationScreen({
+         <View style={styles.navRightPlaceholder} />
+       </View>
+ 
+-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]} showsVerticalScrollIndicator={false}>
+ 
+         {/* SUCCESS BANNER */}
+         <View style={[styles.successCard, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5', borderColor: isDark ? '#059669' : '#A7F3D0' }]}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ServiceListScreen.tsx.txt" b/src/screens/ServiceListScreen.tsx
+index aa9da92..061c772 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\ServiceListScreen.tsx.txt"
++++ b/src/screens/ServiceListScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+@@ -16,6 +17,7 @@ export const SERVICE_TYPES = [
+ ];
+ 
+ export default function ServiceListScreen({ route, navigation }: RootStackScreenProps<'ServiceList'>) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { user } = route.params || {};
+   const [selectedServices, setSelectedServices] = useState<string[]>(['Pabili']);
+   const { colors, isDark } = useThemeColor();
+@@ -35,7 +37,7 @@ export default function ServiceListScreen({ route, navigation }: RootStackScreen
+   };
+ 
+   return (
+-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
++    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.gutterStyle]} edges={['top', 'bottom', 'left', 'right']}>
+       <View style={styles.navHeaderRow}>
+         <TouchableOpacity
+           onPress={() => navigation.goBack()}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerLocationScreen.tsx.txt" b/src/screens/CustomerLocationScreen.tsx
+index a862702..c4cb319 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\CustomerLocationScreen.tsx.txt"
++++ b/src/screens/CustomerLocationScreen.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React, { useState, useEffect, useCallback } from 'react';
+ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+@@ -37,6 +38,7 @@ import { LocationDraftPayload, SavedLocation } from './location/types';
+ const MAX_LOCATIONS = 5;
+ 
+ export default function CustomerLocationScreen({ route, navigation }: RootStackScreenProps<'CustomerLocation'> | any) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const user = route.params?.user || { id: 0, firstName: 'Customer' };
+   const initialMode = route.params?.initialMode ?? 'list';
+   const initialStep = (route.params?.initialStep as (1 | 2)) ?? 1;
+@@ -170,9 +172,9 @@ export default function CustomerLocationScreen({ route, navigation }: RootStackS
+ 
+   return (
+     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
+-      <View style={styles.responsiveWrapper}>
++      <View style={[styles.responsiveWrapper, pageLayout.frameStyle]}>
+         {mode === 'list' && (
+-          <View style={styles.navHeaderRow}>
++          <View style={[styles.navHeaderRow, pageLayout.gutterStyle]}>
+             <TouchableOpacity
+               onPress={() => navigation?.goBack?.()}
+               hitSlop={PortalTouchTargets.compactHitSlop}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\LocationList.tsx.txt" b/src/screens/location/LocationList.tsx
+index 795240d..321de4f 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\LocationList.tsx.txt"
++++ b/src/screens/location/LocationList.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React from 'react';
+ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { Plus, RotateCw } from 'lucide-react-native';
+@@ -43,10 +44,11 @@ export default function LocationList({
+   onEdit,
+   onDelete,
+ }: LocationListProps) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { colors, isDark } = useThemeColor();
+ 
+   return (
+-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
++    <ScrollView style={styles.container} contentContainerStyle={[styles.content, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+       <Text style={[styles.headerTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+         My Delivery Locations
+       </Text>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\LocationWizard.tsx.txt" b/src/screens/location/LocationWizard.tsx
+index c5e8e31..cb29d9a 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\LocationWizard.tsx.txt"
++++ b/src/screens/location/LocationWizard.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useEffect, useState } from 'react';
+ import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { ChevronLeft } from 'lucide-react-native';
+@@ -39,6 +40,7 @@ export default function LocationWizard({
+   onSave,
+   onCancel,
+ }: LocationWizardProps) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { colors, isDark } = useThemeColor();
+   const [step, setStep] = useState<1 | 2>(initialStep);
+   const [pin, setPin] = useState<MapCoordinate | null>(
+@@ -120,7 +122,7 @@ export default function LocationWizard({
+ 
+   return (
+     <View style={[styles.flex, { backgroundColor: colors.bgApp }]}>
+-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
++      <View style={[styles.header, { borderBottomColor: colors.border }, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           style={styles.backBtn}
+           onPress={handleBack}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\WizardStepDetails.tsx.txt" b/src/screens/location/WizardStepDetails.tsx
+index 1636963..699ac4e 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\WizardStepDetails.tsx.txt"
++++ b/src/screens/location/WizardStepDetails.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useRef, useState } from 'react';
+ import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+ import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
+@@ -62,6 +63,7 @@ export default function WizardStepDetails({
+   isEditing,
+   onSave,
+ }: WizardStepDetailsProps) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+   const labelInputRef = useRef<TextInput>(null);
+@@ -94,7 +96,7 @@ export default function WizardStepDetails({
+   return (
+     <View style={styles.flex}>
+       <KeyboardAwareScrollView
+-        contentContainerStyle={styles.scrollContent}
++        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]}
+         bottomOffset={footerHeight + FOCUSED_FIELD_GAP}
+         keyboardShouldPersistTaps="handled"
+         showsVerticalScrollIndicator={false}
+@@ -259,7 +261,7 @@ export default function WizardStepDetails({
+           rather than float above it. */}
+       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
+         <View
+-          style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.bgApp }]}
++          style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.bgApp }, pageLayout.gutterStyle]}
+           onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+         >
+           <TouchableOpacity
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\WizardStepPin.tsx.txt" b/src/screens/location/WizardStepPin.tsx
+index 3b35cc3..6af4aba 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\screens\\location\\WizardStepPin.tsx.txt"
++++ b/src/screens/location/WizardStepPin.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../../hooks/usePageLayout';
+ import React, { useState } from 'react';
+ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import { LocateFixed, Navigation, ChevronRight } from 'lucide-react-native';
+@@ -37,6 +38,7 @@ function statusTextFor(pin: MapCoordinate | null, resolving: boolean, resolvedAd
+ }
+ 
+ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurrentLocation, onNext }: WizardStepPinProps) {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { colors, isDark } = useThemeColor();
+   const [mapPickerVisible, setMapPickerVisible] = useState(false);
+   const { resolving, resolvedAddress } = useReverseGeocodedAddress(pin);
+@@ -48,7 +50,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
+ 
+   return (
+     <View style={styles.flex}>
+-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+         <Text
+           style={[styles.title, { color: colors.textDark }]}
+           maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
+@@ -119,7 +121,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
+         </View>
+       </ScrollView>
+ 
+-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
++      <View style={[styles.footer, { borderTopColor: colors.border }, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           style={[
+             styles.nextBtn,
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\ChatSkeleton.tsx.txt" b/src/components/ChatSkeleton.tsx
+index 9e02414..9b57a03 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\ChatSkeleton.tsx.txt"
++++ b/src/components/ChatSkeleton.tsx
+@@ -1,3 +1,4 @@
++import { usePageLayout } from '../hooks/usePageLayout';
+ import React from 'react';
+ import { StyleSheet, View } from 'react-native';
+ import ShimmerWave from './ShimmerWave';
+@@ -57,10 +58,11 @@ export function ChannelListSkeleton() {
+  * 2. CHAT MESSAGES SKELETON (Inside CustomerChatScreen)
+  */
+ export function ChatMessagesSkeleton() {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
+   const { colors, isDark } = useThemeColor();
+ 
+   return (
+-    <View style={styles.messagesSkeletonContainer} testID="chat-messages-skeleton">
++    <View style={[styles.messagesSkeletonContainer, pageLayout.gutterStyle]} testID="chat-messages-skeleton">
+       {/* Left bubble (Incoming message) */}
+       <View
+         style={[
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\MapPreviewField.tsx.txt" b/src/components/MapPreviewField.tsx
+index 5a364ee..cae3473 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\MapPreviewField.tsx.txt"
++++ b/src/components/MapPreviewField.tsx
+@@ -1,4 +1,5 @@
+ import React, { useEffect, useRef, useState } from 'react';
++import { usePageLayout } from '../hooks/usePageLayout';
+ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
+ import { MapPin, X, Navigation, CheckCircle2, LocateFixed } from 'lucide-react-native';
+@@ -35,6 +36,7 @@ export interface MapPreviewFieldProps {
+ }
+ 
+ export default function MapPreviewField(props: MapPreviewFieldProps) {
++  const pageLayout = usePageLayout();
+   const { colors, isDark } = useThemeColor();
+   const mapRef = useRef<MapView>(null);
+   const [selfOpen, setSelfOpen] = useState(false);
+@@ -96,7 +98,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
+       <Modal visible={open} animationType="slide" transparent={false} onRequestClose={close}>
+         <View style={[styles.modalRoot, { backgroundColor: colors.bgApp }]}>
+           {/* Top Modal Header */}
+-          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
++          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }, pageLayout.insetStyle]}>
+             <View style={styles.headerTextGroup}>
+               <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalTitle, { color: colors.textDark }]}>{props.modalTitle || props.label}</Text>
+               <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalSubtitle, { color: colors.textGray }]}>
+@@ -262,7 +264,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
+ 
+           {/* Footer Actions */}
+           {props.editable ? (
+-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
++            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }, pageLayout.insetStyle]}>
+               <TouchableOpacity
+                 style={[styles.cancelBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
+                 onPress={close}
+@@ -280,7 +282,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
+               </TouchableOpacity>
+             </View>
+           ) : (
+-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
++            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }, pageLayout.insetStyle]}>
+               <TouchableOpacity
+                 style={[styles.closeFooterBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
+                 onPress={close}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\ErrandTrackCard.tsx.txt" b/src/components/ErrandTrackCard.tsx
+index 8779c24..5819264 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\ErrandTrackCard.tsx.txt"
++++ b/src/components/ErrandTrackCard.tsx
+@@ -1,4 +1,5 @@
+ import React, { useState } from 'react';
++import { usePageLayout } from '../hooks/usePageLayout';
+ import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import {
+   MapPin,
+@@ -34,6 +35,7 @@ export interface ErrandTrackCardProps {
+ }
+ 
+ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
++  const pageLayout = usePageLayout();
+   const { colors, isDark } = useThemeColor();
+   const [isMapOpen, setIsMapOpen] = useState(false);
+   const {
+@@ -370,7 +372,7 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
+       {/* 6. Full Screen Interactive Live GPS Map Modal */}
+       <Modal visible={isMapOpen} animationType="slide" transparent={false} onRequestClose={() => setIsMapOpen(false)}>
+         <View style={[styles.modalRoot, { backgroundColor: colors.bgApp }]}>
+-          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
++          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }, pageLayout.insetStyle]}>
+             <View>
+               <Text style={[styles.modalTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
+                 Errand #{formatErrandId(errand.orderId, errand.referenceNo)}
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\OfflineGate.tsx.txt" b/src/components/OfflineGate.tsx
+index 1f3dbe8..ef0fba3 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\components\\OfflineGate.tsx.txt"
++++ b/src/components/OfflineGate.tsx
+@@ -1,4 +1,5 @@
+ import React, { useCallback, useEffect, useState } from 'react';
++import { usePageLayout } from '../hooks/usePageLayout';
+ import {
+   Modal,
+   View,
+@@ -39,6 +40,7 @@ import StatusBadge from './StatusBadge';
+  * inert. Looking is not functioning.
+  */
+ export const OfflineGate: React.FC = () => {
++  const pageLayout = usePageLayout();
+   const { isConnected, retry } = useNetworkStatus();
+   const { colors, isDark } = useThemeColor();
+   const insets = useSafeAreaInsets();
+@@ -90,13 +92,14 @@ export const OfflineGate: React.FC = () => {
+         style={[
+           styles.root,
+           { backgroundColor: colors.bgApp, paddingTop: insets.top, paddingBottom: insets.bottom },
++          pageLayout.frameStyle,
+         ]}
+         testID="offline-gate"
+       >
+         {showSnapshot && cached ? (
+           <ErrandSnapshot cached={cached} onBack={() => setShowSnapshot(false)} />
+         ) : (
+-          <View style={styles.center}>
++          <View style={[styles.center, pageLayout.gutterStyle]}>
+             <View style={[styles.halo, { backgroundColor: haloBg }]}>
+               <WifiOff size={34} color={colors.danger} strokeWidth={2} />
+             </View>
+@@ -170,13 +173,14 @@ const ErrandSnapshot: React.FC<{ cached: CachedActiveErrand; onBack: () => void
+   cached,
+   onBack,
+ }) => {
++  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
+   const { colors } = useThemeColor();
+   const { errand } = cached;
+   const category = errand.category || extractMerchantCategories(errand);
+ 
+   return (
+     <View style={styles.snapshotRoot}>
+-      <View style={styles.snapshotNav}>
++      <View style={[styles.snapshotNav, pageLayout.gutterStyle]}>
+         <TouchableOpacity
+           onPress={onBack}
+           style={styles.backBtn}
+@@ -195,7 +199,7 @@ const ErrandSnapshot: React.FC<{ cached: CachedActiveErrand; onBack: () => void
+         <View style={styles.backBtn} />
+       </View>
+ 
+-      <ScrollView contentContainerStyle={styles.snapshotBody} showsVerticalScrollIndicator={false}>
++      <ScrollView contentContainerStyle={[styles.snapshotBody, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
+         <View style={[styles.staleRow, { backgroundColor: colors.warningBg }]}>
+           <Lock size={13} color={colors.warning} strokeWidth={2.2} />
+           <Text style={[styles.staleText, { color: colors.warning }]} maxFontSizeMultiplier={1.15}>
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\utils\\responsive.ts.txt" b/src/utils/responsive.ts
+index 0ffae38..58fe5bc 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\utils\\responsive.ts.txt"
++++ b/src/utils/responsive.ts
+@@ -21,6 +21,38 @@ export const Breakpoints = {
+  */
+ export const MAX_CONTENT_WIDTH = 580;
+ 
++/** Page margins are independent of spacing inside cards and controls. */
++export const PHONE_PAGE_GUTTER = 12;
++
++export interface PageLayoutOptions {
++  leftInset?: number;
++  rightInset?: number;
++  /** The enclosing SafeAreaView already consumes the horizontal insets. */
++  horizontalSafeAreaApplied?: boolean;
++  /** Preserve the screen's existing margin on tablets. */
++  tabletGutter?: number;
++}
++
++export function getPageLayout(width: number, options: PageLayoutOptions = {}) {
++  const leftInset = Math.max(0, options.leftInset ?? 0);
++  const rightInset = Math.max(0, options.rightInset ?? 0);
++  const safeWidth = Math.max(0, width - leftInset - rightInset);
++  const isPhone = width < Breakpoints.phablet;
++  const frameWidth = isPhone ? safeWidth : Math.min(safeWidth, MAX_CONTENT_WIDTH);
++  const gutter = isPhone ? PHONE_PAGE_GUTTER : (options.tabletGutter ?? 14);
++  return {
++    isPhone,
++    safeWidth,
++    frameWidth,
++    contentWidth: Math.max(0, frameWidth - gutter * 2),
++    gutter,
++    // A safe-area parent has already positioned the frame, but the physical
++    // safe width above still excludes its insets exactly once.
++    leftMargin: options.horizontalSafeAreaApplied ? 0 : leftInset,
++    rightMargin: options.horizontalSafeAreaApplied ? 0 : rightInset,
++  };
++}
++
+ /**
+  * Helper to clamp a number between min and max bounds.
+  */
+diff --git a/src/hooks/usePageLayout.ts b/src/hooks/usePageLayout.ts
+new file mode 100644
+index 0000000..1bc4fa1
+--- /dev/null
++++ b/src/hooks/usePageLayout.ts
+@@ -0,0 +1,38 @@
++import { useWindowDimensions, type ViewStyle } from 'react-native';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
++import { getPageLayout, type PageLayoutOptions } from '../utils/responsive';
++
++/** Apply frameStyle once per page; nested sections only need gutterStyle. */
++export function usePageLayout(options: Pick<PageLayoutOptions, 'horizontalSafeAreaApplied' | 'tabletGutter'> = {}) {
++  const { width } = useWindowDimensions();
++  const insets = useSafeAreaInsets();
++  const layout = getPageLayout(width, {
++    ...options,
++    leftInset: insets.left,
++    rightInset: insets.right,
++  });
++  const frameStyle: ViewStyle | undefined = layout.isPhone ? {
++    width: layout.frameWidth,
++    maxWidth: layout.frameWidth,
++    alignSelf: 'center',
++    marginLeft: layout.leftMargin,
++    marginRight: layout.rightMargin,
++  } : undefined;
++  const gutterStyle: ViewStyle | undefined = layout.isPhone ? { paddingHorizontal: layout.gutter } : undefined;
++  // For full-width surfaces (e.g. an auth hero) that keep their background
++  // edge-to-edge and consume the horizontal safe area through padding.
++  const insetStyle: ViewStyle | undefined = layout.isPhone ? {
++    paddingLeft: layout.gutter + layout.leftMargin,
++    paddingRight: layout.gutter + layout.rightMargin,
++  } : undefined;
++  const bleedStyle: ViewStyle | undefined = layout.isPhone ? { marginHorizontal: -layout.gutter } : undefined;
++  // A SafeAreaView must keep its full outer width: it applies its own insets
++  // inside that width. Use frameStyle on its children, never on that root.
++  const safeAreaFrameStyle: ViewStyle | undefined = layout.isPhone ? {
++    width: '100%', maxWidth: '100%', alignSelf: 'stretch',
++  } : undefined;
++  const contentStyle: ViewStyle | undefined = layout.isPhone ? {
++    width: '100%', maxWidth: layout.contentWidth,
++  } : undefined;
++  return { ...layout, frameStyle, gutterStyle, insetStyle, bleedStyle, safeAreaFrameStyle, contentStyle };
++}
+diff --git a/src/__tests__/pageLayout.test.ts b/src/__tests__/pageLayout.test.ts
+new file mode 100644
+index 0000000..4aa45b3
+--- /dev/null
++++ b/src/__tests__/pageLayout.test.ts
+@@ -0,0 +1,28 @@
++import { getPageLayout, MAX_CONTENT_WIDTH } from '../utils/responsive';
++
++describe('phone page layout', () => {
++  it.each([320, 360, 392, 428, 599])('uses the safe width and one pair of 12 dp margins at %i dp', width => {
++    expect(getPageLayout(width)).toMatchObject({ isPhone: true, frameWidth: width, gutter: 12, contentWidth: width - 24 });
++  });
++
++  it.each([600, 800])('retains the tablet cap and screen-specific gutter at %i dp', width => {
++    expect(getPageLayout(width, { tabletGutter: 24 })).toMatchObject({
++      isPhone: false, frameWidth: MAX_CONTENT_WIDTH, gutter: 24, contentWidth: 532,
++    });
++  });
++
++  it.each([320, 360, 392, 428, 599, 600, 800])('subtracts asymmetric safe-area insets once at %i dp', width => {
++    const layout = getPageLayout(width, { leftInset: 9, rightInset: 21 });
++    const consumed = getPageLayout(width, { leftInset: 9, rightInset: 21, horizontalSafeAreaApplied: true });
++    expect(layout.safeWidth).toBe(width - 30);
++    expect(layout.frameWidth).toBe(Math.min(width - 30, width < 600 ? width : 580));
++    expect(consumed.frameWidth).toBe(layout.frameWidth);
++    expect(consumed.contentWidth).toBe(layout.contentWidth);
++    expect([layout.leftMargin, layout.rightMargin]).toEqual([9, 21]);
++    expect([consumed.leftMargin, consumed.rightMargin]).toEqual([0, 0]);
++  });
++
++  it('never returns a negative content width when space is exhausted', () => {
++    expect(getPageLayout(20, { leftInset: 15, rightInset: 15 }).contentWidth).toBe(0);
++  });
++});
+diff --git a/src/__tests__/usePageLayout.test.tsx b/src/__tests__/usePageLayout.test.tsx
+new file mode 100644
+index 0000000..cd1ec50
+--- /dev/null
++++ b/src/__tests__/usePageLayout.test.tsx
+@@ -0,0 +1,55 @@
++import React from 'react';
++import { SafeAreaProvider } from 'react-native-safe-area-context';
++import { renderHook } from '@testing-library/react-native';
++import { usePageLayout } from '../hooks/usePageLayout';
++
++// Expo rewrites RN imports to this module, so mock the shared implementation.
++jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
++  __esModule: true,
++  default: jest.fn(),
++}));
++const dimensions = require('react-native/Libraries/Utilities/useWindowDimensions').default as jest.Mock;
++
++const metrics = {
++  frame: { x: 0, y: 0, width: 360, height: 800 },
++  insets: { left: 9, right: 21, top: 24, bottom: 16 },
++};
++const wrapper = ({ children }: { children: React.ReactNode }) => (
++  <SafeAreaProvider initialMetrics={metrics}>{children}</SafeAreaProvider>
++);
++
++describe('page layout style ownership', () => {
++  afterEach(() => jest.clearAllMocks());
++
++  it('positions a phone frame inside asymmetric safe areas and gives nested content only a gutter', async () => {
++    dimensions.mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
++    const { result } = await renderHook(() => usePageLayout(), { wrapper });
++    expect(result.current.frameStyle).toMatchObject({ width: 330, marginLeft: 9, marginRight: 21 });
++    expect(result.current.gutterStyle).toEqual({ paddingHorizontal: 12 });
++    expect(result.current.contentWidth).toBe(306);
++    expect(result.current.insetStyle).toEqual({ paddingLeft: 21, paddingRight: 33 });
++    expect(result.current.bleedStyle).toEqual({ marginHorizontal: -12 });
++  });
++
++  it('does not consume safe areas again inside a horizontal SafeAreaView', async () => {
++    dimensions.mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
++    const { result } = await renderHook(() => usePageLayout({ horizontalSafeAreaApplied: true }), { wrapper });
++    expect(result.current.frameStyle).toMatchObject({ width: 330, marginLeft: 0, marginRight: 0 });
++    expect(result.current.contentWidth).toBe(306);
++    expect(result.current.safeAreaFrameStyle).toEqual({ width: '100%', maxWidth: '100%', alignSelf: 'stretch' });
++    expect(result.current.insetStyle).toEqual({ paddingLeft: 12, paddingRight: 12 });
++  });
++
++  it('removes phone overrides when the viewport becomes a tablet', async () => {
++    dimensions.mockReturnValue({ width: 360, height: 800, scale: 2, fontScale: 1 });
++    const { result, rerender } = await renderHook(() => usePageLayout({ tabletGutter: 24 }), { wrapper });
++    expect(result.current.gutterStyle).toBeDefined();
++    dimensions.mockReturnValue({ width: 800, height: 1024, scale: 2, fontScale: 1 });
++    await rerender(undefined);
++    expect(result.current.frameWidth).toBe(580);
++    expect(result.current.contentWidth).toBe(532);
++    for (const key of ['frameStyle', 'gutterStyle', 'safeAreaFrameStyle', 'insetStyle', 'bleedStyle', 'contentStyle'] as const) {
++      expect(result.current[key]).toBeUndefined();
++    }
++  });
++});
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\__tests__\\MerchantCategoryStoresScreen.test.tsx.txt" b/src/__tests__/MerchantCategoryStoresScreen.test.tsx
+index 255cb5a..5a2b7c7 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\__tests__\\MerchantCategoryStoresScreen.test.tsx.txt"
++++ b/src/__tests__/MerchantCategoryStoresScreen.test.tsx
+@@ -172,14 +172,14 @@ describe('MerchantCategoryStoresScreen', () => {
+       'category-nearby-store-catalogue:c3',
+     ]);
+ 
+-    // The sideways rows match Home's larger photos and keep titles inside them.
++    // The sideways rows retain Home's approved compact photos and title overlays.
+     const { StyleSheet } = require('react-native');
+     const widthOf = (id: string) => StyleSheet.flatten(res.getByTestId(id).props.style).width;
+-    expect(widthOf('category-popular-store-google:pop1')).toBe(200);
+-    expect(widthOf('category-nearby-store-catalogue:c2')).toBe(200);
++    expect(widthOf('category-popular-store-google:pop1')).toBe(160);
++    expect(widthOf('category-nearby-store-catalogue:c2')).toBe(160);
+     for (const [prefix, key, name, height] of [
+-      ['category-popular-store', 'google:pop1', 'Popular Pharmacy 1', 150],
+-      ['category-nearby-store', 'catalogue:c2', 'Closest Pharmacy', 150],
++      ['category-popular-store', 'google:pop1', 'Popular Pharmacy 1', 120],
++      ['category-nearby-store', 'catalogue:c2', 'Closest Pharmacy', 120],
+       ['category-all-store', 'catalogue:c3', 'Mid Pharmacy', 180],
+     ] as const) {
+       expect(within(res.getByTestId(`${prefix}-title-overlay-${key}`)).getByText(name)).toBeTruthy();
+diff --git "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\__tests__\\CustomerChatScreen.test.tsx.txt" b/src/__tests__/CustomerChatScreen.test.tsx
+index 12d70d6..cad73ff 100644
+--- "a/C:\\Capstone_Project_Mobile_App\\CustomerApp\\scratch\\page-width-20261104\\before\\src\\__tests__\\CustomerChatScreen.test.tsx.txt"
++++ b/src/__tests__/CustomerChatScreen.test.tsx
+@@ -537,7 +537,7 @@ describe('CustomerChatScreen (Messenger-Style Chat UI, Presence & New Message Pi
+     });
+ 
+     // Press Decline / Adjust
+-    fireEvent.press(res.getByText('Decline / Adjust'));
++    await fireEvent.press(res.getByText('Decline / Adjust'));
+ 
+     await waitFor(() => {
+       expect(res.getByText('Decline or Request Adjustment')).toBeTruthy();

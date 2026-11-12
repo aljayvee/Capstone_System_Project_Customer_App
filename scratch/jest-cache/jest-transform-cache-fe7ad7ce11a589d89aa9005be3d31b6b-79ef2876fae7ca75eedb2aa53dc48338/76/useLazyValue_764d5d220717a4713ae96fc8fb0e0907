@@ -1,0 +1,17 @@
+88d096c39cc40cd3f5a3e68d38b9bdf6
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useLazyValue = useLazyValue;
+var React = _interopRequireWildcard(require("react"));
+function useLazyValue(create) {
+  var lazyRef = React.useRef(undefined);
+  if (lazyRef.current === undefined) {
+    lazyRef.current = create();
+  }
+  return lazyRef.current;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsInVzZUxhenlWYWx1ZSIsImNyZWF0ZSIsImxhenlSZWYiLCJ1c2VSZWYiLCJ1bmRlZmluZWQiLCJjdXJyZW50Il0sInNvdXJjZXMiOlsiLi4vLi4vc3JjL3VzZUxhenlWYWx1ZS50c3giXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFBQSxJQUFBQSxLQUFBLEdBQUFDLHVCQUFBLENBQUFDLE9BQUE7QUFFTyxTQUFTQyxZQUFZQSxDQUFJQyxNQUFlLEVBQUs7RUFDbEQsSUFBTUMsT0FBTyxHQUFHTCxLQUFLLENBQUNNLE1BQU0sQ0FBSUMsU0FBUyxDQUFDO0VBRTFDLElBQUlGLE9BQU8sQ0FBQ0csT0FBTyxLQUFLRCxTQUFTLEVBQUU7SUFDakNGLE9BQU8sQ0FBQ0csT0FBTyxHQUFHSixNQUFNLENBQUMsQ0FBQztFQUM1QjtFQUVBLE9BQU9DLE9BQU8sQ0FBQ0csT0FBTztBQUN4QiIsImlnbm9yZUxpc3QiOltdfQ==

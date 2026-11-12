@@ -45,12 +45,10 @@ interface TabConfig {
   isCenter?: boolean;
 }
 
-// Brand color tokens & Default Gray accents
+// Neutral accents for inactive navigation items.
 const COLOR_BLACK = '#010013';
 // One step darker in light mode since the bar became liquid glass (2026-10-11):
 // slate-800 / slate-500 were lost over store photos showing through it.
-const COLOR_ACTIVE_GRAY_LIGHT = '#0F172A';  // Slate-900
-const COLOR_ACTIVE_GRAY_DARK = '#F1F5F9';   // Slate-100 default crisp gray
 const COLOR_INACTIVE_GRAY_LIGHT = '#334155'; // Slate-700
 const COLOR_INACTIVE_GRAY_DARK = '#94A3B8';  // Slate-400 muted gray
 
@@ -93,6 +91,7 @@ function StandardTabItem({
   isLight: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useThemeColor();
   const labelOpacity = useSharedValue(labelsVisible ? 1 : 0);
   const labelTranslateY = useSharedValue(labelsVisible ? 0 : 5);
   const labelHeight = useSharedValue(labelsVisible ? 13 : 0);
@@ -147,8 +146,8 @@ function StandardTabItem({
 
   const { Icon, label, key } = tab;
 
-  // Default gray color tokens for active and inactive states
-  const activeColor = isLight ? COLOR_ACTIVE_GRAY_LIGHT : COLOR_ACTIVE_GRAY_DARK;
+  // The selected tab carries the Customer App's pink identity.
+  const activeColor = isLight ? colors.primaryStrong : colors.primary;
   const inactiveColor = isLight ? COLOR_INACTIVE_GRAY_LIGHT : COLOR_INACTIVE_GRAY_DARK;
 
   return (
@@ -163,7 +162,7 @@ function StandardTabItem({
     >
       <View style={styles.tabContent}>
         <Animated.View style={animatedIconStyle}>
-          {/* Active state in default gray */}
+          {/* Selected icon and label share the brand accent. */}
           <Icon
             size={moderateScale(21, 0.3)}
             color={selected ? activeColor : inactiveColor}
@@ -193,7 +192,7 @@ function StandardTabItem({
           </Text>
         </Animated.View>
 
-        {/* Sleek Active Dot Indicator in default gray (fallback when labels are collapsed) */}
+        {/* Keep the pink selection visible when labels are collapsed. */}
         <Animated.View
           style={[
             styles.activeDot,

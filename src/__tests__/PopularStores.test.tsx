@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { apiClient } from '../services/apiClient';
 import { showAppAlert } from '../services/alertModal';
 import { clearNearbyEstablishmentCache } from '../services/establishments';
@@ -89,6 +89,8 @@ describe('Popular Stores on Home', () => {
     const res: any = await draw();
 
     expect(await res.findByTestId('popular-store-g1')).toBeTruthy();
+    expect(within(res.getByTestId('popular-store-title-overlay-g1')).getByText('Mercury Drug Alunan')).toBeTruthy();
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     expect(apiClient.get).toHaveBeenCalledWith(
       '/places/establishments/popular',
       expect.objectContaining({ params: { lat: 6.69, lng: 124.68, photos: 1 } })
@@ -99,18 +101,17 @@ describe('Popular Stores on Home', () => {
     // Three in the row; the rest wait on the See all screen.
     expect(res.getByTestId('popular-store-g3')).toBeTruthy();
     expect(res.queryByTestId('popular-store-g4')).toBeNull();
-    expect(res.getByTestId('popular-stores-see-all-card')).toBeTruthy();
+    expect(res.queryByTestId('popular-stores-see-all-card')).toBeNull();
   });
 
-  it('opens the Popular Stores screen from See all, and the arrow', async () => {
+  it('opens the Popular Stores screen from the header See all link', async () => {
     (apiClient.get as jest.Mock).mockReturnValue(answer(SIX));
     const res: any = await draw();
     await res.findByTestId('popular-store-g1');
 
-    await fireEvent.press(res.getByTestId('popular-stores-see-all-card'));
-    expect(navigation.navigate).toHaveBeenLastCalledWith('PopularStores', { user });
     await fireEvent.press(res.getByTestId('popular-stores-see-all'));
-    expect(navigation.navigate).toHaveBeenCalledTimes(2);
+    expect(navigation.navigate).toHaveBeenLastCalledWith('PopularStores', { user });
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
   });
 
   it('opens the Popular Stores screen with the tapped store already picked (2026-10-11)', async () => {
@@ -157,6 +158,8 @@ describe('the Popular Stores screen', () => {
     const res: any = await draw();
 
     await res.findByTestId('popular-stores-screen-store-g1');
+    expect(within(res.getByTestId('popular-stores-screen-store-title-overlay-g1')).getByText('Mercury Drug Alunan')).toBeTruthy();
+    expect(res.queryByText('Poblacion, Tacurong')).toBeNull();
     const tree = JSON.stringify(res.toJSON());
     const order = SIX.map((s) => tree.indexOf(`"popular-stores-screen-store-${s.key}"`));
     expect(order.every((at) => at >= 0)).toBe(true);

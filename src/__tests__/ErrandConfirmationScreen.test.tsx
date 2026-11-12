@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import ErrandConfirmationScreen from '../screens/ErrandConfirmationScreen';
+import { rememberErrandReferences } from '../utils/formatErrandId';
 
 const mockNavigation: any = {
   navigate: jest.fn(),
@@ -10,11 +11,13 @@ const mockNavigation: any = {
 
 describe('ErrandConfirmationScreen', () => {
   it('renders receipt summary, tracking stepper, and map preview', async () => {
+    // The create response passed through the API client, which learned its number.
+    rememberErrandReferences({ id: '6d48243c-8b83-4a11-897b-9c3f0b889900', referenceNo: '261019-89900-0042' });
     const mockRoute: any = {
       params: {
         user: { id: 'u1', username: 'testuser' },
         finalErrand: {
-          errandId: 'SGO-889900',
+          errandId: '6d48243c-8b83-4a11-897b-9c3f0b889900',
           services: ['Pabili', 'Padala'],
           payload: {},
           baseFee: 70,
@@ -37,7 +40,7 @@ describe('ErrandConfirmationScreen', () => {
     // Digital receipt checks
     expect(res.getByTestId('digital-receipt')).toBeTruthy();
     expect(res.getByTestId('errand-id-text')).toBeTruthy();
-    expect(res.getByText('SGO-889900')).toBeTruthy();
+    expect(res.getByText('261019-89900-0042')).toBeTruthy();
     expect(res.getByTestId('grand-total-text')).toBeTruthy();
     expect(res.getByText('₱130.00')).toBeTruthy();
 

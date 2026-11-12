@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -14,11 +15,12 @@ import {
   Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Eye, EyeOff, ArrowRight, Bike, AlertCircle } from 'lucide-react-native';
+import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthHeroPattern from '../components/AuthHeroPattern';
 import { apiClient } from '../services/apiClient';
@@ -26,16 +28,15 @@ import { toUserMessage, retryAfterSeconds } from '../services/errorMessages';
 import RateLimitCountdown from '../components/RateLimitCountdown';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import { signInWithGoogleNative } from '../services/googleAuth';
+import { mfaTrustField, readLoginChallenge } from '../services/mfaTrust';
 import { useAuth } from '../context/AuthContext';
 import {
   FontFamily,
-  FontSizes,
   Spacing,
   BorderRadius,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   moderateScale,
   AuthFontSizes,
   scaledAuthFontSize,
@@ -46,11 +47,15 @@ import {
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useAuthHeroGradient } from '../hooks/useAuthHeroGradient';
 
+// The app logo's scooter, white on transparent (artwork/kuya-sugo/export_flat_logo.mjs writes it from the logo master).
+const SUGO_MARK = require('../../assets/mascot/sugo-mark-white.png');
+
 // The hero owns the top third of the screen in resting state, and the white
 // sheet is pulled up over its bottom edge by SHEET_OVERLAP.
 const SHEET_OVERLAP = 34;
 
 export default function LoginScreen({ navigation }: any) {
+  const pageLayout = usePageLayout();
   const { login } = useAuth();
   const { colors, isDark } = useThemeColor();
   const heroGradient = useAuthHeroGradient();
@@ -172,8 +177,17 @@ export default function LoginScreen({ navigation }: any) {
         // the server untouched. The server trims identically, so the two agree
         // on exactly which string gets hashed and compared.
         password: password.trim(),
+        // Only on a device that passed the second factor before.
+        ...(await mfaTrustField()),
       });
       const data = response.data;
+      // A correct password on a device the server does not trust yet: the
+      // second factor finishes the sign-in. The fields keep what was typed.
+      const challenge = readLoginChallenge(data);
+      if (challenge) {
+        navigation.navigate('MfaChallenge', { challenge });
+        return;
+      }
       const userPayload = data.user || data;
 
       await AsyncStorage.setItem('@sugo_customer_onboarding_completed', 'true');
@@ -213,10 +227,14 @@ export default function LoginScreen({ navigation }: any) {
 
       const response = await apiClient.post('/customers/google-login', {
         idToken: googleUser.firebaseIdToken,
+        ...(await mfaTrustField()),
       });
 
       const data = response.data;
-      if (data.status === 'PHONE_SETUP_REQUIRED') {
+      const challenge = readLoginChallenge(data);
+      if (challenge) {
+        navigation.navigate('MfaChallenge', { challenge });
+      } else if (data.status === 'PHONE_SETUP_REQUIRED') {
         navigation.navigate('GooglePhoneSetup', {
           googleIdToken: googleUser.firebaseIdToken,
           email: data.email || googleUser.email,
@@ -250,7 +268,7 @@ export default function LoginScreen({ navigation }: any) {
   const renderFieldError = (message: string) => (
     <View style={[styles.errorPill, { backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2' }]}>
       <AlertCircle size={11} color={colors.danger} strokeWidth={2.4} />
-      <Text style={[styles.errorPillText, { color: colors.danger }]}>{message}</Text>
+      <Text maxFontSizeMultiplier={AuthFontSizeMultipliers.body} style={[styles.errorPillText, { color: colors.danger }]}>{message}</Text>
     </View>
   );
 
@@ -286,14 +304,14 @@ export default function LoginScreen({ navigation }: any) {
               colors={heroGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.hero, { height: heroHeight, paddingTop: insets.top + Spacing.xl }]}
+              style={[styles.hero, { height: heroHeight, paddingTop: insets.top + Spacing.xl }, pageLayout.insetStyle]}
             >
               <AuthHeroPattern width={screenWidth} height={heroHeight} />
 
               <Animated.View style={{ opacity: introFade }}>
                 <View style={styles.brandRow}>
                   <View style={styles.brandMark}>
-                    <Bike size={18} color="#FFFFFF" strokeWidth={2.4} />
+                    <Image source={SUGO_MARK} style={styles.brandMarkImage} resizeMode="contain" accessible={false} />
                   </View>
                   <Text style={styles.brandWordmark} maxFontSizeMultiplier={AuthFontSizeMultipliers.label}>SUGO EXPRESS</Text>
                 </View>
@@ -319,8 +337,7 @@ export default function LoginScreen({ navigation }: any) {
                 paddingBottom: insets.bottom + Spacing.xxl,
                 opacity: introFade,
                 transform: [{ translateY: sheetRise }],
-              },
-            ]}
+              }, pageLayout.gutterStyle, pageLayout.frameStyle]}
           >
             <Text style={[styles.sheetTitle, { color: colors.textDark }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.heading}>Login</Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.body}>
@@ -458,7 +475,15 @@ export default function LoginScreen({ navigation }: any) {
 
             {/* FORGOT PASSWORD */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
+              onPress={() => {
+                const routes = typeof navigation.getState === 'function' ? navigation.getState()?.routes : undefined;
+                const prevRoute = routes && routes.length >= 2 ? routes[routes.length - 2]?.name : null;
+                if (prevRoute === 'ForgotPassword') {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('ForgotPassword');
+                }
+              }}
               style={styles.forgotRow}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="forgot-password-link"
@@ -475,11 +500,11 @@ export default function LoginScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <View style={styles.buttonRow}>
-                  <Text style={styles.buttonText} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Log In</Text>
-                  <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={AuthFontSizeMultipliers.button}>Log In</Text>
+                  <ArrowRight size={18} color={colors.onPrimary} strokeWidth={2.5} />
                 </View>
               )}
             </TouchableOpacity>
@@ -507,7 +532,15 @@ export default function LoginScreen({ navigation }: any) {
 
             {/* SIGN UP */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('Register')}
+              onPress={() => {
+                const routes = typeof navigation.getState === 'function' ? navigation.getState()?.routes : undefined;
+                const prevRoute = routes && routes.length >= 2 ? routes[routes.length - 2]?.name : null;
+                if (prevRoute === 'Register') {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Register');
+                }
+              }}
               style={styles.linkContainer}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="register-link"
@@ -552,6 +585,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  brandMarkImage: {
+    width: 24,
+    aspectRatio: 1.5,
+  },
   brandWordmark: {
     color: '#FFFFFF',
     fontFamily: FontFamily.bold,
@@ -567,6 +604,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   heroHeadlineSmall: {
+    fontFamily: FontFamily.regular,
     fontSize: scaledAuthFontSize(AuthFontSizes.xl),
     lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.xl), 'heading'),
   },
@@ -721,8 +759,9 @@ const styles = StyleSheet.create({
     height: 1,
   },
   dividerText: {
+    lineHeight: getAuthLineHeight(scaledAuthFontSize(AuthFontSizes.sm), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(11, 0.2),
+    fontSize: scaledAuthFontSize(AuthFontSizes.sm),
     letterSpacing: 0.8,
   },
 });

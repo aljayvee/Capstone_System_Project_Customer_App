@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Image,
@@ -13,25 +14,19 @@ import {
 import { showAppAlert } from '../services/alertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Mail,
-  Phone,
   Pencil,
   MapPin,
   ChevronRight,
   ChevronLeft,
   Settings,
-  ShieldCheck,
   LogOut,
   Package,
-  Award,
-  HelpCircle,
   Camera,
   Image as ImageIcon,
   Trash2,
   X,
   Moon,
   Sun,
-  ExternalLink,
   MessageSquare,
   Sparkles,
 } from 'lucide-react-native';
@@ -39,13 +34,11 @@ import { useAuth } from '../context/AuthContext';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
   BorderRadius,
-  FontSizes,
   Spacing,
   FontFamily,
   Shadows,
   useResponsive,
   MAX_CONTENT_WIDTH,
-  scaledFontSize,
   PortalFontSizes,
   scaledPortalFontSize,
   getPortalLineHeight,
@@ -76,10 +69,11 @@ function fieldOrPlaceholder(value: string | undefined) {
 }
 
 export default function AccountScreen({ route, navigation }: RootStackScreenProps<'Account'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
   const { user: authUser, logout, updateUser } = useAuth();
   const { colors, isDark, setThemeMode } = useThemeColor();
+  const brandColor = isDark ? colors.primary : colors.primaryStrong;
   const { width: windowWidth } = useResponsive();
-  const contentMaxWidth = Math.min(windowWidth - Spacing.md * 2, MAX_CONTENT_WIDTH);
 
   const initialUser =
     route.params?.user || authUser || {
@@ -95,7 +89,6 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [staticMapError, setStaticMapError] = useState(false);
   const [completedErrandsCount, setCompletedErrandsCount] = useState<number>(0);
 
   const [defaultAddressText, setDefaultAddressText] = useState<string | null>(null);
@@ -324,14 +317,6 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
     'C'
   ).toUpperCase()}${(currentUser.lastName?.[0] || '').toUpperCase()}`;
 
-  // Google Static Map URL
-  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  const hasCoordinates = customerPinCoords && customerPinCoords.latitude && customerPinCoords.longitude;
-  const staticMapUrl =
-    googleMapsApiKey && hasCoordinates && !staticMapError
-      ? `https://maps.googleapis.com/maps/api/staticmap?center=${customerPinCoords.latitude},${customerPinCoords.longitude}&zoom=16&size=640x260&scale=2&maptype=roadmap&markers=color:0xF62459%7C${customerPinCoords.latitude},${customerPinCoords.longitude}&key=${googleMapsApiKey}`
-      : null;
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.bgApp }]}
@@ -344,8 +329,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
           {
             borderBottomColor: colors.border,
             backgroundColor: colors.bgApp,
-          },
-        ]}
+          }, pageLayout.gutterStyle]}
       >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -380,8 +364,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH },
-        ]}
+          { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: windowWidth < 350 ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle, pageLayout.frameStyle]}
         showsVerticalScrollIndicator={false}
       >
         {/* 1. APP UPDATE ALERT BANNER */}
@@ -407,14 +390,14 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
               </View>
               <View style={styles.updateBannerTextCol}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.updateBannerTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.updateBannerTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
                     Sugo Express v{updateStatus.latestVersion} Available
                   </Text>
                   <View style={styles.updateNewChip}>
-                    <Text style={styles.updateNewChipText}>NEW</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.updateNewChipText}>NEW</Text>
                   </View>
                 </View>
-                <Text style={[styles.updateBannerSubtitle, { color: isDark ? '#F87171' : '#B91C1C' }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.updateBannerSubtitle, { color: isDark ? '#F87171' : '#B91C1C' }]}>
                   Tap to view new features, fixes & download APK
                 </Text>
               </View>
@@ -433,19 +416,14 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
           </View>
         )}
 
-        {/* 2. IDENTITY HERO (2026-10-14): the photo and the name are what this
-            screen is about, so they lead it, centred and at the largest sizes
-            on the page. The name used to be 16 pt, the same as the screen title,
-            the stats and every section heading, beside a 52 dp photo, so nothing
-            said whose account this was. Edit Profile moved off the name's line
-            and quietened, so it no longer competes with it. */}
+        {/* Profile identity */}
         <View style={styles.heroSection}>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setShowPhotoModal(true)}
             style={[
               styles.avatarRing,
-              { borderColor: isDark ? 'rgba(246, 36, 89, 0.45)' : '#FBCFDA' },
+              { borderColor: colors.border },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Change profile photo"
@@ -454,8 +432,8 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
             {currentUser.avatar ? (
               <Image source={{ uri: currentUser.avatar }} style={styles.avatarImage} />
             ) : (
-              <View style={[styles.avatarBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarText} maxFontSizeMultiplier={1}>
+              <View style={[styles.avatarBadge, { backgroundColor: colors.bgGray }]}>
+                <Text style={[styles.avatarText, { color: colors.textDark }]} maxFontSizeMultiplier={1}>
                   {userInitials}
                 </Text>
               </View>
@@ -469,12 +447,12 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                 style={[
                   styles.avatarCameraBadge,
                   {
-                    backgroundColor: colors.primary,
-                    borderColor: isDark ? colors.bgApp : '#FFFFFF',
+                    backgroundColor: brandColor,
+                    borderColor: colors.card,
                   },
                 ]}
               >
-                <Camera size={15} color="#FFFFFF" strokeWidth={2.4} />
+                <Camera size={15} color={colors.onPrimary} strokeWidth={2.4} />
               </View>
             )}
           </TouchableOpacity>
@@ -497,26 +475,9 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
           </Text>
 
           <View style={styles.heroTagRow}>
-            <View
-              style={[
-                styles.verifiedChip,
-                {
-                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
-                  borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : '#A7F3D0',
-                },
-              ]}
-            >
-              <ShieldCheck size={12} color="#10B981" strokeWidth={2.4} />
-              <Text
-                style={styles.verifiedChipText}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-              >
-                Verified Customer
-              </Text>
-            </View>
             <TouchableOpacity
               activeOpacity={0.7}
-              style={[styles.editProfileBtn, { borderColor: colors.border }]}
+              style={[styles.editProfileBtn, { backgroundColor: colors.bgGray }]}
               onPress={() => navigation.navigate('EditAccount', { user: currentUser })}
               hitSlop={PortalTouchTargets.compactHitSlop}
               testID="edit-profile-button"
@@ -534,301 +495,69 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
           </View>
         </View>
 
-        {/* 2.5 QUICK ACTION & STATS ROW (CLEAN & SHADOW-FREE) */}
-        <View style={styles.statsBentoRow}>
+        {/* Delivery details stay in the page flow; the map opens on demand. */}
+        <View style={[styles.pinSection, { borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+            Delivery address
+          </Text>
           <TouchableOpacity
             activeOpacity={0.7}
-            style={[
-              styles.statsBentoTile,
-              {
-                backgroundColor: isDark ? colors.card : '#FFFFFF',
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => navigation.navigate('CustomerPortal', { user: currentUser, initialTab: 'errands' })}
+            style={styles.addressRow}
+            onPress={() => defaultAddressText
+              ? setPinPickerVisible(true)
+              : navigation.navigate('CustomerLocation', { user: currentUser })}
             accessibilityRole="button"
-            accessibilityLabel="View completed orders"
+            accessibilityLabel={defaultAddressText ? 'View delivery pin on map' : 'Set your delivery address'}
           >
-            <View style={[styles.statsBentoIconBadge, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FFEEF3' }]}>
-              <Package size={17} color={colors.primary} strokeWidth={2.2} />
+            <MapPin size={21} color={colors.textGray} strokeWidth={1.7} />
+            <View style={styles.addressTextCol}>
+              <Text style={[styles.addressLabel, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+                {defaultAddressText ? (defaultLocationLabel || 'Default address') : 'Add a delivery address'}
+              </Text>
+              <Text style={[styles.addressDescription, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                {defaultAddressText || 'Set a saved location for your next delivery.'}
+              </Text>
             </View>
-            <Text
-              style={[styles.statsBentoNumber, { color: colors.textDark }]}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
-            >
-              {completedErrandsCount}
-            </Text>
-            <Text
-              style={[styles.statsBentoLabel, { color: colors.textGray }]}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-            >
-              Completed
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.statsBentoTile,
-              {
-                backgroundColor: isDark ? colors.card : '#FFFFFF',
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => setPinPickerVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Delivery pinpoint"
-          >
-            <View style={[styles.statsBentoIconBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF' }]}>
-              <MapPin size={17} color="#3B82F6" strokeWidth={2.2} />
-            </View>
-            <Text
-              style={[styles.statsBentoNumber, { color: colors.textDark }]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
-            >
-              Tacurong
-            </Text>
-            <Text
-              style={[styles.statsBentoLabel, { color: colors.textGray }]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-            >
-              {defaultLocationLabel || 'Default Pin'}
-            </Text>
+            <ChevronRight size={17} color={colors.textGray} />
           </TouchableOpacity>
         </View>
 
-        {/* 3. DEFAULT DELIVERY PIN SECTION (CLEAN & SHADOW-FREE) */}
-        <View style={styles.pinSection}>
-          <View style={styles.bentoCardHeader}>
-            <View style={styles.bentoTitleGroup}>
-              <View
-                style={[
-                  styles.bentoIconPill,
-                  { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
-                ]}
-              >
-                <MapPin size={14} color={colors.primary} strokeWidth={2.2} />
-              </View>
-              <Text
-                style={[styles.bentoCardTitle, { color: colors.textDark }]}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
-              >
-                Default Delivery Pin
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.bentoActionChip}
-              onPress={() => setPinPickerVisible(true)}
-              hitSlop={PortalTouchTargets.compactHitSlop}
-              accessibilityRole="button"
-              accessibilityLabel="View delivery pin"
-            >
-              <Text
-                style={[styles.bentoActionChipText, { color: colors.primary }]}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-              >
-                View Pin
-              </Text>
-              <ChevronRight size={13} color={colors.primary} strokeWidth={2.2} />
-            </TouchableOpacity>
-          </View>
-
-          {defaultAddressText ? (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => setPinPickerVisible(true)}
-              style={[
-                styles.mapSnapshotContainer,
-                { borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Interactive delivery pin map"
-            >
-              {staticMapUrl ? (
-                <Image
-                  source={{ uri: staticMapUrl }}
-                  style={styles.staticMapImage}
-                  onError={() => setStaticMapError(true)}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.staticMapFallback,
-                    { backgroundColor: isDark ? '#0F172A' : '#F1F5F9' },
-                  ]}
-                >
-                  <View style={styles.radarRingOuter} />
-                  <View style={styles.radarRingInner} />
-                  <View style={[styles.radarPinBadge, { backgroundColor: colors.primary }]}>
-                    <MapPin size={18} color="#FFFFFF" strokeWidth={2.4} />
-                  </View>
-                  <Text
-                    style={[styles.radarLabelText, { color: colors.textDark }]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
-                  >
-                    Tacurong City Pinpoint
-                  </Text>
-                  <Text
-                    style={[styles.radarCoordsText, { color: colors.textLight }]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                  >
-                    {customerPinCoords.latitude.toFixed(4)}° N,{' '}
-                    {customerPinCoords.longitude.toFixed(4)}° E
-                  </Text>
-                </View>
-              )}
-
-              {/* Overlaid Pill Badges */}
-              <View style={styles.mapOverlayHeader}>
-                <View
-                  style={[
-                    styles.mapLocationTag,
-                    { backgroundColor: isDark ? 'rgba(10, 15, 29, 0.85)' : 'rgba(255, 255, 255, 0.92)' },
-                  ]}
-                >
-                  <View style={styles.activeLocationDot} />
-                  <Text
-                    style={[
-                      styles.mapLocationTagText,
-                      { color: isDark ? '#F1F5F9' : '#1E293B' },
-                    ]}
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                  >
-                    {defaultLocationLabel || 'Default Pin'}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.mapTapChip,
-                    { backgroundColor: isDark ? 'rgba(10, 15, 29, 0.85)' : 'rgba(255, 255, 255, 0.92)' },
-                  ]}
-                >
-                  <Text
-                    style={[styles.mapTapChipText, { color: colors.primary }]}
-                    maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
-                  >
-                    Tap to view map
-                  </Text>
-                </View>
-              </View>
-
-              {/* Address Footer inside Map Container */}
-              <View
-                style={[
-                  styles.mapAddressFooter,
-                  {
-                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : '#FFFFFF',
-                    borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.mapAddressMainText, { color: colors.textDark }]}
-                  numberOfLines={2}
-                  maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
-                >
-                  {defaultAddressText}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setPinPickerVisible(true)}
-              style={[
-                styles.emptyAddressBox,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC',
-                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1',
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="View delivery pin on map"
-            >
-              <View
-                style={[
-                  styles.emptyAddressIconBadge,
-                  { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.15)' : '#FFEEF3' },
-                ]}
-              >
-                <MapPin size={20} color={colors.primary} strokeWidth={2} />
-              </View>
-              <Text
-                style={[styles.emptyAddressTitle, { color: colors.textDark }]}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
-              >
-                No Default Delivery Pinpoint Set
-              </Text>
-              <Text
-                style={[styles.emptyAddressDesc, { color: colors.textGray }]}
-                maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
-              >
-                View your default delivery pin location on the Tacurong map.
-              </Text>
-              <View style={[styles.emptyAddressCTA, { backgroundColor: colors.primary }]}>
-                <Text
-                  style={styles.emptyAddressCTAText}
-                  maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
-                >
-                  View Delivery Pin on Map
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* 4. ACTIVITY & PREFERENCES (CLEAN & SHADOW-FREE) */}
+        {/* Account options */}
         <View style={styles.groupSection}>
           <Text
-            style={[styles.groupSectionHeader, { color: colors.textLight }]}
+            style={[styles.sectionTitle, { color: colors.textDark }]}
             maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
           >
-            ACTIVITY & PREFERENCES
+            Your account
           </Text>
-          <View
-            style={[
-              styles.groupedCard,
-              {
-                backgroundColor: isDark ? colors.card : '#FFFFFF',
-                borderColor: colors.border,
-              },
-            ]}
-          >
+          <View>
             {/* Row 1: Errands Completed */}
             <TouchableOpacity
               activeOpacity={0.7}
-              style={[styles.menuRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}
-              onPress={() => navigation.navigate('CustomerPortal', { user: currentUser, initialTab: 'errands' })}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
+              // pop: back to the portal under this screen. A plain navigate()
+              // pushes a second portal in React Navigation 7 (2026-11-06).
+              onPress={() =>
+                navigation.navigate('CustomerPortal', { user: currentUser, initialTab: 'errands' }, { pop: true })
+              }
               accessibilityRole="button"
               accessibilityLabel="View errand receipts"
             >
-              <View
-                style={[
-                  styles.menuIconBadge,
-                  { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FFEEF3' },
-                ]}
-              >
-                <Package size={17} color={colors.primary} strokeWidth={2.2} />
+              <View style={styles.menuIconBadge}>
+                <Package size={17} color={colors.textGray} strokeWidth={1.7} />
               </View>
               <View style={styles.menuTextCol}>
                 <Text
                   style={[styles.menuTitle, { color: colors.textDark }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
                 >
-                  Orders Completed
+                  Order history
                 </Text>
                 <Text
                   style={[styles.menuSubtitle, { color: colors.textGray }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                 >
-                  View past receipts & errand history
+                  Past orders and receipts
                 </Text>
               </View>
               <View style={styles.menuRightCol}>
@@ -842,34 +571,29 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
               </View>
             </TouchableOpacity>
 
-            {/* Row 2: Saved Places */}
+            {/* Row 2: Saved places */}
             <TouchableOpacity
               activeOpacity={0.7}
-              style={[styles.menuRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
               onPress={() => navigation.navigate('CustomerLocation', { user: currentUser })}
               accessibilityRole="button"
               accessibilityLabel="Manage saved locations"
             >
-              <View
-                style={[
-                  styles.menuIconBadge,
-                  { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF' },
-                ]}
-              >
-                <MapPin size={17} color="#3B82F6" strokeWidth={2.2} />
+              <View style={styles.menuIconBadge}>
+                <MapPin size={17} color={colors.textGray} strokeWidth={1.7} />
               </View>
               <View style={styles.menuTextCol}>
                 <Text
                   style={[styles.menuTitle, { color: colors.textDark }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
                 >
-                  Saved Places
+                  Saved places
                 </Text>
                 <Text
                   style={[styles.menuSubtitle, { color: colors.textGray }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                 >
-                  Tacurong address pinpoints
+                  Manage your delivery locations
                 </Text>
               </View>
               <View style={styles.menuRightCol}>
@@ -886,21 +610,16 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
             {/* Row 3: Appearance & Theme Toggle */}
             <TouchableOpacity
               activeOpacity={0.7}
-              style={[styles.menuRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }]}
+              style={[styles.menuRow, { borderBottomColor: colors.border }]}
               onPress={() => setThemeMode(isDark ? 'light' : 'dark')}
               accessibilityRole="button"
               accessibilityLabel="Toggle light and dark mode"
             >
-              <View
-                style={[
-                  styles.menuIconBadge,
-                  { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FEF3C7' },
-                ]}
-              >
+              <View style={styles.menuIconBadge}>
                 {isDark ? (
-                  <Moon size={17} color="#F59E0B" strokeWidth={2.2} />
+                  <Moon size={17} color={colors.textGray} strokeWidth={1.7} />
                 ) : (
-                  <Sun size={17} color="#F59E0B" strokeWidth={2.2} />
+                  <Sun size={17} color={colors.textGray} strokeWidth={1.7} />
                 )}
               </View>
               <View style={styles.menuTextCol}>
@@ -908,7 +627,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                   style={[styles.menuTitle, { color: colors.textDark }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
                 >
-                  App Theme
+                  Appearance
                 </Text>
                 <Text
                   style={[styles.menuSubtitle, { color: colors.textGray }]}
@@ -922,13 +641,13 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                   style={[styles.menuValueText, { color: colors.textDark }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
                 >
-                  {isDark ? 'Dark Mode' : 'Light Mode'}
+                  {isDark ? 'Dark' : 'Light'}
                 </Text>
                 <ChevronRight size={16} color={colors.textLight} />
               </View>
             </TouchableOpacity>
 
-            {/* Row 4: App Feedback & Reviews */}
+            {/* Row 4: Feedback & reviews */}
             <TouchableOpacity
               activeOpacity={0.7}
               style={[styles.menuRow, { borderBottomWidth: 0 }]}
@@ -936,26 +655,21 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
               accessibilityRole="button"
               accessibilityLabel="App feedback and reviews"
             >
-              <View
-                style={[
-                  styles.menuIconBadge,
-                  { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FFEEF3' },
-                ]}
-              >
-                <MessageSquare size={17} color={colors.primary} strokeWidth={2.2} />
+              <View style={styles.menuIconBadge}>
+                <MessageSquare size={17} color={colors.textGray} strokeWidth={1.7} />
               </View>
               <View style={styles.menuTextCol}>
                 <Text
                   style={[styles.menuTitle, { color: colors.textDark }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}
                 >
-                  App Feedback & Reviews
+                  Feedback & reviews
                 </Text>
                 <Text
                   style={[styles.menuSubtitle, { color: colors.textGray }]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                 >
-                  Send bugs, ratings & suggestions directly to developers
+                  Share your experience
                 </Text>
               </View>
               <View style={styles.menuRightCol}>
@@ -1013,7 +727,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.photoModalHeader}>
-              <Text style={[styles.photoModalTitle, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalTitle, { color: colors.textDark }]}>
                 Profile Photo
               </Text>
               <TouchableOpacity
@@ -1024,7 +738,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.photoModalSub, { color: colors.textGray }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoModalSub, { color: colors.textGray }]}>
               {currentUser.avatar
                 ? 'Update or remove your current profile photo.'
                 : 'Select an image from your device gallery to personalize your account.'}
@@ -1041,7 +755,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                 accessibilityLabel="Choose from Gallery"
               >
                 <ImageIcon size={18} color={colors.primary} />
-                <Text style={[styles.photoOptionText, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
                   Choose from Gallery
                 </Text>
               </TouchableOpacity>
@@ -1056,7 +770,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                 accessibilityLabel="Take a Photo"
               >
                 <Camera size={18} color={colors.primary} />
-                <Text style={[styles.photoOptionText, { color: colors.textDark }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.textDark }]}>
                   Take a Photo
                 </Text>
               </TouchableOpacity>
@@ -1072,7 +786,7 @@ export default function AccountScreen({ route, navigation }: RootStackScreenProp
                   accessibilityLabel="Remove Current Photo"
                 >
                   <Trash2 size={18} color={colors.danger} />
-                  <Text style={[styles.photoOptionText, { color: colors.danger }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.photoOptionText, { color: colors.danger }]}>
                     Remove Current Photo
                   </Text>
                 </TouchableOpacity>
@@ -1168,12 +882,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   updateBannerTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xs + 1,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   updateBannerSubtitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginTop: 1,
   },
   updateNewChip: {
@@ -1183,8 +899,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   updateNewChipText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: 9,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     color: '#FFFFFF',
   },
   updateBannerDismissBtn: {
@@ -1222,20 +939,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollContent: {
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xl * 2,
+    paddingBottom: Spacing.xxl,
   },
 
   // 1. Identity Hero Section (Unboxed & Breathable)
   heroSection: {
     alignItems: 'center',
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    marginBottom: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+    marginBottom: Spacing.xs,
   },
   pinSection: {
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.xxl,
   },
 
   // 2. Hero Identity: photo, then name, the two largest things on the screen.
@@ -1314,284 +1034,53 @@ const styles = StyleSheet.create({
   editProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: 12,
-    minHeight: 32,
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    minHeight: 48,
   },
   editProfileText: {
     fontFamily: FontFamily.semibold,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
   },
-  verifiedChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    minHeight: 28,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  verifiedChipText: {
+  sectionTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    color: '#10B981',
-  },
-
-  // Stats Bento Row (Clean & Shadow-Free)
-  statsBentoRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  statsBentoTile: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsBentoIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  statsBentoNumber: {
-    fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-    marginBottom: 1,
-    textAlign: 'center',
-  },
-  statsBentoLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    textAlign: 'center',
-  },
-
-  // 3. Static Map Snapshot Bento
-  bentoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: Spacing.sm,
   },
-  bentoTitleGroup: {
+  addressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
+    minHeight: 72,
+    gap: Spacing.md,
   },
-  bentoIconPill: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bentoCardTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
-    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-  },
-  bentoActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    minHeight: 36,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  bentoActionChipText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
-  },
-  mapSnapshotContainer: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  staticMapImage: {
-    width: '100%',
-    height: 140,
-  },
-  staticMapFallback: {
-    width: '100%',
-    height: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  radarRingOuter: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 1,
-    borderColor: 'rgba(246, 36, 89, 0.15)',
-  },
-  radarRingInner: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(246, 36, 89, 0.25)',
-  },
-  radarPinBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  addressTextCol: { flex: 1, minWidth: 0 },
+  addressLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
     marginBottom: 4,
   },
-  radarLabelText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    marginTop: 2,
-  },
-  radarCoordsText: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-  },
-  mapOverlayHeader: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  mapLocationTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    maxWidth: '65%',
-  },
-  activeLocationDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  mapLocationTagText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-  },
-  mapTapChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  mapTapChipText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-  },
-  mapAddressFooter: {
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: Spacing.sm,
-    borderTopWidth: 1,
-  },
-  mapAddressMainText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'heading'),
-    marginBottom: 2,
-  },
-  mapAddressSubText: {
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
-  },
-
-  // Empty Address Card
-  emptyAddressBox: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: Spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyAddressIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  emptyAddressTitle: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
-    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
-    marginBottom: 3,
-  },
-  emptyAddressDesc: {
+  addressDescription: {
     fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
   },
-  emptyAddressCTA: {
-    minHeight: PortalTouchTargets.buttonHeight,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyAddressCTAText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'label'),
-    color: '#FFFFFF',
-  },
-
-  // Grouped Inset Sections (Apple / Uber Pattern)
-  groupSection: {
-    marginBottom: Spacing.md,
-  },
-  groupSectionHeader: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    letterSpacing: 0.6,
-    marginBottom: 6,
-    marginLeft: 4,
-  },
-  groupedCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
+  groupSection: { marginBottom: Spacing.xl },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    paddingVertical: 12,
-    paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
+    minHeight: 76,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   menuIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1601,7 +1090,7 @@ const styles = StyleSheet.create({
     marginRight: Spacing.xs,
   },
   menuTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
     lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
     marginBottom: 2,
@@ -1624,20 +1113,15 @@ const styles = StyleSheet.create({
 
   // 6. Sign Out Section
   logoutSection: {
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xl,
-    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    alignItems: 'flex-start',
   },
   logoutBtn: {
-    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: PortalTouchTargets.buttonHeight,
+    gap: Spacing.md,
+    minHeight: 48,
     paddingVertical: 12,
-    borderRadius: 10,
-    marginBottom: Spacing.sm,
   },
   logoutBtnText: {
     fontFamily: FontFamily.bold,
@@ -1673,14 +1157,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   photoModalTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.md,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
   },
   photoModalSub: {
     fontFamily: FontFamily.regular,
-    fontSize: 12,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginBottom: Spacing.md,
-    lineHeight: 16,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   photoModalOptions: {
     gap: 8,

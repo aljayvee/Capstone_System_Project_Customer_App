@@ -130,4 +130,20 @@ describe('Responsive Scaling Engine (Samsung A04 360x800 Baseline)', () => {
       expect(MAX_CONTENT_WIDTH).toBe(580);
     });
   });
+
+  describe('720 x 1604 display regression', () => {
+    const { scaledPortalFontSize, PortalFontSizes } = require('../config/portalTypography');
+    const { scaledAuthFontSize, AuthFontSizes } = require('../config/authTypography');
+
+    it.each([1, 1.5, 2, 3])('keeps typography at or below baseline at %ix density', (density) => {
+      // React Native sizes use dp, not physical pixels. Height must not enlarge text.
+      const width = 720 / density;
+      for (const size of Object.values(PortalFontSizes) as number[]) {
+        expect(scaledPortalFontSize(size, width)).toBeLessThanOrEqual(scaledPortalFontSize(size, 360));
+      }
+      for (const size of Object.values(AuthFontSizes) as number[]) {
+        expect(scaledAuthFontSize(size, width)).toBeLessThanOrEqual(scaledAuthFontSize(size, 360));
+      }
+    });
+  });
 });

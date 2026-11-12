@@ -3,9 +3,8 @@ import { LightColors, DarkColors, FontSizes } from '../config/theme';
 /**
  * The palette's accessibility guarantees, as tests.
  *
- * The mirror of the Rider App's tests/palette.test.ts, deliberately: the two
- * apps share a token vocabulary, and a guarantee enforced in one and not the
- * other is how they drift apart again.
+ * Customer keeps its own pink identity in both themes. Status and neutral
+ * text contrast checks remain independent of the Rider palette.
  *
  * These caught twelve real failures when first written — five in the light
  * palette and seven in the dark, including textLight at 2.13:1 on bgGray. The
@@ -34,16 +33,20 @@ function contrast(fg: string, bg: string): number {
 const AA_BODY = 4.5;
 
 const PAIRINGS: Array<[keyof typeof LightColors, keyof typeof LightColors]> = [
+  ['onDanger', 'danger'],
   ['success', 'successBg'],
   ['warning', 'warningBg'],
   ['danger', 'dangerBg'],
   ['info', 'infoBg'],
 ];
 
-const TEXT_TOKENS = ['textDark', 'textMedium', 'textGray', 'textLight'] as const;
+const TEXT_TOKENS = ['textDark', 'textMedium', 'textGray', 'textLight', 'detailBlue'] as const;
 const SURFACES = ['bgWhite', 'bgGray', 'bgApp', 'card'] as const;
 
 describe('the light palette', () => {
+  it('preserves the Customer pink brand colors', () => {
+    expect(LightColors).toMatchObject({ primary: '#F62459', primaryDark: '#C41B47', primaryLight: '#FFEEF3' });
+  });
   it.each(PAIRINGS)('puts %s on %s at 4.5:1 or better', (ink, surface) => {
     expect(contrast(LightColors[ink], LightColors[surface])).toBeGreaterThanOrEqual(AA_BODY);
   });
@@ -56,6 +59,9 @@ describe('the light palette', () => {
 });
 
 describe('the dark palette', () => {
+  it('preserves the Customer dark pink brand colors', () => {
+    expect(DarkColors).toMatchObject({ primary: '#FF4D79', primaryDark: '#F62459', primaryLight: '#3D1420' });
+  });
   it('defines every token the light palette does', () => {
     // A missing key renders as `undefined`, which React Native treats as "no
     // colour" — invisible text rather than a crash.

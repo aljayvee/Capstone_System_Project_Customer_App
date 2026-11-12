@@ -6,6 +6,8 @@ import { useCachedResource } from '../services/swrCache';
 
 export interface ErrandSummary {
   id: string;
+  /** YYMMDD-KKKKK-NNNN, for display (utils/formatErrandId). */
+  referenceNo?: string | null;
   category: string;
   categories?: string[] | string;
   description?: string;

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LocateFixed, Navigation, ChevronRight } from 'lucide-react-native';
@@ -37,6 +38,7 @@ function statusTextFor(pin: MapCoordinate | null, resolving: boolean, resolvedAd
 }
 
 export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurrentLocation, onNext }: WizardStepPinProps) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const { colors, isDark } = useThemeColor();
   const [mapPickerVisible, setMapPickerVisible] = useState(false);
   const { resolving, resolvedAddress } = useReverseGeocodedAddress(pin);
@@ -48,7 +50,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
 
   return (
     <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
         <Text
           style={[styles.title, { color: colors.textDark }]}
           maxFontSizeMultiplier={PortalFontSizeMultipliers.title}
@@ -70,12 +72,12 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
           hitSlop={PortalTouchTargets.compactHitSlop}
         >
           {gpsLoading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
             <>
-              <LocateFixed size={18} color="#FFFFFF" strokeWidth={2.2} />
+              <LocateFixed size={18} color={colors.onPrimary} strokeWidth={2.2} />
               <Text
-                style={styles.gpsBtnText}
+                style={[styles.gpsBtnText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
               >
                 Use Current Location
@@ -119,7 +121,7 @@ export default function WizardStepPin({ pin, onSelectPin, gpsLoading, onUseCurre
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
+      <View style={[styles.footer, { borderTopColor: colors.border }, pageLayout.gutterStyle]}>
         <TouchableOpacity
           style={[
             styles.nextBtn,

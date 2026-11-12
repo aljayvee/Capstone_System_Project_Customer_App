@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { apiClient } from '../services/apiClient';
 import {
   clearNearbyEstablishmentCache,
@@ -172,12 +172,20 @@ describe('MerchantCategoryStoresScreen', () => {
       'category-nearby-store-catalogue:c3',
     ]);
 
-    // 2026-10-14: the sideways rows use Home's fixed card width, not 58% of
-    // the column, so a row shows two and a bit cards with room around them.
+    // The sideways rows retain Home's approved compact photos and title overlays.
     const { StyleSheet } = require('react-native');
     const widthOf = (id: string) => StyleSheet.flatten(res.getByTestId(id).props.style).width;
-    expect(widthOf('category-popular-store-google:pop1')).toBe(150);
-    expect(widthOf('category-nearby-store-catalogue:c2')).toBe(150);
+    expect(widthOf('category-popular-store-google:pop1')).toBe(160);
+    expect(widthOf('category-nearby-store-catalogue:c2')).toBe(160);
+    for (const [prefix, key, name, height] of [
+      ['category-popular-store', 'google:pop1', 'Popular Pharmacy 1', 120],
+      ['category-nearby-store', 'catalogue:c2', 'Closest Pharmacy', 120],
+      ['category-all-store', 'catalogue:c3', 'Mid Pharmacy', 180],
+    ] as const) {
+      expect(within(res.getByTestId(`${prefix}-title-overlay-${key}`)).getByText(name)).toBeTruthy();
+      expect(StyleSheet.flatten(res.getByTestId(`${prefix}-icon-${key}`).props.style).minHeight).toBe(height);
+    }
+    expect(res.queryByText('Street 1, Tacurong')).toBeNull();
 
     // Merchant category description is smaller than the category title
     const descEl = res.getByTestId('merchant-category-stores-description');
@@ -376,8 +384,9 @@ describe('MerchantCategoryStoresScreen', () => {
   });
 
   it('handles error recovery and empty states gracefully', async () => {
-    (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network down'));
-    (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network down'));
+    // Keep every request offline until Retry, without falling back to the
+    // previous test's successful API implementation after two calls.
+    (apiClient.get as jest.Mock).mockRejectedValue(new Error('Network down'));
 
     const res: any = await draw();
     expect(await res.findByTestId('category-popular-error')).toBeTruthy();

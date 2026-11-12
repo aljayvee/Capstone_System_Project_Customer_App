@@ -86,6 +86,11 @@ export default function PabiliItemRow({ row, testID, onPress, onIncrement, onDec
             {`Note: ${row.notes}`}
           </Text>
         ) : null}
+        {row.review && row.review.tidy !== 'applied' ? (
+          <Text style={[styles.hint, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+            Check item, quantity, unit and note
+          </Text>
+        ) : null}
       </TouchableOpacity>
 
       {onRemove ? (

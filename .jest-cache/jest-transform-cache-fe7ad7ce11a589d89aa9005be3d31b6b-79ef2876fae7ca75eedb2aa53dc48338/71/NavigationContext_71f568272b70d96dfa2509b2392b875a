@@ -1,0 +1,11 @@
+c9c46640df7307ab53bf1f4e5b4233ba
+"use strict";
+
+var _interopRequireWildcard = require("@babel/runtime/helpers/interopRequireWildcard").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.NavigationContext = void 0;
+var React = _interopRequireWildcard(require("react"));
+var NavigationContext = exports.NavigationContext = React.createContext(undefined);
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJSZWFjdCIsIl9pbnRlcm9wUmVxdWlyZVdpbGRjYXJkIiwicmVxdWlyZSIsIk5hdmlnYXRpb25Db250ZXh0IiwiZXhwb3J0cyIsImNyZWF0ZUNvbnRleHQiLCJ1bmRlZmluZWQiXSwic291cmNlcyI6WyIuLi8uLi9zcmMvTmF2aWdhdGlvbkNvbnRleHQudHN4Il0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7O0FBQ0EsSUFBQUEsS0FBQSxHQUFBQyx1QkFBQSxDQUFBQyxPQUFBO0FBTU8sSUFBTUMsaUJBQWlCLEdBQUFDLE9BQUEsQ0FBQUQsaUJBQUEsR0FBR0gsS0FBSyxDQUFDSyxhQUFhLENBRWxEQyxTQUFTLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

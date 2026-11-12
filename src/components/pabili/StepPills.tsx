@@ -18,6 +18,7 @@ import {
  */
 export default function StepPills({ step, storeCount }: { step: 1 | 2 | 3; storeCount: number }) {
   const { colors, isDark } = useThemeColor();
+  const activeColor = isDark ? colors.primary : colors.primaryStrong;
 
   const done = (label: string, key: string) => (
     <View
@@ -38,11 +39,11 @@ export default function StepPills({ step, storeCount }: { step: 1 | 2 | 3; store
   );
 
   const active = (n: number, label: string) => (
-    <View style={[styles.pillActive, { backgroundColor: colors.primary }]}>
-      <View style={styles.numCircle}>
-        <Text style={styles.numActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{n}</Text>
+    <View style={[styles.pillActive, { backgroundColor: activeColor }]}>
+      <View style={[styles.numCircle, { backgroundColor: colors.onPrimary }]}>
+        <Text style={[styles.numActive, { color: activeColor }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{n}</Text>
       </View>
-      <Text style={styles.textActive} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{label}</Text>
+      <Text style={[styles.textActive, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>{label}</Text>
     </View>
   );
 
@@ -91,12 +92,11 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  numActive: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.micro), color: '#F62459' },
-  textActive: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption), color: '#FFFFFF' },
+  numActive: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+  textActive: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
   pillTodo: {
     flexDirection: 'row',
     alignItems: 'center',

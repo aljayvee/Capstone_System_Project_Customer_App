@@ -1,4 +1,4 @@
-import { push, ref } from 'firebase/database';
+import { push, ref, runTransaction } from 'firebase/database';
 import { database } from '../firebase/config';
 import { formatItemLabel } from '../utils/format';
 
@@ -56,14 +56,20 @@ async function postSystemMessage(
     Record<string, unknown>
 ): Promise<void> {
   try {
-    await push(ref(database, `chats/${errandId}/messages`), {
+    const payload = {
       senderId: 'system',
       senderName: 'Sugo',
       role: 'system',
       type: 'system',
       timestamp: Date.now(),
       ...message,
-    });
+    };
+    if (message.systemKind === 'order_submitted') {
+      await runTransaction(ref(database, `chats/${errandId}/messages/order_submitted`),
+        (current) => current === null ? payload : undefined, { applyLocally: false });
+    } else {
+      await push(ref(database, `chats/${errandId}/messages`), payload);
+    }
   } catch (err) {
     // Never surfaced to the customer and never rethrown. These messages narrate
     // an action that has already succeeded on the server; failing the action

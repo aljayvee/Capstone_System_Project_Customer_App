@@ -1,6 +1,25 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
+// Exercise the native swipe lifecycle at its JS boundary. Gesture distance
+// recognition and frame animation belong to the installed native component.
+jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: React.forwardRef((props: any, ref: any) => {
+      React.useImperativeHandle(ref, () => ({ reset: jest.fn(), close: jest.fn(), openRight: jest.fn(), openLeft: jest.fn() }));
+      return React.createElement(View, {
+        testID: props.testID,
+        onSwipeableWillOpen: props.onSwipeableWillOpen,
+        onSwipeableWillClose: props.onSwipeableWillClose,
+        onSwipeableOpen: props.onSwipeableOpen,
+      }, props.renderLeftActions?.(), props.renderRightActions?.(), props.children);
+    }),
+  };
+});
+
 const mockStorage = new Map<string, string>();
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn((key: string) => Promise.resolve(mockStorage.get(key) ?? null)),
@@ -29,7 +48,11 @@ jest.mock('../hooks/useDefaultDeliveryLocation', () => ({
 }));
 
 const mockSubmit = jest.fn();
-jest.mock('../services/pabiliSubmit', () => ({ submitPabili: (...args: unknown[]) => mockSubmit(...args) }));
+jest.mock('../services/pabiliSubmit', () => ({
+  ...jest.requireActual('../services/pabiliSubmit'),
+  submitPabili: (...args: unknown[]) => mockSubmit(...args),
+  publishSubmittedPabili: jest.fn(),
+}));
 
 const mockAlert = jest.fn();
 jest.mock('../services/alertModal', () => ({ showAppAlert: (...args: unknown[]) => mockAlert(...args) }));
@@ -37,6 +60,8 @@ jest.mock('../services/alertModal', () => ({ showAppAlert: (...args: unknown[]) 
 import PabiliHubScreen from '../screens/pabili/PabiliHubScreen';
 import PabiliStoreEditorScreen from '../screens/pabili/PabiliStoreEditorScreen';
 import PabiliReviewScreen from '../screens/pabili/PabiliReviewScreen';
+import { pabiliSubmissionStore } from '../services/pabiliSubmission';
+import { apiClient } from '../services/apiClient';
 import {
   addChip,
   addTypedLines,
@@ -45,6 +70,7 @@ import {
   pabiliDraftStore,
   withStores,
   writeStoredDraft,
+  readStoredDraft,
   type PabiliDraft,
   type PickedStore,
 } from '../services/pabiliDraft';
@@ -60,7 +86,7 @@ const GROCERY = 'Supermarket & Grocery';
 const PHARMACY = 'Pharmacy & Health';
 const BAKERY = 'Bakery & Snacks';
 const user = { id: 'u1', username: 'ana', firstName: 'Ana', lastName: 'Cruz' };
-const navigation: any = { navigate: jest.fn(), goBack: jest.fn(), reset: jest.fn() };
+const navigation: any = { navigate: jest.fn(), goBack: jest.fn(), reset: jest.fn(), popTo: jest.fn() };
 
 const quoteReply = { data: { fees: { subtotal: 65 } } };
 const nothingToTidy = () => Promise.resolve({ data: { available: true, results: [] } });
@@ -86,9 +112,25 @@ async function begin(draft: PabiliDraft) {
 }
 
 beforeEach(async () => {
+  pabiliSubmissionStore.deactivate();
+  await readStoredDraft('u1');
   jest.clearAllMocks();
+  (apiClient.get as jest.Mock).mockImplementation((url: string) => Promise.resolve({ data: {
+    submissionId: decodeURIComponent(url.split('/').pop()!), status: 'NOT_FOUND', errand: null,
+  } }));
   mockStorage.clear();
   await pabiliDraftStore.clear();
+});
+
+it('offers restoration retry instead of replacing an unreadable saved shopping list', async () => {
+  jest.requireMock('@react-native-async-storage/async-storage').getItem.mockRejectedValueOnce(new Error('Storage unavailable'));
+  const screen: any = await render(<PabiliHubScreen navigation={navigation} route={{
+    key: 'h', name: 'ErrandItems', params: { user, selectedCats: [GROCERY] },
+  } as any} />);
+  expect(await screen.findByTestId('retry-draft-restoration')).toBeTruthy();
+  expect(pabiliDraftStore.getSnapshot()).toBeNull();
+  await fireEvent.press(screen.getByTestId('retry-draft-restoration'));
+  await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY]));
 });
 
 describe('a store editor', () => {
@@ -120,12 +162,15 @@ describe('a store editor', () => {
     expect(screen.getByText('Add')).toBeTruthy();
   });
 
-  it('sets the quantity in one tap from the quick pills', async () => {
+  it('uses only the quantity picker and keeps its minimum at one', async () => {
     await begin(emptyDraft([GROCERY]));
     postRoutes(nothingToTidy);
     const screen: any = await render(<PabiliStoreEditorScreen navigation={navigation} route={editorRoute} />);
-    await fireEvent.press(screen.getByTestId('quick-qty-5'));
-    expect(screen.getByTestId('quick-qty-5').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryAllByTestId(/^quick-qty-/)).toHaveLength(0);
+    await fireEvent.press(screen.getByTestId('compose-minus'));
+    expect(pabiliDraftStore.getSnapshot()?.composeByCategory[GROCERY]?.quantity).toBe(1);
+    for (let i = 0; i < 5; i++) await fireEvent.press(screen.getByTestId('compose-plus'));
+    await fireEvent.press(screen.getByTestId('compose-minus'));
     await addTyped(screen, 'Eggs');
     expect(allRows(pabiliDraftStore.getSnapshot()!)[0].row).toMatchObject({ name: 'Eggs', quantity: 5 });
   });
@@ -240,6 +285,63 @@ describe('the store hub', () => {
       size: '500 mg',
     });
 
+  it('opens Home from Add stores and the back arrow with the current list retained', async () => {
+    await begin(savedTwoStores());
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY])} />);
+    await fireEvent.press(await screen.findByTestId('add-stores-fab'));
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+    navigation.popTo.mockClear();
+    await fireEvent.press(screen.getByTestId('back-button'));
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+    expect(allRows(pabiliDraftStore.getSnapshot()!)).toHaveLength(2);
+  });
+
+  it('allows browsing Home even when three stores are already on the list', async () => {
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY, BAKERY])} />);
+    const fab = await screen.findByTestId('add-stores-fab');
+    await fireEvent.press(fab);
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+    expect(pabiliDraftStore.getSnapshot()?.categories).toHaveLength(3);
+  });
+
+  it('allows returning Home while a saved list is still loading', async () => {
+    let finish!: (value: string | null) => void;
+    jest.requireMock('@react-native-async-storage/async-storage').getItem.mockReturnValueOnce(
+      new Promise<string | null>((resolve) => { finish = resolve; })
+    );
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY])} />);
+    expect(screen.getByTestId('hub-loading')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('back-button'));
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+    await screen.unmount();
+    await act(async () => { finish(null); });
+    expect(pabiliDraftStore.getSnapshot()).toBeNull();
+  });
+
+  it('uses Android back to browse Home only while Stage 2 is focused', async () => {
+    const { BackHandler, Platform } = require('react-native');
+    const previousOS = Platform.OS;
+    Platform.OS = 'android';
+    const spy = jest.spyOn(BackHandler, 'addEventListener');
+    const focusedNavigation = { ...navigation, isFocused: jest.fn(() => true) };
+    let screen: any;
+    try {
+      screen = await render(<PabiliHubScreen navigation={focusedNavigation} route={hubRoute([GROCERY])} />);
+      await screen.findByTestId('add-stores-fab');
+      const handler = spy.mock.calls.filter((args: any[]) => args[0] === 'hardwareBackPress').at(-1)![1] as () => boolean;
+      expect(handler()).toBe(true);
+      expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+      navigation.popTo.mockClear();
+      focusedNavigation.isFocused.mockReturnValue(false);
+      expect(handler()).toBe(false);
+      expect(navigation.popTo).not.toHaveBeenCalled();
+    } finally {
+      if (screen) await screen.unmount();
+      spy.mockRestore();
+      Platform.OS = previousOS;
+    }
+  });
+
   it('names the store that is still empty instead of opening Review', async () => {
     await begin(addChip(emptyDraft([GROCERY, PHARMACY]), GROCERY, { name: 'Rice', size: '5 kg' }));
     const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY])} />);
@@ -261,26 +363,108 @@ describe('the store hub', () => {
     expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, PHARMACY]);
   });
 
-  it('asks before dropping a store that still has items, and keeps it on request', async () => {
+  it('automatically keeps existing stores when browsing adds another, without a discard modal', async () => {
     await writeStoredDraft('u1', savedTwoStores());
     const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, BAKERY])} />);
 
-    expect(await screen.findByText('Remove your Pharmacy & Health items?')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('confirm-modal-cancel'));
-
-    await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, BAKERY, PHARMACY]));
+    await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, PHARMACY, BAKERY]));
+    expect(screen.queryByText(/Remove your/)).toBeNull();
+    expect(screen.queryByTestId('drop-stores-modal')).toBeNull();
     expect(pabiliDraftStore.getSnapshot()?.rowsByCategory[PHARMACY].map((r) => r.name)).toEqual(['Paracetamol']);
   });
 
-  it('removes only that store when the customer agrees', async () => {
+  it('removes a store explicitly and can undo without losing its items', async () => {
     await writeStoredDraft('u1', savedTwoStores());
     const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, BAKERY])} />);
 
-    expect(await screen.findByText('Remove your Pharmacy & Health items?')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('confirm-modal-submit'));
-
+    const swipe = await screen.findByTestId(`swipe-store-${PHARMACY}`);
+    expect(screen.queryByTestId(`remove-store-${PHARMACY}`)).toBeNull();
+    await fireEvent(swipe, 'swipeableWillOpen', 'left');
+    await fireEvent(swipe, 'swipeableOpen', 'left');
+    expect(pabiliDraftStore.getSnapshot()?.categories).toContain(PHARMACY);
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId(`remove-store-${PHARMACY}`));
     await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, BAKERY]));
     expect(pabiliDraftStore.getSnapshot()?.rowsByCategory[GROCERY].map((r) => r.name)).toEqual(['Rice']);
+    await fireEvent.press(screen.getByTestId('undo-remove-store'));
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, BAKERY, PHARMACY]);
+    expect(pabiliDraftStore.getSnapshot()?.rowsByCategory[PHARMACY][0].name).toBe('Paracetamol');
+  });
+
+  it('can remove the last store and browse again from an empty list', async () => {
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY])} />);
+    await fireEvent(await screen.findByTestId(`swipe-store-${GROCERY}`), 'swipeableWillOpen', 'left');
+    await fireEvent.press(screen.getByTestId(`remove-store-${GROCERY}`));
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([]);
+    expect(screen.getByTestId('review-list-button-label').props.children).toBe('Add stores');
+    await fireEvent.press(screen.getByTestId('review-list-button'));
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+  });
+
+  it('opens the same store editor with a right swipe and keeps its saved items', async () => {
+    await writeStoredDraft('u1', savedTwoStores());
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY])} />);
+    const swipe = await screen.findByTestId(`swipe-store-${PHARMACY}`);
+    await fireEvent(swipe, 'swipeableWillOpen', 'right');
+    await fireEvent(swipe, 'swipeableOpen', 'right');
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
+    expect(navigation.navigate).toHaveBeenCalledWith('PabiliStoreEditor', { user, category: PHARMACY });
+    expect(screen.queryByTestId(`remove-store-${PHARMACY}`)).toBeNull();
+    expect(pabiliDraftStore.getSnapshot()?.rowsByCategory[PHARMACY][0].name).toBe('Paracetamol');
+  });
+
+  it('closes a revealed Remove action without deleting or opening the store', async () => {
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY])} />);
+    const swipe = await screen.findByTestId(`swipe-store-${GROCERY}`);
+    await fireEvent(swipe, 'swipeableWillOpen', 'left');
+    expect(screen.getByTestId(`remove-store-${GROCERY}`)).toBeTruthy();
+    await fireEvent(swipe, 'swipeableWillClose', 'right');
+    expect(screen.queryByTestId(`remove-store-${GROCERY}`)).toBeNull();
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY]);
+    expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('lets screen-reader users remove a store and undo it without swiping', async () => {
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY])} />);
+    const card = await screen.findByTestId(`store-card-${GROCERY}`);
+    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'remove' } });
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([]);
+    await fireEvent.press(screen.getByTestId('undo-remove-store'));
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY]);
+  });
+
+  it('shows a right-edge remove indicator that reveals and toggles the Remove button when tapped', async () => {
+    await writeStoredDraft('u1', savedTwoStores());
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY])} />);
+
+    const indicator = await screen.findByTestId(`remove-indicator-${PHARMACY}`);
+    expect(screen.getByTestId(`remove-indicator-${GROCERY}`)).toBeTruthy();
+    expect(screen.queryByTestId(`remove-store-${PHARMACY}`)).toBeNull();
+
+    // First tap reveals the Remove drawer without opening the store editor
+    await fireEvent.press(indicator);
+    expect(screen.getByTestId(`remove-store-${PHARMACY}`)).toBeTruthy();
+    expect(navigation.navigate).not.toHaveBeenCalled();
+
+    // Second tap closes the Remove drawer
+    await fireEvent.press(indicator);
+    expect(screen.queryByTestId(`remove-store-${PHARMACY}`)).toBeNull();
+
+    // Re-open via indicator and remove store, then undo
+    await fireEvent.press(indicator);
+    await fireEvent.press(screen.getByTestId(`remove-store-${PHARMACY}`));
+    await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY]));
+    await fireEvent.press(screen.getByTestId('undo-remove-store'));
+    expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([GROCERY, PHARMACY]);
+  });
+
+  it('clears every store explicitly and returns Home', async () => {
+    await begin(savedTwoStores());
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([GROCERY, PHARMACY])} />);
+    await fireEvent.press(await screen.findByTestId('clear-list'));
+    await fireEvent.press(screen.getByTestId('confirm-modal-submit'));
+    await waitFor(() => expect(pabiliDraftStore.getSnapshot()).toBeNull());
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
   });
 });
 
@@ -300,6 +484,20 @@ describe('stores picked in the Location list', () => {
   const hubRoute = (stores: PickedStore[]) =>
     ({ key: 'h', name: 'ErrandItems', params: { user, selectedCats: stores.map((s) => s.key), stores } }) as any;
   const editorRoute = (category: string) => ({ key: 'e', name: 'PabiliStoreEditor', params: { user, category } }) as any;
+
+  it('adds pinned stores from the FAB and preserves existing rows when Stage 2 receives the picks', async () => {
+    await begin(addChip(withStores(emptyDraft([]), [MERCURY]), MERCURY.key, { name: 'Biogesic' }));
+    const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([MERCURY])} />);
+    await fireEvent.press(await screen.findByTestId('add-stores-fab'));
+    expect(navigation.popTo).toHaveBeenCalledWith('CustomerPortal', { user, initialTab: 'home' });
+    await screen.rerender(<PabiliHubScreen navigation={navigation} route={hubRoute([NENA])} />);
+    await waitFor(() => expect(pabiliDraftStore.getSnapshot()?.categories).toEqual([MERCURY.key, NENA.key]));
+    const draft = pabiliDraftStore.getSnapshot()!;
+    expect(draft.rowsByCategory[MERCURY.key][0].name).toBe('Biogesic');
+    expect(draft.rowsByCategory[NENA.key]).toEqual([]);
+    expect(draft.stores?.[MERCURY.key]).toEqual(MERCURY);
+    expect(draft.stores?.[NENA.key]).toEqual(NENA);
+  });
 
   it('lists each picked store with the kind of shop it is', async () => {
     const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([MERCURY, NENA])} />);
@@ -324,11 +522,12 @@ describe('stores picked in the Location list', () => {
     expect(StyleSheet.flatten(screen.getByTestId('review-list-button').props.style).paddingHorizontal).toBeGreaterThan(0);
   });
 
-  it('does not offer to keep a merchant category alongside picked stores', async () => {
+  it('preserves an incompatible store-type list with inline guidance, without a discard dialog', async () => {
     await writeStoredDraft('u1', addChip(emptyDraft([GROCERY]), GROCERY, { name: 'Rice', size: '5 kg' }));
     const screen: any = await render(<PabiliHubScreen navigation={navigation} route={hubRoute([MERCURY])} />);
-    expect(await screen.findByText(`Remove your ${GROCERY} items?`)).toBeTruthy();
-    expect(screen.getByText('Change my stores')).toBeTruthy();
+    expect(await screen.findByTestId('store-selection-notice')).toBeTruthy();
+    expect(screen.queryByText(/Remove your/)).toBeNull();
+    expect(pabiliDraftStore.getSnapshot()?.rowsByCategory[GROCERY][0].name).toBe('Rice');
   });
 
   it('moves an item to the picked store that sells it', async () => {
@@ -355,6 +554,54 @@ describe('stores picked in the Location list', () => {
 });
 
 describe('Review', () => {
+  it('blocks repeat taps and back navigation, then offers safe retry or order history after 30 seconds', async () => {
+    jest.useFakeTimers();
+    try {
+      await begin(addTypedLines(emptyDraft([GROCERY]), GROCERY, 'Rice', 2));
+      postRoutes(nothingToTidy);
+      mockSubmit.mockImplementationOnce(() => new Promise(() => {}));
+      const screen: any = await render(<PabiliReviewScreen navigation={navigation} route={{ key: 'r', name: 'PabiliReview', params: { user } } as any} />);
+      await act(async () => {
+        await fireEvent.press(screen.getByTestId('submit-errand-items-button'));
+        await fireEvent.press(screen.getByTestId('submit-errand-items-button'));
+      });
+      expect(screen.getByText('Sending your order…')).toBeTruthy();
+      expect(mockSubmit).toHaveBeenCalledTimes(1);
+      await fireEvent.press(screen.getByTestId('review-back'));
+      expect(navigation.goBack).not.toHaveBeenCalled();
+      expect(jest.requireMock('@react-navigation/native').usePreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
+      await act(async () => { await jest.advanceTimersByTimeAsync(8000); });
+      expect(screen.getByText('This is taking longer than usual.')).toBeTruthy();
+      await act(async () => { await jest.advanceTimersByTimeAsync(22000); });
+      expect(screen.getByTestId('order-unconfirmed-modal')).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('view-orders-after-timeout'));
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [
+        { name: 'CustomerPortal', params: { user, initialTab: 'errands' } },
+      ] });
+      expect(pabiliDraftStore.getSnapshot()?.submission).toBeTruthy();
+    } finally { await act(async () => pabiliSubmissionStore.deactivate()); jest.useRealTimers(); }
+  });
+
+  it('dismisses the timeout dialog when the original request confirms late and opens that order', async () => {
+    jest.useFakeTimers();
+    try {
+      await begin(addTypedLines(emptyDraft([GROCERY]), GROCERY, 'Rice', 2));
+      postRoutes(nothingToTidy);
+      let confirm!: (id: string) => void;
+      mockSubmit.mockImplementationOnce(() => new Promise((resolve) => { confirm = resolve; }));
+      const screen: any = await render(<PabiliReviewScreen navigation={navigation} route={{ key: 'r', name: 'PabiliReview', params: { user } } as any} />);
+      await fireEvent.press(screen.getByTestId('submit-errand-items-button'));
+      await act(async () => { await jest.advanceTimersByTimeAsync(30000); });
+      expect(screen.getByTestId('order-unconfirmed-modal')).toBeTruthy();
+      await act(async () => { confirm('E-late'); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(screen.queryByTestId('order-unconfirmed-modal')).toBeNull();
+      expect(navigation.reset).toHaveBeenCalledWith(expect.objectContaining({ routes: expect.arrayContaining([
+        { name: 'ErrandDetails', params: { user, errandId: 'E-late' } },
+      ]) }));
+    } finally { await act(async () => pabiliSubmissionStore.deactivate()); jest.useRealTimers(); }
+  });
   const flaggedDraft = () => addTypedLines(emptyDraft([GROCERY]), GROCERY, 'chicken 2, rice 5kg', 1);
   const route = { key: 'r', name: 'PabiliReview', params: { user } } as any;
 
@@ -436,11 +683,42 @@ describe('Review', () => {
     await waitFor(() =>
       expect(navigation.reset).toHaveBeenCalledWith(
         expect.objectContaining({
-          routes: expect.arrayContaining([expect.objectContaining({ name: 'WaitingForDispatcher', params: { user, errandId: 'E-9' } })]),
+          routes: expect.arrayContaining([expect.objectContaining({ name: 'ErrandDetails', params: { user, errandId: 'E-9' } })]),
         })
       )
     );
     expect(pabiliDraftStore.getSnapshot()).toBeNull();
+  });
+
+  it('leaves an uncertain sentence intact and offers a way to check it', async () => {
+    const draft = addTypedLines(emptyDraft([GROCERY]), GROCERY, 'I need some rice for dinner', 1);
+    const id = allRows(draft)[0].row.id;
+    await begin(draft);
+    postRoutes(() => Promise.resolve({ data: { available: true, results: [
+      { id, confident: false, items: [{ name: 'rice', quantity: 2, size: null }] },
+    ] } }));
+    const screen: any = await render(<PabiliReviewScreen navigation={navigation} route={route} />);
+    expect(await screen.findByText('I need some rice for dinner')).toBeTruthy();
+    expect(screen.getByText('Check item, quantity, unit and note')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId(`review-row-${id}`));
+    expect(navigation.navigate).toHaveBeenCalledWith('PabiliStoreEditor', { user, category: GROCERY });
+    expect(allRows(pabiliDraftStore.getSnapshot()!)[0].row.quantity).toBe(1);
+  });
+
+  it('preserves a long sentence in the request and prevents sending an overlong unresolved item', async () => {
+    const sentence = 'Please buy rice, ' + 'keep it dry '.repeat(12);
+    const draft = addTypedLines(emptyDraft([GROCERY]), GROCERY, sentence, 1);
+    const id = allRows(draft)[0].row.id;
+    await begin(draft);
+    postRoutes(nothingToTidy);
+    const screen: any = await render(<PabiliReviewScreen navigation={navigation} route={route} />);
+    await waitFor(() => expect(screen.queryByTestId(`tidying-${id}`)).toBeNull());
+    expect(mockPost).toHaveBeenCalledWith('/errands/normalize-items',
+      { lines: [{ id, text: sentence.trim() }] }, expect.anything());
+    await fireEvent.press(screen.getByTestId('submit-errand-items-button'));
+    expect(mockSubmit).not.toHaveBeenCalled();
+    expect(mockAlert).toHaveBeenCalledWith('Check this item', expect.stringContaining('120 characters'));
+    expect(navigation.navigate).toHaveBeenCalledWith('PabiliStoreEditor', { user, category: GROCERY });
   });
 
   it('keeps the list when the send fails, and says so', async () => {
@@ -453,10 +731,10 @@ describe('Review', () => {
       await fireEvent.press(screen.getByTestId('submit-errand-items-button'));
     });
 
-    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith('Errand not sent', expect.any(String)));
+    await waitFor(() => expect(screen.getByTestId('order-unconfirmed-modal')).toBeTruthy());
     const kept = pabiliDraftStore.getSnapshot();
     expect(kept && allRows(kept).map(({ row }) => row.name)).toEqual(['Rice']);
-    expect(kept?.submitStartedAt).toBeNull();
+    expect(kept?.submission?.id).toBeTruthy();
     expect(navigation.reset).not.toHaveBeenCalled();
   });
 

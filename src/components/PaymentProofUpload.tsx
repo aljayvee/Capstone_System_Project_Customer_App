@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Camera, ImageIcon, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, FontSizes, Spacing, BorderRadius, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius, moderateScale } from '../config/theme';
 import { formatPeso } from '../utils/format';
 import { safePickImage } from '../utils/safeImagePicker';
 import { apiClient } from '../services/apiClient';
@@ -194,8 +194,8 @@ export default function PaymentProofUpload({
             accessibilityLabel="Take a photo of your payment receipt"
             testID="proof-camera"
           >
-            <Camera size={15} color="#FFFFFF" />
-            <Text style={styles.btnText} maxFontSizeMultiplier={1.2}>Take photo</Text>
+            <Camera size={15} color={colors.onPrimary} />
+            <Text style={[styles.btnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.2}>Take photo</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -245,11 +245,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  heading: { fontFamily: FontFamily.bold, fontSize: scaledFontSize(FontSizes.sm, 0.2) },
+  heading: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) },
   note: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(15, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   preview: { width: '100%', height: moderateScale(150, 0.2), borderRadius: BorderRadius.sm },
   actions: { flexDirection: 'row', gap: Spacing.sm },
@@ -265,25 +265,27 @@ const styles = StyleSheet.create({
   },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1 },
   btnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     color: '#FFFFFF',
   },
   uploading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
   rows: { gap: 2 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.sm },
-  rowLabel: { fontFamily: FontFamily.regular, fontSize: scaledFontSize(FontSizes.xs, 0.2) },
-  rowValue: { fontFamily: FontFamily.mono, fontSize: scaledFontSize(FontSizes.xs, 0.2), flexShrink: 1 },
+  rowLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
+  rowValue: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.medium, fontSize: scaledPortalFontSize(PortalFontSizes.body), flexShrink: 1 },
   errorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs },
   errorText: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
-    lineHeight: moderateScale(15, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   replace: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     paddingTop: Spacing.xs,
   },
 });

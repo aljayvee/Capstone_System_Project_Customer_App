@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { usePageLayout } from '../hooks/usePageLayout';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MapPin, X, Navigation, CheckCircle2, LocateFixed } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontSizes, FontWeights, Spacing, BorderRadius, FontFamily, Shadows } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, Spacing, BorderRadius, FontFamily, Shadows } from '../config/theme';
 import { MapCoordinate, sanitizeCoordinate, toRegion } from '../utils/coords';
 
 export interface MapMarkerSpec {
@@ -35,6 +36,7 @@ export interface MapPreviewFieldProps {
 }
 
 export default function MapPreviewField(props: MapPreviewFieldProps) {
+  const pageLayout = usePageLayout();
   const { colors, isDark } = useThemeColor();
   const mapRef = useRef<MapView>(null);
   const [selfOpen, setSelfOpen] = useState(false);
@@ -83,23 +85,23 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
           testID={props.testID}
         >
           <MapPin size={28} color={colors.textGray} strokeWidth={1.8} style={styles.placeholderIcon} />
-          <Text style={[styles.placeholderLabel, { color: colors.textDark }]}>{props.label}</Text>
-          <Text style={[styles.placeholderCoords, { color: colors.textGray }]}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.placeholderLabel, { color: colors.textDark }]}>{props.label}</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.placeholderCoords, { color: colors.textGray }]}>
             {props.center
               ? `${center.latitude.toFixed(4)}, ${center.longitude.toFixed(4)}`
               : 'No location set'}
           </Text>
-          {props.hint ? <Text style={[styles.placeholderHint, { color: colors.textLight }]}>{props.hint}</Text> : null}
+          {props.hint ? <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.placeholderHint, { color: colors.textLight }]}>{props.hint}</Text> : null}
         </TouchableOpacity>
       )}
 
       <Modal visible={open} animationType="slide" transparent={false} onRequestClose={close}>
         <View style={[styles.modalRoot, { backgroundColor: colors.bgApp }]}>
           {/* Top Modal Header */}
-          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }, pageLayout.insetStyle]}>
             <View style={styles.headerTextGroup}>
-              <Text style={[styles.modalTitle, { color: colors.textDark }]}>{props.modalTitle || props.label}</Text>
-              <Text style={[styles.modalSubtitle, { color: colors.textGray }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalTitle, { color: colors.textDark }]}>{props.modalTitle || props.label}</Text>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.modalSubtitle, { color: colors.textGray }]}>
                 {props.editable ? 'Tap map or drag pin to update location' : 'Read-only location view'}
               </Text>
             </View>
@@ -148,8 +150,8 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                   >
                     <Callout style={styles.calloutContainer}>
                       <View style={styles.calloutContent}>
-                        <Text style={styles.calloutTitle}>{activeLabel}</Text>
-                        <Text style={styles.calloutDesc}>{activeAddress}</Text>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.calloutTitle}>{activeLabel}</Text>
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.calloutDesc}>{activeAddress}</Text>
                       </View>
                     </Callout>
                   </Marker>
@@ -170,8 +172,8 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                   >
                     <Callout style={styles.calloutContainer}>
                       <View style={styles.calloutContent}>
-                        <Text style={styles.calloutTitle}>{m.title}</Text>
-                        {m.description ? <Text style={styles.calloutDesc}>{m.description}</Text> : null}
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.calloutTitle}>{m.title}</Text>
+                        {m.description ? <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={styles.calloutDesc}>{m.description}</Text> : null}
                       </View>
                     </Callout>
                   </Marker>
@@ -191,21 +193,21 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                 </View>
                 <View style={styles.detailBadgeTextCol}>
                   <View style={styles.badgeHeaderRow}>
-                    <Text style={[styles.badgeLabel, { color: colors.primary }]}>{activeLabel}</Text>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.badgeLabel, { color: colors.primary }]}>{activeLabel}</Text>
                     <View style={styles.badgeActionGroup}>
                       <TouchableOpacity
                         style={[styles.hoverChip, { backgroundColor: colors.primary }]}
                         onPress={() => hoverToLocation(draft)}
                       >
-                        <LocateFixed size={11} color="#FFFFFF" />
-                        <Text style={styles.hoverChipText}>Hover Map</Text>
+                        <LocateFixed size={11} color={colors.onPrimary} />
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.hoverChipText, { color: colors.onPrimary }]}>Hover Map</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
-                  <Text style={[styles.badgeAddress, { color: colors.textDark }]} numberOfLines={1}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.badgeAddress, { color: colors.textDark }]} numberOfLines={1}>
                     {activeAddress}
                   </Text>
-                  <Text style={[styles.badgeCoords, { color: colors.textGray }]}>
+                  <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.badgeCoords, { color: colors.textGray }]}>
                     GPS: {draft.latitude.toFixed(4)}, {draft.longitude.toFixed(4)}
                   </Text>
                 </View>
@@ -227,7 +229,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                         hoverToLocation(center);
                       }}
                     >
-                      <Text style={[styles.locPillText, { color: selectedMarkerKey === null ? '#FFFFFF' : colors.textDark }]}>
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.locPillText, { color: selectedMarkerKey === null ? '#FFFFFF' : colors.textDark }]}>
                         Current Pin
                       </Text>
                     </TouchableOpacity>
@@ -248,7 +250,7 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                             hoverToLocation(m.coordinate);
                           }}
                         >
-                          <Text style={[styles.locPillText, { color: isSelected ? '#FFFFFF' : colors.textDark }]} numberOfLines={1}>
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.locPillText, { color: isSelected ? '#FFFFFF' : colors.textDark }]} numberOfLines={1}>
                             {m.title}
                           </Text>
                         </TouchableOpacity>
@@ -262,12 +264,12 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
 
           {/* Footer Actions */}
           {props.editable ? (
-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }, pageLayout.insetStyle]}>
               <TouchableOpacity
                 style={[styles.cancelBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
                 onPress={close}
               >
-                <Text style={[styles.cancelBtnText, { color: colors.textDark }]}>Cancel</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cancelBtnText, { color: colors.textDark }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmBtn, { backgroundColor: colors.primary }, Shadows.liftedUp]}
@@ -276,18 +278,18 @@ export default function MapPreviewField(props: MapPreviewFieldProps) {
                   close();
                 }}
               >
-                <Text style={styles.confirmBtnText}>{props.confirmLabel || 'Save Pinpoint Location'}</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.confirmBtnText, { color: colors.onPrimary }]}>{props.confirmLabel || 'Save Pinpoint Location'}</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }, pageLayout.insetStyle]}>
               <TouchableOpacity
                 style={[styles.closeFooterBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.bgGray }]}
                 onPress={close}
                 accessibilityRole="button"
                 accessibilityLabel="Close map preview"
               >
-                <Text style={[styles.cancelBtnText, { color: colors.textDark }]}>Close</Text>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cancelBtnText, { color: colors.textDark }]}>Close</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -305,13 +307,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderIcon: { marginBottom: Spacing.xs },
-  placeholderLabel: { fontSize: FontSizes.md, fontFamily: FontFamily.bold },
+  placeholderLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.bold },
   placeholderCoords: {
-    fontSize: FontSizes.sm,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.medium,
     marginTop: Spacing.xs,
   },
-  placeholderHint: { fontSize: FontSizes.xs, fontFamily: FontFamily.regular, marginTop: Spacing.xs, textAlign: 'center' },
+  placeholderHint: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.regular, marginTop: Spacing.xs, textAlign: 'center' },
   modalRoot: { flex: 1 },
   modalHeader: {
     flexDirection: 'row',
@@ -323,8 +326,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTextGroup: { flex: 1 },
-  modalTitle: { fontSize: FontSizes.lg, fontFamily: FontFamily.bold },
-  modalSubtitle: { fontSize: FontSizes.xs, fontFamily: FontFamily.regular, marginTop: 1 },
+  modalTitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'), fontSize: scaledPortalFontSize(PortalFontSizes.title), fontFamily: FontFamily.bold },
+  modalSubtitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.regular, marginTop: 1 },
   closeBtn: {
     width: 36,
     height: 36,
@@ -335,8 +338,8 @@ const styles = StyleSheet.create({
   mapWrapper: { flex: 1, position: 'relative' },
   calloutContainer: { padding: Spacing.xs, minWidth: 140 },
   calloutContent: { alignItems: 'flex-start' },
-  calloutTitle: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs, color: '#111827' },
-  calloutDesc: { fontFamily: FontFamily.regular, fontSize: 10, color: '#4B5563', marginTop: 1 },
+  calloutTitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption), color: '#111827' },
+  calloutDesc: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.caption), color: '#4B5563', marginTop: 1 },
   overlayWrapper: {
     position: 'absolute',
     top: Spacing.md,
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
   },
   detailBadgeTextCol: { flex: 1 },
   badgeHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
-  badgeLabel: { fontFamily: FontFamily.bold, fontSize: FontSizes.sm, flex: 1, marginRight: Spacing.xs },
+  badgeLabel: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption), flex: 1, marginRight: Spacing.xs },
   badgeActionGroup: { flexDirection: 'row', alignItems: 'center' },
   hoverChip: {
     flexDirection: 'row',
@@ -371,9 +374,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
-  hoverChipText: { color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: 10 },
-  badgeAddress: { fontFamily: FontFamily.semibold, fontSize: FontSizes.xs },
-  badgeCoords: { fontFamily: FontFamily.regular, fontSize: 10, marginTop: 1 },
+  hoverChipText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
+  badgeAddress: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'), fontFamily: FontFamily.semibold, fontSize: scaledPortalFontSize(PortalFontSizes.body) },
+  badgeCoords: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.micro), marginTop: 1 },
   selectorBar: {
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
@@ -386,7 +389,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
   },
-  locPillText: { fontFamily: FontFamily.bold, fontSize: FontSizes.xs },
+  locPillText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.micro) },
   footer: {
     flexDirection: 'row',
     gap: Spacing.md,

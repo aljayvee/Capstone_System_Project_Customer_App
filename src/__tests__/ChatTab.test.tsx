@@ -39,19 +39,7 @@ jest.mock('../hooks/useActiveErrands', () => ({
 jest.mock('../hooks/useThemeColor', () => ({
   useThemeColor: () => ({
     isDark: false,
-    colors: {
-      primary: '#F62459',
-      card: '#FFFFFF',
-      border: '#E5E7EB',
-      textDark: '#1F2937',
-      textGray: '#6B7280',
-      textLight: '#9CA3AF',
-      textMedium: '#4B5563',
-      bgApp: '#F9FAFB',
-      bgGray: '#F3F4F6',
-      borderLight: '#F3F4F6',
-      danger: '#EF4444',
-    },
+    colors: jest.requireActual('../config/theme').LightColors,
   }),
 }));
 
@@ -90,7 +78,7 @@ describe('ChatTab (Messages & Support Screen)', () => {
     mockError = false;
   });
 
-  it('renders header without left icon, search input, and filter capsules', async () => {
+  it('renders the header, search input, and status tabs', async () => {
     mockErrandsList = [
       { id: 'errand-1', status: 'PENDING', category: 'Fast Food & Restaurant' },
       { id: 'errand-2', status: 'IN_TRANSIT', category: 'Medicine & Pharmacy' },
@@ -144,7 +132,7 @@ describe('ChatTab (Messages & Support Screen)', () => {
     });
   });
 
-  it('renders empty state card without request CTA when there are no active chats', async () => {
+  it('renders the empty state when there are no active chats', async () => {
     mockErrandsList = [];
 
     const res: any = await render(<ChatTab user={mockUser} navigation={mockNavigation} />);

@@ -50,7 +50,9 @@ export type ParseReason =
   /** Two counts that disagree: "Coke x2" typed with the stepper on 3. */
   | 'conflicting_counts'
   /** A count over 99: "Tide x500" is more likely 500 g than 500 boxes. */
-  | 'large_quantity';
+  | 'large_quantity'
+  /** Longer than the bounded sentence reader accepts; the customer must split it. */
+  | 'long_request';
 
 export interface ParsedItem {
   /** The product, in the customer's words. The whole cleaned line when flagged. */
@@ -73,11 +75,11 @@ export interface ParsedItem {
 
 /** Measures one of something can be: settled by the rules. */
 export const UNIT_TABLE: ReadonlyArray<{ canonical: string; aliases: readonly string[] }> = [
-  { canonical: 'kg', aliases: ['kilograms', 'kilogram', 'kilos', 'kilo', 'kgs', 'kls', 'kg', 'kl'] },
+  { canonical: 'kg', aliases: ['kilograms', 'kilogram', 'kilong', 'kilos', 'kilo', 'kgs', 'kls', 'kg', 'kl'] },
   { canonical: 'mg', aliases: ['milligrams', 'milligram', 'mg'] },
-  { canonical: 'g', aliases: ['grams', 'gram', 'gms', 'gm', 'gr', 'g'] },
+  { canonical: 'g', aliases: ['grams', 'gramo', 'gram', 'gms', 'gm', 'gr', 'g'] },
   { canonical: 'mL', aliases: ['milliliters', 'millilitres', 'milliliter', 'millilitre', 'mls', 'ml', 'cc'] },
-  { canonical: 'L', aliases: ['liters', 'litres', 'liter', 'litre', 'ltr', 'lt', 'l'] },
+  { canonical: 'L', aliases: ['liters', 'litres', 'litrong', 'litro', 'liter', 'litre', 'ltr', 'lt', 'l'] },
   { canonical: 'lb', aliases: ['pounds', 'pound', 'lbs', 'lb'] },
   { canonical: 'oz', aliases: ['oz'] },
 ];
@@ -209,18 +211,18 @@ function joinQualifiers(text: string): string {
 const LIST_MARKER = /^(?:[-•*·]|\d{1,2}[.)])\s+/;
 const PREFIX_LABEL = /^(?:items?|order|pabili|bili)\s*[:-]\s*/i;
 const NUMBER_WORDS =
-  /\b(?:isa|isang|dalawa|dalawang|tatlo|tatlong|apat|lima|limang|anim|pito|pitong|walo|walong|siyam|sampu|sampung|kalahati|kalahating|dosena|dosenang|half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|uno|dos|tres|kwatro|singko|sais|siyete|otso|nuwebe|diyes|onse|dose|kinse|bente|beinte|trenta|kwarenta|singkwenta|sisenta|sitenta|otsenta|nobenta|siyento)\b/i;
+  /\b(?:isa|isang|dalawa|dalawang|tatlo|tatlong|apat|lima|limang|anim|pito|pitong|walo|walong|siyam|sampu|sampung|kalahati|kalahating|dosena|dosenang|half|quarter|duha|tulo|upat|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|uno|dos|tres|kwatro|kuwatro|singko|sais|siyete|syete|otso|nuwebe|diyes|dyis|onse|dose|trese|katorse|kinse|bente|beinte|trenta|kwarenta|singkwenta|sisenta|sitenta|setenta|otsenta|nobenta|siyento|sandaan|isandaan)\b/i;
 /** Words that join two products. "and" and "&" are left out: "mac and cheese", "Head & Shoulders". */
 const JOINING_WORDS = /\b(?:tapos|tsaka|saka|pati)\b/i;
 /** Asking rather than naming: politeness, address and errand verbs. */
-const CONVERSATIONAL = /\b(?:pabili|paki\w*|bumili|bilhan|po|opo|salamat|kuya|ate|please|pls+|thanks?)\b/i;
+const CONVERSATIONAL = /\b(?:pabili|paki\w*|bumili|bilhan|po|opo|salamat|kuya|ate|please|pls+|thanks?)\b|^(?:(?:i|we)\s+(?:need|want|would like)|i['’]d\s+like|(?:can|could|would)\s+you\b|(?:buy|get)\s+(?:me|us)\b|(?:gusto|kailangan)\s+ko\b|(?:palit|bakal)\s+(?:ko|ako)\b)|\b(?:without|no substitutes|if\s+(?:unavailable|out of stock)|walang|huwag|ayaw)\b/i;
 const FRACTION = /\d+\s*\/\s*\d+|[½¼¾⅓]/;
 const PACK_COUNT =
   /\d+\s*(?:pcs|pc|pieces|piece|pks|pk|pck|packs|pack|boxes|box|doz|dozens|dozen|trays|tray|btls|btl|bottles|bottle|cans|can|sachets|sachet|reams|ream|rolls|roll|bundles|bundle)(?![a-z])/i;
 const AMOUNT = /₱\s*\d|\bphp\s?\d|\bp\d|\bpesos?\b/i;
 /** Digits alone: "7", "1.5". Not "70%", "2x4" or "500mg". */
 const BARE_NUMBER = /^\d+(?:[.,]\d+)?$/;
-const MAX_LINE = 120;
+export const MAX_SENTENCE_LENGTH = 500;
 
 /** "chicken 2, rice 5kg": a comma not inside a number, a semicolon, or " + ". */
 function listsSeveralItems(text: string): boolean {
@@ -293,8 +295,8 @@ export function parseItemEntry(text: string, { stepperQty = 1 }: { stepperQty?: 
     reasons,
   });
 
-  // Too long to be one product. The server refuses it; leave it alone.
-  if (cleaned.length > MAX_LINE) return raw([]);
+  // Preserve every word; never silently truncate an instruction.
+  if (cleaned.length > MAX_SENTENCE_LENGTH) return raw(['long_request']);
 
   // List scaffolding is never part of what to buy, and neither is a store's
   // name. A flagged line goes to the model without it too.

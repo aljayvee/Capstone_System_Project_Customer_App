@@ -5,16 +5,20 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
+  Urbanist_400Regular,
+  Urbanist_500Medium,
+  Urbanist_600SemiBold,
+  Urbanist_700Bold,
+} from '@expo-google-fonts/urbanist';
 import {
   JetBrainsMono_500Medium,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
 import AppNavigator from './src/navigation/AppNavigator';
+import {
+  syncUpdatesInBackground,
+  setupUpdateListeners,
+} from './src/services/updatesService';
 
 LogBox.ignoreLogs(['FIREBASE WARNING: Missing appcheck token']);
 
@@ -26,11 +30,17 @@ LogBox.ignoreLogs(['FIREBASE WARNING: Missing appcheck token']);
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
+  React.useEffect(() => {
+    syncUpdatesInBackground(true);
+    const cleanup = setupUpdateListeners();
+    return cleanup;
+  }, []);
+
   const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Urbanist_400Regular,
+    Urbanist_500Medium,
+    Urbanist_600SemiBold,
+    Urbanist_700Bold,
     JetBrainsMono_500Medium,
     JetBrainsMono_700Bold,
   });

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useRef } from 'react';
 import {
   Linking,
@@ -43,6 +44,7 @@ const BODY_LINE = getPortalLineHeight(BODY_SIZE, 'body');
 const HEADING_SIZE = scaledPortalFontSize(PortalFontSizes.subheading);
 
 export default function LegalDocumentScreen({ route, navigation }: any) {
+  const pageLayout = usePageLayout({ tabletGutter: 18 });
   const { colors } = useThemeColor();
   const scrollRef = useRef<ScrollView>(null);
   const sectionOffsets = useRef<Record<string, number>>({});
@@ -51,7 +53,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
   const doc = docId ? LEGAL_DOCUMENTS[docId] : undefined;
 
   const header = (
-    <View style={styles.navHeaderRow}>
+    <View style={[styles.navHeaderRow, pageLayout.insetStyle]}>
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         hitSlop={PortalTouchTargets.compactHitSlop}
@@ -80,7 +82,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom']}>
         {header}
-        <View style={styles.errorWrap} testID="legal-document-missing">
+        <View style={[styles.errorWrap, pageLayout.gutterStyle, pageLayout.frameStyle]} testID="legal-document-missing">
           <Text style={[styles.errorTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
             This document could not be opened
           </Text>
@@ -92,7 +94,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
           >
-            <Text style={styles.errorBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+            <Text style={[styles.errorBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
               Go back
             </Text>
           </TouchableOpacity>
@@ -116,7 +118,7 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
   };
 
   const renderLead = (lead?: string) =>
-    lead ? <Text style={[styles.lead, { color: colors.textDark }]}>{lead} </Text> : null;
+    lead ? <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.lead, { color: colors.textDark }]}>{lead} </Text> : null;
 
   const renderBlock = (block: LegalBlock, key: number) => {
     if (block.kind === 'list') {
@@ -157,10 +159,10 @@ export default function LegalDocumentScreen({ route, navigation }: any) {
       {header}
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]}
         testID={`legal-document-${doc.id}`}
       >
-        <View style={styles.inner}>
+        <View style={[styles.inner, pageLayout.contentStyle]}>
           <Text style={[styles.meta, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
             Effective {LEGAL_EFFECTIVE_DATE}
           </Text>
@@ -269,8 +271,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(17),
-    lineHeight: getPortalLineHeight(17, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,

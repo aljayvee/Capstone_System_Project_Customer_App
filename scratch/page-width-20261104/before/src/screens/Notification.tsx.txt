@@ -1,0 +1,816 @@
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  FlatList,
+  RefreshControl,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import {
+  AlertCircle,
+  ArrowUpDown,
+  Bell,
+  Bike,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronLeft,
+  MessageSquare,
+  Package,
+  RotateCcw,
+  Search,
+  Wallet,
+  X,
+} from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useThemeColor } from '../hooks/useThemeColor';
+import { searchFieldStyles, getSearchFieldSurface } from '../config/searchField';
+import {
+  FontFamily,
+  Spacing,
+  BorderRadius,
+  PortalFontSizes,
+  scaledPortalFontSize,
+  getPortalLineHeight,
+  PortalTouchTargets,
+  PortalFontSizeMultipliers,
+} from '../config/theme';
+import {
+  useNotifications,
+  type CustomerNotification,
+  type NotificationCategory,
+} from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
+import { RootStackScreenProps } from '../navigation/types';
+import ShimmerWave from '../components/ShimmerWave';
+import { CATEGORY_LABEL, categoryOf, needsYou } from '../utils/notificationCategory';
+import { routeForNotification } from '../utils/notificationRoute';
+
+export type { CustomerNotification };
+
+/**
+ * Customer notifications are organised by what they are about, plus whether
+ * they wait on the customer (2026-10-21). Staff get a severity ladder; a
+ * customer thinks about their order, so there are no levels here.
+ *
+ * There is no "All" chip (user, 2026-10-21): with no chip selected the list
+ * shows everything, and tapping the selected chip again clears it. 'ALL' is
+ * that unselected state.
+ */
+export type NotificationFilter = 'ALL' | 'NEEDS_YOU' | NotificationCategory;
+
+const FILTERS: Array<{ key: Exclude<NotificationFilter, 'ALL'>; label: string }> = [
+  { key: 'NEEDS_YOU', label: 'Needs you' },
+  { key: 'ORDER', label: 'Orders' },
+  { key: 'DELIVERY', label: 'Delivery' },
+  { key: 'PAYMENT', label: 'Payments' },
+  { key: 'CHAT', label: 'Chats' },
+];
+
+/** Sort by (user, 2026-10-21). Date sorts group by day; the others by what is waiting. */
+export type NotificationSort = 'NEWEST' | 'OLDEST' | 'NEEDS_YOU' | 'UNREAD';
+
+const SORT_OPTIONS: Array<{ key: NotificationSort; label: string }> = [
+  { key: 'NEWEST', label: 'Newest first' },
+  { key: 'OLDEST', label: 'Oldest first' },
+  { key: 'NEEDS_YOU', label: 'Needs you first' },
+  { key: 'UNREAD', label: 'Unread first' },
+];
+
+const byNewest = (a: CustomerNotification, b: CustomerNotification) =>
+  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+/** The list as sections, in the chosen order. Exported for tests. */
+export function sectionsFor(list: CustomerNotification[], sort: NotificationSort, now: Date = new Date()) {
+  if (sort === 'NEEDS_YOU' || sort === 'UNREAD') {
+    const first = sort === 'NEEDS_YOU' ? needsYou : (n: CustomerNotification) => !n.isRead;
+    const sorted = [...list].sort(byNewest);
+    return [
+      { title: sort === 'NEEDS_YOU' ? 'Needs you' : 'Unread', data: sorted.filter(first) },
+      { title: sort === 'NEEDS_YOU' ? 'Everything else' : 'Read', data: sorted.filter((n) => !first(n)) },
+    ].filter((section) => section.data.length > 0);
+  }
+  const oldest = sort === 'OLDEST';
+  const sorted = [...list].sort((a, b) => (oldest ? -byNewest(a, b) : byNewest(a, b)));
+  const days: Array<ReturnType<typeof dayBucket>> = oldest
+    ? ['Earlier', 'Yesterday', 'Today']
+    : ['Today', 'Yesterday', 'Earlier'];
+  return days
+    .map((title) => ({ title, data: sorted.filter((n) => dayBucket(n.createdAt, now) === title) }))
+    .filter((section) => section.data.length > 0);
+}
+
+const CATEGORY_ICON: Record<NotificationCategory, typeof Package> = {
+  ORDER: Package,
+  DELIVERY: Bike,
+  PAYMENT: Wallet,
+  CHAT: MessageSquare,
+};
+
+const EMPTY_COPY: Record<NotificationFilter, { title: string; body: string }> = {
+  ALL: {
+    title: 'No notifications yet',
+    body: 'Updates about your errands, deliveries, payments and messages will show here.',
+  },
+  NEEDS_YOU: { title: 'Nothing needs you', body: 'When something waits on you, like a new total or a message, it shows here.' },
+  ORDER: { title: 'No order updates', body: 'You will see when your errand is accepted, picked up, delivered or cancelled.' },
+  DELIVERY: { title: 'No delivery updates', body: 'You will see when your rider is on the way and almost there.' },
+  PAYMENT: { title: 'No payment updates', body: 'Fee changes, payments and refunds will show here.' },
+  CHAT: { title: 'No messages', body: 'Messages from your dispatcher will show here.' },
+};
+
+export function matchesFilter(n: CustomerNotification, filter: NotificationFilter): boolean {
+  if (filter === 'ALL') return true;
+  if (filter === 'NEEDS_YOU') return needsYou(n);
+  return categoryOf(n) === filter;
+}
+
+/** Today, Yesterday or Earlier, by the phone's calendar day. */
+export function dayBucket(iso: string, now: Date = new Date()): 'Today' | 'Yesterday' | 'Earlier' {
+  const date = new Date(iso);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const time = date.getTime();
+  if (time >= startOfToday) return 'Today';
+  if (time >= startOfToday - 24 * 60 * 60 * 1000) return 'Yesterday';
+  return 'Earlier';
+}
+
+function formatTime(iso: string, bucket: ReturnType<typeof dayBucket>): string {
+  const date = new Date(iso);
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (bucket === 'Today') {
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+  }
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (bucket !== 'Earlier') return time;
+  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
+export default function NotificationScreen({ navigation, route }: RootStackScreenProps<'Notification'>) {
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useThemeColor();
+  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, refreshNotifications } =
+    useNotifications();
+  const { user: authUser } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<NotificationFilter>('ALL');
+  const [sort, setSort] = useState<NotificationSort>('NEWEST');
+  const [sortOpen, setSortOpen] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshNotifications(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshNotifications]);
+
+  const handlePress = async (item: CustomerNotification) => {
+    if (!item.isRead) await markAsRead(item.id);
+    const user = (route.params?.user || authUser) as any;
+    if (!user) return;
+    const target = routeForNotification(item);
+    if (target.kind === 'chat') {
+      navigation.navigate('CustomerChat', { user, errandId: target.errandId });
+    } else if (target.kind === 'track') {
+      navigation.navigate('CustomerPortal', { user, initialTab: 'track', focusedErrandId: target.errandId });
+    } else if (target.kind === 'details') {
+      navigation.navigate('ErrandDetails', { user, errandId: target.errandId });
+    }
+  };
+
+  const counts = useMemo(() => {
+    const result = { ALL: notifications.length } as Record<NotificationFilter, number>;
+    for (const { key } of FILTERS) result[key] = notifications.filter((n) => matchesFilter(n, key)).length;
+    return result;
+  }, [notifications]);
+
+  const query = search.trim().toLowerCase();
+  const sections = useMemo(() => {
+    const visible = notifications
+      .filter((n) => matchesFilter(n, filter))
+      .filter((n) => !query || `${n.title} ${n.body}`.toLowerCase().includes(query));
+    return sectionsFor(visible, sort);
+  }, [notifications, filter, query, sort]);
+  const sortLabel = SORT_OPTIONS.find((option) => option.key === sort)?.label ?? 'Newest first';
+
+  const isEmpty = sections.length === 0;
+  const showSkeleton = loading && notifications.length === 0;
+  const showFullError = error && notifications.length === 0 && !loading;
+  const empty = EMPTY_COPY[filter];
+  const hairline = isDark ? colors.border : colors.borderLight;
+
+  return (
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: colors.bgApp, paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md },
+      ]}
+    >
+      {/* Header: one only, with the unread count inline (AGENTS.md). */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="back-button"
+        >
+          <ChevronLeft size={22} color={colors.textDark} />
+        </TouchableOpacity>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+            Notifications
+          </Text>
+          {unreadCount > 0 && (
+            <View style={[styles.unreadPill, { backgroundColor: colors.primary }]} testID="notification-unread-pill">
+              <Text
+                style={[styles.unreadPillText, { color: colors.onPrimary }]}
+                maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </View>
+        {unreadCount > 0 ? (
+          <TouchableOpacity
+            onPress={markAllAsRead}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            style={styles.headerAction}
+            accessibilityRole="button"
+            accessibilityLabel="Mark all notifications as read"
+            testID="mark-all-read-btn"
+          >
+            <Text style={[styles.headerActionText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+              Read all
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.iconButton} />
+        )}
+      </View>
+
+      {/* Search */}
+      <View
+        style={[searchFieldStyles.surface, getSearchFieldSurface(isDark)]}
+        testID="notification-search-bar"
+      >
+        <Search size={16} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.2} />
+        <TextInput
+          style={[searchFieldStyles.input, { color: colors.textDark }]}
+          placeholder="Search notifications"
+          placeholderTextColor={colors.textLight}
+          value={search}
+          onChangeText={setSearch}
+          accessibilityLabel="Search notifications"
+          testID="notification-search-input"
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setSearch('')}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            style={styles.clearButton}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            testID="notification-search-clear"
+          >
+            <X size={14} color={colors.textMedium} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filters, with live counts */}
+      <View style={styles.filterSection}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={FILTERS}
+          keyExtractor={(item) => item.key}
+          contentContainerStyle={styles.filterList}
+          renderItem={({ item: chip }) => {
+            const active = filter === chip.key;
+            return (
+              <TouchableOpacity
+                // Tapping the selected chip again shows everything.
+                onPress={() => setFilter(active ? 'ALL' : chip.key)}
+                hitSlop={PortalTouchTargets.compactHitSlop}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: active ? colors.primary : colors.card,
+                    borderColor: active ? colors.primary : colors.border,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${chip.label}, ${counts[chip.key]}`}
+                testID={`notification-filter-${chip.key}`}
+              >
+                <Text
+                  style={[styles.chipText, { color: active ? colors.onPrimary : colors.textDark }, active && styles.chipTextActive]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                >
+                  {chip.label}
+                </Text>
+                <Text
+                  style={[styles.chipCount, { color: active ? colors.onPrimary : colors.textGray }]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                  testID={`notification-filter-count-${chip.key}`}
+                >
+                  {counts[chip.key]}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
+      {/* Sort by */}
+      <View style={styles.sortRow}>
+        <Text style={[styles.sortSummary, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+          {filter === 'ALL' ? `${counts.ALL} notifications` : `${counts[filter]} of ${counts.ALL}`}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setSortOpen((open) => !open)}
+          hitSlop={PortalTouchTargets.compactHitSlop}
+          style={styles.sortButton}
+          accessibilityRole="button"
+          accessibilityLabel={`Sort by, ${sortLabel}`}
+          accessibilityState={{ expanded: sortOpen }}
+          testID="notification-sort-button"
+        >
+          <ArrowUpDown size={14} color={colors.textMedium} />
+          <Text style={[styles.sortButtonText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+            Sort by: {sortLabel}
+          </Text>
+          <ChevronDown size={14} color={colors.textMedium} />
+        </TouchableOpacity>
+      </View>
+      {sortOpen && (
+        <View style={[styles.sortMenu, { backgroundColor: colors.card, borderColor: colors.border }]} testID="notification-sort-menu">
+          {SORT_OPTIONS.map((option) => {
+            const selected = option.key === sort;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                onPress={() => {
+                  setSort(option.key);
+                  setSortOpen(false);
+                }}
+                style={styles.sortOption}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                testID={`notification-sort-${option.key}`}
+              >
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    { color: selected ? colors.primaryStrong : colors.textDark },
+                    selected && styles.chipTextActive,
+                  ]}
+                  maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
+                >
+                  {option.label}
+                </Text>
+                {selected && <Check size={16} color={colors.primaryStrong} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* A failed refresh over a list we already have: say so, keep the list. */}
+      {error && notifications.length > 0 && (
+        <View style={[styles.inlineError, { backgroundColor: colors.dangerBg }]} testID="notification-refresh-error">
+          <AlertCircle size={14} color={colors.danger} />
+          <Text style={[styles.inlineErrorText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+            Could not refresh. These may be out of date.
+          </Text>
+          <TouchableOpacity
+            onPress={() => refreshNotifications()}
+            hitSlop={PortalTouchTargets.compactHitSlop}
+            accessibilityRole="button"
+            testID="notification-refresh-retry"
+          >
+            <Text style={[styles.inlineErrorAction, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showSkeleton ? (
+        <View testID="notification-skeleton" style={styles.skeletonList}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <View key={index} style={[styles.row, { borderBottomColor: hairline }]}>
+              <ShimmerWave width={24} height={24} borderRadius={6} />
+              <View style={styles.rowContent}>
+                <ShimmerWave width="62%" height={14} borderRadius={4} />
+                <ShimmerWave width="92%" height={12} borderRadius={4} style={styles.skeletonGap} />
+                <ShimmerWave width="35%" height={10} borderRadius={4} style={styles.skeletonGap} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : showFullError ? (
+        <View style={styles.stateFrame} testID="notification-error">
+          <AlertCircle size={26} color={colors.danger} />
+          <Text style={[styles.stateTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+            Notifications did not load
+          </Text>
+          <Text style={[styles.stateBody, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+            Check your connection and try again.
+          </Text>
+          <TouchableOpacity
+            onPress={() => refreshNotifications()}
+            style={[styles.stateButton, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            testID="notification-error-retry"
+          >
+            <RotateCcw size={15} color={colors.onPrimary} />
+            <Text style={[styles.stateButtonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+              Try again
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => String(item.id)}
+          stickySectionHeadersEnabled={false}
+          // The search field stays put while the keyboard covers the bottom of the
+          // list: a drag puts it away, and a tap on a row works the first time.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={[styles.listContent, isEmpty && styles.listContentEmpty]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+          }
+          renderSectionHeader={({ section }) => (
+            <Text
+              style={[styles.sectionHeader, { color: colors.textGray }]}
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+              testID={`notification-section-${section.title}`}
+            >
+              {section.title}
+            </Text>
+          )}
+          ListEmptyComponent={
+            <View style={styles.stateFrame} testID="notification-empty">
+              <Bell size={26} color={colors.textGray} strokeWidth={1.8} />
+              <Text style={[styles.stateTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
+                {query ? 'No matches' : empty.title}
+              </Text>
+              <Text style={[styles.stateBody, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+                {query ? `Nothing here matches "${search.trim()}".` : empty.body}
+              </Text>
+              {query ? (
+                <TouchableOpacity
+                  onPress={() => setSearch('')}
+                  style={[styles.stateButton, styles.stateButtonSecondary, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  testID="notification-empty-clear-search"
+                >
+                  <Text style={[styles.stateButtonText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+                    Clear search
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          }
+          renderItem={({ item }) => {
+            const category = categoryOf(item);
+            const Icon = CATEGORY_ICON[category];
+            const waiting = needsYou(item);
+            return (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => handlePress(item)}
+                style={[styles.row, { borderBottomColor: hairline }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.isRead ? '' : 'Unread. '}${waiting ? 'Needs you. ' : ''}${item.title}. ${item.body}`}
+                testID={`notification-card-${item.id}`}
+              >
+                {/* Neutral grey category mark: no tinted circles (AGENTS.md). */}
+                <View style={styles.iconBox}>
+                  <Icon size={20} color={item.isRead ? colors.textLight : colors.textMedium} strokeWidth={2} />
+                </View>
+                <View style={styles.rowContent}>
+                  <View style={styles.rowTitleLine}>
+                    <Text
+                      style={[
+                        styles.rowTitle,
+                        { color: item.isRead ? colors.textMedium : colors.textDark },
+                        !item.isRead && styles.rowTitleUnread,
+                      ]}
+                      numberOfLines={2}
+                      maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
+                    >
+                      {item.title}
+                    </Text>
+                    {!item.isRead && (
+                      <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} testID={`notification-unread-${item.id}`} />
+                    )}
+                  </View>
+                  <Text
+                    style={[styles.rowBody, { color: colors.textGray }]}
+                    numberOfLines={2}
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+                  >
+                    {item.body}
+                  </Text>
+                  <View style={styles.metaLine}>
+                    {waiting && (
+                      <View style={[styles.needsYouChip, { backgroundColor: colors.primarySurface }]} testID={`notification-needs-you-${item.id}`}>
+                        <Text style={[styles.needsYouText, { color: colors.primaryStrong }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                          Needs you
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={[styles.metaText, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                      {CATEGORY_LABEL[category]} · {formatTime(item.createdAt, dayBucket(item.createdAt))}
+                    </Text>
+                    {!item.isRead && (
+                      <TouchableOpacity
+                        onPress={() => markAsRead(item.id)}
+                        hitSlop={PortalTouchTargets.compactHitSlop}
+                        style={styles.markRead}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark ${item.title} as read`}
+                        testID={`notification-mark-read-${item.id}`}
+                      >
+                        <CheckCheck size={14} color={colors.textGray} strokeWidth={2.2} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm + 4,
+  },
+  iconButton: {
+    width: PortalTouchTargets.compact,
+    height: PortalTouchTargets.compact,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+  },
+  unreadPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  unreadPillText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+  },
+  headerAction: {
+    minHeight: PortalTouchTargets.compact,
+    paddingHorizontal: Spacing.xs,
+    justifyContent: 'center',
+  },
+  headerActionText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  clearButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterSection: {
+    paddingVertical: Spacing.sm,
+  },
+  filterList: {
+    gap: 6,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: PortalTouchTargets.pillHeight,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  chipTextActive: {
+    fontFamily: FontFamily.bold,
+  },
+  chipCount: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  sortSummary: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: PortalTouchTargets.pillHeight,
+  },
+  sortButtonText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  sortMenu: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    overflow: 'hidden',
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: PortalTouchTargets.minTouchTarget,
+    paddingHorizontal: Spacing.md,
+  },
+  sortOptionText: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+  },
+  inlineError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.xs,
+  },
+  inlineErrorText: {
+    flex: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  inlineErrorAction: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+  skeletonList: {
+    paddingTop: Spacing.xs,
+  },
+  skeletonGap: {
+    marginTop: 8,
+  },
+  listContent: {
+    paddingBottom: Spacing.xl * 3,
+  },
+  listContentEmpty: {
+    flexGrow: 1,
+  },
+  sectionHeader: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm + 2,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  iconBox: {
+    width: 24,
+    alignItems: 'center',
+    paddingTop: 1,
+  },
+  rowContent: {
+    flex: 1,
+  },
+  rowTitleLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  rowTitle: {
+    flex: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
+  },
+  rowTitleUnread: {
+    fontFamily: FontFamily.bold,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  rowBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    marginTop: 2,
+  },
+  metaLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  needsYouChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  needsYouText: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+  },
+  metaText: {
+    flex: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+  },
+  markRead: {
+    width: 32,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stateFrame: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xxl,
+    gap: 6,
+  },
+  stateTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
+    marginTop: Spacing.xs,
+    textAlign: 'center',
+  },
+  stateBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
+    textAlign: 'center',
+  },
+  stateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: PortalTouchTargets.minTouchTarget,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.md,
+  },
+  stateButtonSecondary: {
+    borderWidth: 1,
+  },
+  stateButtonText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+  },
+});

@@ -180,10 +180,10 @@ export default function EditProfileModal({ visible, initialValues, saving, onSav
             hitSlop={PortalTouchTargets.compactHitSlop}
           >
             {saving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
               <Text
-                style={styles.saveBtnText}
+                style={[styles.saveBtnText, { color: colors.onPrimary }]}
                 maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
               >
                 Save Profile

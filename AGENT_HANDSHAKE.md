@@ -1,14 +1,657 @@
 # 🌐 DUAL-MODEL COLLABORATION TUNNEL (CLAUDE ◄► GEMINI) - CUSTOMER APP
 
+## 2026-11-12 - Step 2 Remove-Store Indicator & Peek Animation (Antigravity)
+* **Request**: Add a visual indicator on Step 2 (`PabiliHubScreen`) showing where the Remove Store button is located so naive users do not have to guess the hidden right-to-left swipe gesture.
+* **Modified paths**:
+  - `src/components/pabili/SwipeableStoreRow.tsx`: Added inline right-edge remove indicator button (`testID="remove-indicator-${storeName}"`, `ChevronsLeft` + `Trash2` icon capsule) that toggles the `ReanimatedSwipeable` right drawer (`openRight()` / `close()`) and sets `showRemove` without triggering `onOpen`. Added optional `peekOnMount` native-driver horizontal nudge (`translateX: 0 -> -24 -> 0`, guarded by `AccessibilityInfo.isReduceMotionEnabled`) and continuous row bottom hairline border (`borderBottomColor`).
+  - `src/screens/pabili/PabiliHubScreen.tsx`: Passed `peekOnMount={index === 0}` and `borderBottomColor` to `SwipeableStoreRow`, and updated helper copy to `"Tap a store to add items. Swipe left or tap « on the right to remove."`
+  - `src/__tests__/PabiliScreens.test.tsx`: Extended `ReanimatedSwipeable` ref mock with `openRight`/`openLeft` and added regression test verifying indicator rendering, drawer toggle, removal, and undo.
+* **Verification**: `node node_modules/typescript/bin/tsc --noEmit` exit 0; `PabiliScreens.test.tsx` **41 / 41 tests PASS**.
+* **Next session**: Preserve the dual-path store removal UX (both right-to-left swipe and right-edge `« Trash` indicator tap-to-reveal).
+
+## 2026-11-09 - Store search allowed from Banga, South Cotabato (Claude Code)
+* **Why**: dual-zone service area (full entry in `C:\Capstone_Server\server\AGENT_HANDSHAKE.md`). The app's own box check answered "Sugo Express isn't in your area yet." for any point outside Tacurong without asking the server, so Banga field testers could never see stores.
+* **Modified paths**: `src/services/establishments.ts`: `isWithinTacurongServiceArea` replaced by `isWithinSupportedServiceArea` (true inside `TACURONG_ENVELOPE` or the new `BANGA_ENVELOPE`, 6.28 to 6.52 and 124.70 to 124.925); the three call sites (`searchEstablishments`, the nearby cache peek, `popularEstablishments`) use it. Banga's box also holds western Koronadal: the server's polygon check (`outsideServiceArea`) stays the real answer. NEW `src/__tests__/supportedServiceArea.test.ts` (5).
+* **Verification**: `tsc --noEmit` exit 0; full jest **98 suites / 1110 tests PASS**.
+* **OTA PUBLISHED 2026-11-09 21:52 (+08)** on the user's "Yes, ship the OTA", scope "Everything in the tree". Group `2fb978cd-c3ea-4071-a002-c8d6977098aa`, branch production, runtime 1.4.0, android and ios. It carries the whole working tree, so it also ships four other finished, unpublished changes: rating prompt moved to the Track tab (11-06), chat push tap / Back bounce fix (11-06), Android Back listeners on hidden screens (11-06), Account & Profile on the Settings background colors (11-07, Codex).
+  - **Incident**: the first publish, group `a1a848c7-6995-4d3d-ad1f-6b7f212662e7` (21:40:41), had none of the `.env` values compiled in. `eas update --environment production` uses EAS-hosted variables (production has none) and skips the local `.env`, so the bundle had no API address and Android fell back to `10.0.2.2:5000`. tsc and jest both passed on it. It was the newest update for about 3 minutes: rolled back at 21:43:54 by republishing `cca9b9ad` (new group `e524a032-135f-482e-932d-b122a7b4b65e`). A phone that fetched it in those minutes runs it on one launch, then downloads the fixed update on that launch (`checkAutomatically: ON_LOAD` talks to u.expo.dev, not the API) and recovers on the next.
+  - **Method for the good publish**: `expo export --clear --source-maps` (its log shows `env: load .env`; `--clear` because Metro had cached the env-less transforms), checked both `.hbc` files for the API base URL and the Firebase values, then `eas update --skip-bundler --input-dir dist`. The Maps key is absent from the bundle on purpose (only native config uses it).
+  - **Verified 2026-11-10**: the manifest u.expo.dev serves for production/1.4.0 has launch hashes equal to the sha256 of the local bundles (android `65Nt7tqczrMlkyc6ayDaiW27OwmIDUBqOh0wf0EqTGw`, ios `FA6ILePuRh7gdgavYGCavXhgmsMbRg6KBOrQXjBmZNY`). The eas CLI hung after "Publishing..." for about 5 hours even though the update was created at 21:52:17; it was stopped by hand.
+* **Next session**: the server half was DEPLOYED 2026-11-09 19:49 (+08), the web portal half (dispatcher Banga store pins) 21:22 (+08), and this app's half by the OTA above. Not committed. Not device-verified, and no real Banga order has been seen end to end. Copy that still names only Tacurong (CustomerHelpModal "Service Area", DeliveryLocationCard, legal terms) was left as is.
+
+## 2026-11-07 - Account & Profile uses App Settings background colors (Codex)
+* **Request**: Use App Settings' light and dark mode colors on Account & Profile.
+* **Modified paths**: `src/screens/AccountScreen.tsx` and this log. Changed only the screen and navigation header background from `colors.card` to `colors.bgApp`, matching Settings: light `#F6F7F8`, dark `#121212`.
+* **Verification**: Confirmed Account and Settings reference the same background token in both locations; scoped `git diff --check` passed. `node node_modules/typescript/bin/tsc --noEmit` passed with zero errors.
+* **Next session**: Preserve this shared background token and the approved Account layout. No device visual review or publication performed.
+
+## 2026-11-06 - Hidden screens' Android Back listeners, audited and fixed where visible (Claude Code)
+* **Finding**: every `hardwareBackPress` listener stays registered under screens pushed on top, and the newest is asked first. A tapped chat push can put the chat on top of any screen. Each handler was reproduced in a failing test before any fix.
+* **Fixed (visible symptom reproduced)**:
+  - `src/screens/EditAccountScreen.tsx`: with an edit pending, Back on the chat raised "Discard Unsaved Changes?" over the chat and the chat stayed.
+  - `src/screens/location/LocationWizard.tsx`: Back on the chat stepped the hidden wizard back (or dropped the draft at step 1) and the chat stayed. It reads its host screen through `useNavigation()`.
+  - Both now return false unless their screen is focused; the PabiliHub guard pattern.
+* **Withdrawn after reproduction**: PabiliReview and PabiliStoreEditor handlers do fire while hidden, but their `goBack()` carries no target, so the router pops the top screen (the chat), which is correct. Verified by probe; kept as an end-to-end regression test. Not changed.
+* **Not reachable, not changed**: WaitingForDispatcher (only from unregistered CheckoutScreen and the dead ErrandItemsScreen; the `ErrandItems` route is PabiliHub) and ErrandConfirmation (nothing navigates to it).
+* **Tests**: `PushTapBackNavigation.test.tsx` gains 3 end-to-end cases (store editor, Edit Account, location wizard; real screens, real push tap, real Android BackHandler). This file now uses the real `useNavigation`/`useRoute`, because the jest.setup stub has no `isFocused`. Plus `EditAccountScreen.test.tsx` and `LocationWizard.test.tsx` each gain a focused/unfocused handler case. On the pre-fix code 4 fail; all pass now.
+* **Verification**: `tsc --noEmit` exit 0; full jest 97 suites / 1105 tests pass. Nothing committed, not device-verified.
+
+## 2026-11-06 - Chat push tap, then Back, bounced back into the chat (Claude Code)
+* **Bug**: tap a dispatcher-message push, the chat opens, press Back: it goes back, then the chat reopens at once.
+* **Reproduced** in `src/__tests__/PushTapBackNavigation.test.tsx`: real portal, real chat, real push hook in a real native stack. Only expo-notifications is simulated, and it keeps the last tap until cleared, as the native module does. After one press of the back arrow the stack was `Portal, Chat, Portal, Chat`.
+* **Cause, three parts**:
+  1. The chat's back arrow called `navigation.navigate('CustomerPortal', …)`. In React Navigation 7, `NAVIGATE` reuses a route only when it is the focused one (or `pop: true` is passed), so the arrow pushed a second portal.
+  2. `useRegisterPushToken` calls `getLastNotificationResponseAsync()` on every mount, as a cold-start check, and acted on what it returned. The native module keeps returning the last tap until `clearLastNotificationResponse()` is called, which nothing did. So the fresh portal replayed the already-followed tap and pushed the chat again, and this repeated on every Back.
+  3. Android hardware Back: the portal's `hardwareBackPress` listener had no focus check. It stays registered under pushed screens and becomes the newest listener on any tab switch (RN asks the newest first). So Back on the chat only switched the hidden portal's tab, and the chat stayed.
+* **Fix**: (1) the arrow uses `navigate('CustomerPortal', params, { pop: true })`, which pops to the existing portal with the same params as before. (2) Each acted-on tap is recorded (`identifier:actionIdentifier`, module-level) and cleared natively. The mount check skips a recorded tap, and the live listener always acts, so a deliberate re-tap still opens. (3) The portal's back handler returns false unless `navigation.isFocused()`.
+* **Modified paths**: `src/hooks/useRegisterPushToken.ts` (adds `resetHandledPushTaps` test seam), `src/screens/CustomerChatScreen.tsx`, `src/screens/CustomerPortalScreen.tsx` (back handler, plus `navigation` in its deps), `src/__tests__/PushTapBackNavigation.test.tsx` (new, 8 tests; the Android cases load the real `BackHandler.android` and set `Platform.OS`).
+* **Verification**: 4 of 5 (later 6 of 8) failed before the fix. All 8 pass after. With each fix reverted alone, its own test fails: arrow 4 tests, hook 1 (remount replay), focus check 1 (hardware Back). `npx tsc --noEmit` exit 0. Not device-verified.
+* **Same class, fixed after (user approved)**: `AccountScreen.tsx` ("View errand receipts") and `Notification.tsx` (a Delivery row to Track) also used a plain `navigate('CustomerPortal', …)` from a pushed screen, which stacked a duplicate portal. Both now pass `{ pop: true }`, keeping the same params (Errands tab; Track tab and `focusedErrandId`). New `src/__tests__/PortalReturnNavigation.test.tsx` (2 tests, real screens in a real stack): both fail on the old code, showing `Portal, Account, Portal` and `Portal, Notification, Portal`, and pass now. `NotificationScreen.test.tsx` now also asserts `{ pop: true }`. The remaining `navigate('CustomerPortal')` calls are in HomeTab, ErrandsTab and AccountTab, which render inside the portal, so the focused route is the portal and only its params change.
+
+## 2026-11-06 - Rating prompt moved to the Track tab, rating sheet keyboard-safe (Claude Code)
+* **Bug**: after delivery the Track tab showed no rating prompt, while opening the dispatcher chat did. Cause: `RatingModal` was mounted only in `CustomerChatScreen` (auto-opened for a DELIVERED, unrated errand), and Track's `trackableErrands` filters DELIVERED out, so the errand vanished from Track ("All Caught Up!") the moment it was delivered.
+* **Fix**: new `src/hooks/useDeliveryRatingPrompt.ts`. Track asks for DELIVERED/COMPLETED errands with a rider, placed within the last 24 h (the transaction list has no `deliveredAt`, so `createdAt` bounds it), newest first. It checks `GET /errands/:id/rating` before showing anything, offers each errand once per app run, pauses for the rest of the visit after a skip, and moves straight to the next errand after a submit. A failed check shows nothing and retries next visit. It is hidden while another screen or dialog is in front (`canPromptRating = isScreenFocused && !acceptedErrand && !isHelpModalOpen`), because the sheet is a Modal and would otherwise float over the chat. The draft is kept. The sheet is a fragment sibling in both TrackTab returns, so the empty/live switch does not remount it. Removed the prompt and its `/rating` fetch from `CustomerChatScreen`.
+* **Keyboard**: `RatingModal` content now scrolls (`keyboardShouldPersistTaps="handled"`) instead of clipping when the sheet is squeezed. The focused comment is kept in view on layout or content change, the comment field is capped at `maxHeight`, and the bottom padding drops from max(40, inset+14) to 14 while the keyboard is up (`useKeyboardState`). New optional `summary` prop (stores · #reference); `onDone` now passes `'rated' | 'skipped'`. Error text now uses `colors.danger` (it had no color).
+* **Modified paths**: `src/hooks/useDeliveryRatingPrompt.ts` (new), `src/components/RatingModal.tsx`, `src/screens/portal/TrackTab.tsx` (props `allErrands`, `canPromptRating`), `src/screens/CustomerPortalScreen.tsx`, `src/screens/CustomerChatScreen.tsx`, `src/__tests__/TrackTabRatingPrompt.test.tsx` (new, 18 tests), `src/__tests__/CustomerChatAvailability.test.tsx` (rating case inverted: chat must never prompt or fetch `/rating`).
+* **Verification**: `npx tsc --noEmit` exit 0 (baseline 0). Full jest: 95 suites / 1090 tests pass. Baseline chat suites before editing: 3/28 pass. Run against the pre-edit TrackTab and chat, the new tests fail 11 times, confirming they catch the bug. No server change, no deploy, nothing committed. **Not device-verified** (no emulator): the keyboard behaviour inside the Modal still needs a phone check.
+
+## 2026-11-04 - Shared 12 dp phone page margins (Codex)
+* **Request**: Implement the approved plan to widen content throughout Sugo Express, targeting Samsung Galaxy A04 / version 1.4.0, with 12 dp page margins and existing type/control/image sizes.
+* **Modified paths**: `src/screens/LoginScreen.tsx`, `src/screens/RegisterScreen.tsx`, `src/screens/ForgotPasswordScreen.tsx`, `src/screens/MfaChallengeScreen.tsx`, `src/screens/GooglePhoneSetupScreen.tsx`, `src/screens/VerifyEmailScreen.tsx`, `src/screens/onboarding/OnboardingLocationScreen.tsx`, `src/screens/onboarding/OnboardingAuthChoiceScreen.tsx`, `src/screens/CustomerPortalScreen.tsx`, `src/screens/portal/HomeTab.tsx`, `src/screens/portal/ChatTab.tsx`, `src/screens/portal/ErrandsTab.tsx`, `src/screens/portal/TrackTab.tsx`, `src/screens/ActiveChatsScreen.tsx`, `src/screens/ActiveErrandsScreen.tsx`, `src/screens/CustomerChatScreen.tsx`, `src/screens/ErrandDetailsScreen.tsx`, `src/screens/StoreSearchScreen.tsx`, `src/screens/errand/MerchantCategoryStoresScreen.tsx`, `src/screens/ErrandFormScreen.tsx`, `src/screens/pabili/PabiliHubScreen.tsx`, `src/screens/pabili/PabiliStoreEditorScreen.tsx`, `src/screens/pabili/PabiliReviewScreen.tsx`, `src/components/stores/StorePickScreen.tsx`, `src/components/stores/ProceedDock.tsx`, `src/components/stores/StoreCardRow.tsx`, `src/screens/AccountScreen.tsx`, `src/screens/EditAccountScreen.tsx`, `src/screens/SettingsScreen.tsx`, `src/screens/Notification.tsx`, `src/screens/FeedbackScreen.tsx`, `src/screens/LegalDocumentScreen.tsx`, `src/screens/WaitingForDispatcherScreen.tsx`, `src/screens/ErrandConfirmationScreen.tsx`, `src/screens/ServiceListScreen.tsx`, `src/screens/CustomerLocationScreen.tsx`, `src/screens/location/LocationList.tsx`, `src/screens/location/LocationWizard.tsx`, `src/screens/location/WizardStepDetails.tsx`, `src/screens/location/WizardStepPin.tsx`, `src/components/ChatSkeleton.tsx`, `src/components/MapPreviewField.tsx`, `src/components/ErrandTrackCard.tsx`, `src/components/OfflineGate.tsx`, `src/utils/responsive.ts`, `src/hooks/usePageLayout.ts`, `src/__tests__/pageLayout.test.ts`, `src/__tests__/usePageLayout.test.tsx`, `src/__tests__/MerchantCategoryStoresScreen.test.tsx`, `src/__tests__/CustomerChatScreen.test.tsx`, and this handoff.
+* **Implementation**: Added pure `getPageLayout` and `usePageLayout`, separate from global spacing/type scaling. Phone-only page styles cover all 31 registered routes (including shared delegated store screens), four main tabs, location steps, carousels/docks, skeletons, full-screen map controls, and offline snapshots. Horizontal SafeAreaView roots keep their full outer width; nested content consumes insets once. Tablets retain existing style overrides/caps. Preserve the approved 160 dp Home store cards, 4:3 photos, category height, floating navigation, typography ramps, mascot, and unused legacy AccountTab/ErrandItemsScreen. Historical wider page-gutter guidance is superseded by this user-approved 12 dp phone rule; inner component padding is retained.
+* **Verification**: TypeScript `node node_modules/typescript/bin/tsc --noEmit` exit 0. Combined affected checks: 355 unique tests across 30 suites passed after targeted reruns. Pre-change source confirmed stale category-store photo expectations (200/150 instead of approved 160/120); repaired those assertions and awaited chat modal dispatch in its existing test. Pure layout tests cover 320/360/392/428/599/600/800 dp and asymmetric safe areas; hook tests cover ownership and tablet transitions. Task-specific whitespace checks and static-geometry preservation audit passed.
+* **Rendered checks**: Local React Native Web Login before/after at 320/360/392/428/800 dp; fields gain 24 dp on phones, retain 54 dp height / same font size, and retain tablet width. Light/dark and narrow-phone validation captures saved. These are source previews with inert native-service adapters, not physical-device captures.
+* **Artifacts**: `scratch/page-width-20261104/review.md` (31-route inventory, verification, pending native acceptance), `implementation.diff` (task-only delta from the saved working tree), `changed-files.json`, `verification.json`, and browser comparison PNGs/metrics.
+* **Native acceptance / next session**: No ADB device was connected, so installed A04 build/update ID, display/font settings, physical captures, native keyboard behavior and real-map visual review remain pending. No APK build, version bump, OTA publication, backend/API contract or persistent-data change. Do not describe this as native visual approval or a deployed change.
+
+
+## 2026-11-04 - App Settings follows Account & Profile layout (Codex)
+* **Request**: Redesign App Settings to match the approved Account & Profile UI, remove Sign Out, the Tacurong operations hub, and hardcoded/nonfunctional controls.
+* **Modified paths**: `src/screens/SettingsScreen.tsx`, `src/components/SettingsRow.tsx`, `src/components/SettingsSection.tsx`, `src/__tests__/SettingsScreen.test.tsx`, and this log.
+* **Implementation**: Open list rows with hairline dividers, 24 dp screen gutters, neutral 17 dp icons, title-case section headings and no section cards/shadows. Appearance uses Light/Dark/System radio rows. Shared settings components expose an opt-in `unboxed` presentation; location wizard screens retain their default presentation. Removed Settings Sign Out and its confirmation/auth hook, hardcoded operations/location/device badges, fabricated storage totals, and the cache button that only changed a label. Retained real appearance, notification, password reset, application update, feedback and legal actions. Notification switches now restore stored choices and only update after successful persistence.
+* **Verification**: `node node_modules/typescript/bin/tsc --noEmit` passed with zero errors. All 20 tests passed across `SettingsScreen`, `AccountScreen`, and `LocationWizard` using `node node_modules/jest/bin/jest.js --runInBand --cacheDirectory scratch/jest-home-ui-20261104`. Scoped `git diff --check` passed. Password reset handlers were compared against the pre-edit source and are unchanged.
+* **Next session**: Preserve the approved Account & Profile screen and its sign-out action. Keep App Settings free of placeholder status/storage controls. Native visual review and publication remain pending; preserve unrelated working-tree changes and locked contracts.
+
+## 2026-11-04 - Compact Home images and stronger section headings (Codex)
+* **Request**: Return Home store images to a normal, smaller size and make Popular Stores, Stores near you, and Explore merchants categories noticeably bold.
+* **Modified paths**: `src/components/stores/StoreCardRow.tsx` (Home card maximum width 200 -> 160 dp, baseline photo minimum height 150 -> 120 dp; bold section title), `src/screens/portal/HomeTab.tsx` (bold category section heading; category image height 176 -> 132 dp before responsive scaling), `src/components/HomeSkeleton.tsx` (matching category image placeholders), `src/__tests__/NearbyStoresRow.test.tsx` (existing size expectations), and this log.
+* **Verification**: `npx tsc --noEmit` passed with zero errors. Scoped `git diff --check` passed. All 38 tests passed across `HomeTab`, `NearbyStoresRow`, and `PopularStores` using `node node_modules/jest/bin/jest.js --runInBand --cacheDirectory scratch/jest-home-ui-20261104` after the default temporary cache failed with an EPERM rename error.
+* **Next session**: Preserve the compact Home dimensions and bold headings. Check the result on a device before release; native visual review and publication are pending. Preserve all unrelated working-tree changes and locked contracts.
+
+## 2026-11-04 - MFA is live on customers' phones via OTA; server does not enforce it yet (Claude)
+* **The production OTA already carries MFA.** Update group `bab5148c-a75e-4b09-b841-03949d80641d` (runtime 1.4.0, branch production) was published by `astrowarden` at 2026-11-03T21:33Z (05:33 +08), message "Fix security vulnerabitlies...". Git commit 67dc117 plus the dirty working tree.
+  - Proof: `dist/_expo/static/js/android/AppEntry-7c34f976....hbc` (05:30 +08) has sha256 `w353tDD4w15fSmVSRDK717ROp0dVgkUCy-MicRfzWmE`, equal to the live manifest's `launchAsset.hash`.
+  - That bundle contains `x-sugo-mfa`, `sugo_customer_mfa_trust`, `purpose=mfa`, `mfa-verified` and `saveMfaTrustToken`; no app file changed after the publish.
+  - It also shipped every other uncommitted change in this tree at that time.
+  - A local `expo export` gives a different hash (different build environment), so compare against `dist/`, not a fresh export.
+* **Server**: since 2026-11-04 08:51 (+08), `MFA_ENFORCED_AUDIENCES=WEB_PORTAL,CUSTOMER_APP`. **Customers ARE asked now** on an untrusted phone (password and Google sign-in). Older bundles get the update-required refusal. Rollback: server handshake. (Before this, the app already sent `x-sugo-mfa` and saved the trust token from sign-up and Google sign-up.)
+* **Next**: once the update has reached most phones (expo-updates downloads on one launch and applies on the next), add `CUSTOMER_APP` to the server setting. Phones still on an older bundle then get "Update Sugo Express to the latest version to sign in" instead of a session. A device test of the SMS hand-off is still pending.
+
+## 2026-11-03 - Second sign-in factor (MFA) on password and Google sign-in (Claude)
+* **Request**: recurring MFA on every sign-in. The server stays the identity authority: after a correct password or Google sign-in it may answer with a challenge, and the device proves an SMS code (Firebase, through the portal page) or an email code. A device that passed in the last 30 days sends its server-issued trust token and skips it. The server and the portal page are built in another session; this side is built against the agreed contract and ships as an OTA (no new native modules).
+* **Wire**: every request now carries `x-sugo-mfa: 1` (`src/utils/deviceInfo.ts`), so the server holds the email code until `POST /auth/resend-login-otp { challengeToken }`, which returns a new challengeToken. `POST /customers/login` and `/customers/google-login` add `mfaTrustToken` only when one is stored (exact-body tests unchanged). Challenge = `mfaRequired: true` (password) or `status: "MFA_REQUIRED"` (Google). Verify: `POST /auth/verify-login-otp { challengeToken, code }` or `{ challengeToken, firebaseIdToken }` returns `{ user, token, refreshToken, sessionId, mfaTrustToken }`. Both endpoints sit under `/auth/`, already inside the [LOCKED] `CREDENTIAL_ENDPOINTS` matcher (untouched).
+* **New `src/services/mfaTrust.ts`**: trust token in SecureStore key `sugo_customer_mfa_trust` (get/save/clear, failures swallowed; deliberately NOT cleared on logout, it marks the device); `mfaTrustField()` for request bodies; `readLoginChallenge(data)` normalises both challenge shapes (unknown factors dropped, none named = `["EMAIL"]`, same as the rider app; a challenge without a token throws rather than being read as a session).
+* **`src/services/phoneVerification.ts`**: new `verifyLoginBySms(hint)` opens `https://portal.sugo-express.org/verify-phone?purpose=mfa&hint=<last4>&redirect=customerapp://mfa-verified` (never the full number) and returns the Firebase ID token; posts nothing itself. `verifyPhoneBySms` is unchanged.
+* **New `src/screens/MfaChallengeScreen.tsx`** (route `MfaChallenge { challenge, onboarding? }`, registered in both signed-out stacks of `AppNavigator.tsx`, typed in `navigation/types.ts`): Login-style hero and sheet. Choices list only the offered factors: "Text message to number ending 1234", "Email to al****@gmail.com". Nothing is sent until one is picked. Email: send, 6-digit code, Verify, Resend code, Text me instead. On success: save trust token, mark onboarding complete, `login(user, token, refreshToken)`, replace to CustomerPortal; with `onboarding` set it also runs the first-run location setup like the onboarding Google path. Recovery: a 401 from verify/resend, or the `expiresInSeconds` clock, shows "This sign-in timed out" with Sign in again (goBack to the sign-in screen, whose fields still hold what was typed, or `replace('Login')` with no history). A 400 on the SMS path shows our own "not the number on your account" copy, never the server text; 429 shows the countdown.
+* **`LoginScreen.tsx`, `onboarding/OnboardingAuthChoiceScreen.tsx`**: navigate to `MfaChallenge` on a challenge (onboarding passes `onboarding: { detectedLocation }`). An old build's 403 `APP_UPDATE_REQUIRED` shows "Update Sugo Express to sign in." through the existing `toUserMessage` 403 passthrough.
+* **Tests**: new `MfaChallengeScreen.test.tsx` (15) and `mfaTrust.test.ts` (10, includes the `verifyLoginBySms` URL); `LoginScreen.test.tsx` +4 (trust token sent, password challenge keeps fields, Google challenge, update-required); `OnboardingAuthChoiceScreen.test.tsx` +1. These suites mock `expo-secure-store` themselves; `jest.setup.js` is unchanged.
+* **Verification**: `tsc --noEmit` exit 0; full jest suite 92/92 suites, 1052/1052 tests; the four MFA suites rerun after the last edit, 50/50. Not on a device, not committed, no EAS update.
+* **Follow-up (server session)**: the server now also trusts the device at sign-up and returns `mfaTrustToken` from `/customers/register` and `/customers/google-register`. `RegisterScreen.tsx` and `GooglePhoneSetupScreen.tsx` save it (`saveMfaTrustToken`) before `login(...)`, so the first sign-in on the phone that registered is not challenged. `tsc` exit 0; Register, Onboarding, MfaChallenge and Login suites 47/47.
+* **Next session**: check against the deployed server once the other session ships it: that challenge expiry stays HTTP 401 and a wrong email code stays 400/429 (both assumed here, as in the rider app). The portal page must handle `purpose=mfa&hint=` without a `phone` param. The OTA must land before customer enforcement is switched on, or customers on this build are fine but older builds get APP_UPDATE_REQUIRED.
+
+## 2026-11-03 - Urbanist primary font migration across Customer App (Antigravity)
+* **Request**: Use Urbanist as primary font across Web, Rider, and Customer apps.
+* **Customer App Implementation**:
+  - Installed `@expo-google-fonts/urbanist` (^0.4.2) and pruned dead `@expo-google-fonts/inter` from `package.json`.
+  - `App.tsx`: Replaced `Inter_400Regular`, `Inter_500Medium`, `Inter_600SemiBold`, `Inter_700Bold` with `Urbanist_400Regular`, `Urbanist_500Medium`, `Urbanist_600SemiBold`, `Urbanist_700Bold` in imports and `useFonts` dictionary.
+  - `src/config/theme.ts`: Updated `FontFamily.regular` (`Urbanist_400Regular`), `FontFamily.medium` (`Urbanist_500Medium`), `FontFamily.semibold` (`Urbanist_600SemiBold`), `FontFamily.bold` (`Urbanist_700Bold`). `JetBrainsMono` preserved for monospace keys.
+  - `src/config/portalTypography.ts`: Updated font reference comment from Inter to Urbanist.
+* **Verification**: `npx tsc --noEmit` passed (0 errors). Jest `LoginScreen` tests passed (13/13). `npm run audit:palette` passed (WCAG 2.2 AA verified).
+* **Next session**: Verify UI rendering and layout scaling on physical devices (e.g. Samsung Galaxy A04).
+
+## 2026-11-02 - This app's logo is the master for the rider app and the web portal (Claude)
+
+* **Request**: "When our logo app in customer changes, it shall change in other environment like web and rider app, even in login screen where the logo is being portrayed."
+* **Hand-off**: `artwork/kuya-sugo/export_flat_logo.mjs` (`node artwork/kuya-sugo/export_flat_logo.mjs`) now finishes by copying `assets/mascot/sugo-mark-white.svg` into `../RiderMobileApp/assets/brand/` and `C:\Capstone_Project_Web\src\assets\brand\`, then running each one's `scripts/export-brand-icons.mjs`. One run changes the logo in all three apps. `--only-customer` skips it. Re-running reproduced the committed customer logo files byte for byte.
+* **Login**: the `LoginScreen.tsx` brand row's lucide `Bike` is now the scooter mark (`assets/mascot/sugo-mark-white.png` @1x/@2x/@3x, written by the same exporter), 24 dp in the existing 32 dp tile.
+* **Verification**: `tsc --noEmit` clean; Jest `LoginScreen` + `LoginSingleSignIn` 17/17. Not committed; not in build 11 (needs the next build or an OTA, since this is JS plus a new image).
+
+## 2026-11-01 - Kuya Sugo Wears the Brand Colour (Claude)
+
+* **Request**: "The current color of our character is pale pink. Now, change it to the color of the Sugo Express App to match the theme."
+* **Recolour**: new `artwork/kuya-sugo/brand_colors.py`, called by `render_chibi_wave_clip.py` and `render_story_clip.py` right after they open the source blend (which is never saved). The Tripo courier keeps every colour in one baked texture, so `apply_brand_colors` puts a shader mask between that texture and the Principled Base Color: hue within .05-.09 of the pink (.97), saturation ramp .28-.42, value ramp .10-.20. Masked texels become `palette.ts` primary `#F62459`, scaled by the texel's own luminance (gain .75 over the cloth's median .474), which keeps the baked folds, seams and occlusion. Skin, gloves, trousers, shoes and the tan parcel sit outside the mask. A looser mask (saturation from .18, value from .02) also tinted the shading under the cap brim and specks on the shoes.
+* **View transform**: AgX, the file's default, rolls the brand red off to coral (212, 95, 109) at any gain, so `apply_brand_look` renders with Standard. The packed stills put the median cap and shirt at (224, 76, 109) on screen 1 and (244, 59, 93) on screen 2, against (246, 36, 89) for the swatch.
+* **Assets** (same frames, poses and framing as the pink clips; per-frame alpha margins identical): `kuya-sugo-chibi-hello.webp` 2,193,842 bytes (was 1,799,216), still 251,270; `kuya-sugo-story.webp` 4,299,884 bytes (was 3,885,224), still 94,764. The saturated red compresses a little worse. Pink assets and manifest: `scratch/kuya-sugo-blender/backups/assets-pink-2026-11-01/`; pink frames: `backups/chibi-hello-frames-pink-v2-2026-11-01/` and `backups/story-frames-pink-2026-11-01/`. `Chibi_Onboarding_Story.blend` was re-saved by the story render. The app icon is the white cyclist mark, not the character, so it is unchanged.
+* **Verification**: tsc 0 errors; Jest 11/11 across `KuyaSugoMascot` and `chatOrderSummary`; key-moment strips (story frames 20-340, wave frames 0-110) show no tint on the face, gloves or parcel and a clean cap underside during the trip. Not on a device; the 1.4.0 APK (versionCode 9) still carries the pink clips.
+
+## 2026-11-01 - Bigger Kuya Sugo and a Smoother Open-Palm Wave on Screen 1 (Claude)
+
+* **Request**: "next is the 1st onboarding screen where our character is waving to the customer. Make him look bigger there and optimize the waving animation."
+* **Size**: `OnboardingLocationScreen` mascot height rule `min(208, max(128, 0.22 h))` -> `min(300, max(150, 0.35 h))`: 186 -> 295 dp on a 390x844 phone. Browser harness gaps between the last bullet and Continue: 65 (320x640), 157 (390x844) dp, no overlap. The clip's framing margin dropped from 1.08 to 1.04 and the narrower arm path made the height govern, so he fills about 4.5% more of the 6:7 frame (orthographic scale 1.144 -> 1.095; nearest edge 10 px).
+* **Wave** (`render_chibi_wave_clip.py`, shoulder rebuild unchanged): the old raise blended the shoulder and elbow angles together, so lowering passed through a stiff arm held straight out sideways. The hand now travels rest -> forward-up in front of him -> beside his head and back the same way, each leg a quaternion slerp on its own eased clock (elbow first going up, last coming down). The palm faces the viewer (forearm twist +40, hand +85) and is opened by a new sculpted shape key `Wave | open palm` (`thumbs_up_sculpt.sculpt_open_palm`: the fist strokes run backwards, uncurl 62 degrees, thumb opened 14), keyed with the raise so the hand opens as it arrives. About three and a half waves at 1.5 Hz, wrist flapping 0.9 rad behind the forearm, 3 degree lean, head bob. Choreography was tried in the user's live Blender over MCP on a work copy (`Chibi_Wave_work.blend`); the source blend is untouched.
+* **Assets**: `kuya-sugo-chibi-hello.webp` is now packed at the full 576x672 render (he shows up to 300 dp, about 900 px on a 3x phone): 5,000 ms, plays once, 1,799,216 bytes; still `kuya-sugo-chibi-hello-wave.png` is frame 40 (palm open, mid-swing), 236,215 bytes. Previous frames are in `scratch/kuya-sugo-blender/backups/chibi-hello-frames-front-v1-2026-11-01/`.
+* **Verification**: tsc 0 errors; Jest 21/21 across `KuyaSugoMascot` and both onboarding screens; key moments and the hand close-up checked from the rendered frames; screen 1 plays in the browser harness. Not on a device; not in the 1.4.0 APK.
+
+## 2026-11-01 - Screen-2 Delivery Story With a Sculpted Thumbs-Up (Claude)
+
+* **Request**: "In the middle of the screen, the character tip over and its package box will fall, he pick it up then do a thumbs up in front of the screen, then walk away. Do the thumbs up smooth and have no twisting or uneven animation. Make used of sculpting." Done partly through the Blender MCP connection to the user's open Blender.
+* **Supersedes the walk-across entry below**: the in-place walk clip slid by `Animated` is gone. One clip now holds the whole crossing, so nothing is timed in JavaScript; `action="walk"` became `action="delivery"`.
+* **Sculpt**: new `artwork/kuya-sugo/thumbs_up_sculpt.py` adds shape key `Thumbs up | sculpted fist` to the real right glove (curl the four fingers 32 degrees about the knuckle line, more toward the tips; swing the thumb up 42 degrees about a pivot deep in the palm; 40 relax passes on the displacement field). The source's thumbs-up was a glove of separate spheres scaled up from 0 over the hand while `close glove fingers` shrank the real glove away; both are now unused (gesture glove hidden, old key held at 0). Settled live in the viewport: a stronger curl pushes the fingertips past the palm as a horn, and a pivot at the top of the thumb's base stretches the web into a fin. Thumb membership is surface distance from the digit's core, because the thumb and the mitten's front edge share space near the base.
+* **Story**: new `artwork/kuya-sugo/render_story_clip.py` samples the smoothed Special Delivery story (walk cycle 24-47; trip, fall, get up, walk to the parcel and pick-up 60-280, 1.25x faster) and bakes a new 374-frame, 20 fps timeline: walk in from past the left edge, the source trip in the middle, turn to face the viewer (yaw -59.5 degrees), right arm rises over 13 frames while the fist key eases in, 22-frame hold with one small pump, 12 frames down, turn back while blending into the walk, walk out past the right edge. Every arm bone slerps between two fixed poses (rotations about the armature's y axis, so the thumb comes up with no forearm roll). Walking moves the rig at the planted foot's sweep (0.01417 units per source frame). The parcel's hand-attachment constraint is removed after its world path is sampled; left on with its influence animation cleared it glued the parcel to his hand while it should lie on the floor. `--from F` re-renders only a tail; `--save PATH` keeps the built scene (`C:/Capstone_Server/character_animation/smooth_fix/Chibi_Onboarding_Story.blend`).
+* **Camera**: fixed, orthographic, level (`VIEW` .5,-.85,0), 2.2:1 lane centred between the trip and the thumbs-up. From any raised three-quarter view a fixed orthographic camera draws his straight walk as a slope (about 8 degrees at 14 degrees of tilt, a quarter of the frame lost across the lane), so the shadows are camera-facing ellipses on the floor line just behind him and the parcel. Orthographic scale spans the frame's longer side, here the width.
+* **Assets**: `package_chibi_clips.py --clip story` reads `story-frames/story.json` for the frame count and still, and writes `kuya-sugo-story.webp` (880x400, 20 fps, loops forever) and `kuya-sugo-story-thumbs-up.png` (the thumbs-up hold). `kuya-sugo-walk.*` and `kuya-sugo-delivery.*` stay in `assets/mascot` but nothing requires them, so they are not bundled.
+* **App**: `KuyaSugoMascot` `action="delivery"` is a full-width, fixed-height lane with one `contentFit="contain"` image; narrower phones letterbox rather than crop his entrance. The lane stays empty until the reduced-motion preference resolves, so the thumbs-up still never flashes before he walks in; the still covers reduced motion, blur, background and decode failure. `OnboardingAuthChoiceScreen` keeps the `walkLane` bleed and height rule.
+* **Verification**: tsc 0 errors; Jest 1023/1023 (90 suites); `KuyaSugoMascot` has three new lane tests (full-width lane with no tap target, empty until the motion preference resolves, still for reduced motion and blur). The packed clip is 374 frames at 20 fps, 18,700 ms, 3,885,224 bytes, 880x400, loop count 0 (ANMF durations checked); the still is 90,125 bytes. Rendered close-ups of frames 232-282 show the fist curling and the thumb rising over about 0.3 s, holding, and releasing back onto the parcel with no pop or forearm roll. Browser harness at 390x844: the lane spans 0-390 x 176 px and plays get up, pick up, thumbs-up, walk out, empty lane. A first contact sheet seemed to show the courier jumping left; it was misread cells (thin dividers on a light background), not a render fault. Not yet on a device; the 1.4.0 APK predates this.
+
+## 2026-10-31 - Kuya Sugo Walks Across the Second Onboarding Screen (Claude)
+
+* **Request**: "In the 2nd Onboarding screen ... the character is stay in place. New: Make the Character walks to the screen in horizontal from left to right, when past to the right edge of the screen, will go to the left again to start."
+* **Clip**: new `artwork/kuya-sugo/render_walk_cycle_clip.py` renders frames 24-47 of the smoothed Special Delivery story (one two-step cycle carrying the parcel; frame 48 repeats frame 24, loop gap 0) on the spot: camera and blob shadow ride with the rig's travel. Seen from his right and a little in front (VIEW .5,-.85,.25), so he faces screen right. `package_chibi_clips.py --clip walk` crops to his width and writes `assets/mascot/kuya-sugo-walk.webp` (24 frames at 30 fps, 800 ms, loop count 0 = forever, 300x500, 377,322 bytes) and `kuya-sugo-walk-still.png` (feet together, 97,360 bytes); the packager gained per-clip `fps`, `loop` and `crop`.
+* **Speed**: the source legs sweep back 0.01417 units a frame while the rig travels only 0.007, so the source feet slide. Moving the in-place clip at the planted foot's sweep (0.2394 frame heights a second at 24 fps, 0.2993 at the 30 fps playback) keeps his feet planted; it is `WALK_SPEED` in `KuyaSugoMascot`. A 390 dp phone crossing takes about 9.4 s.
+* **App**: `KuyaSugoMascot` `action="walk"` is a full-width lane (`overflow: hidden`) whose `Animated.loop` moves the frame from `-width` to the lane's right edge, linear, then restarts from the left. It parks off the left edge while the screen is blurred or the app is backgrounded (walks in again on return), and stands in the middle on the still when reduced motion is on or the clip fails to decode. `useNativeDriver` is off on web only: react-native-web hands `Animated.loop` to the missing native driver and walks across once. `OnboardingAuthChoiceScreen` wraps it in `walkLane` (`marginHorizontal: -Spacing.xl`) so he enters and leaves at the real screen edges; height rule unchanged. The `delivery` action and its requires are gone, so `kuya-sugo-delivery.webp` (3.46 MB) and `kuya-sugo-delivery-thumbs-up.png` are no longer bundled; the files and `render_delivery_clip.py` stay.
+* **Verification**: tsc 0 errors; `KuyaSugoMascot` tests replace the delivery test with three walk tests (crossing distance and duration, centred still under reduced motion, stop on blur and restart on focus). Browser harness at 390x844: the lane spans 0-390 px, he walks from -95 to 390 in about 9.5 s, jumps to -106 and walks in again. A hidden Browser pane pauses requestAnimationFrame, so the tab must be fronted to see motion. Not yet on a device; the 1.4.0 APK built earlier today predates this change.
+
+## 2026-10-31 - Customer App 1.4.0 APK (Claude)
+
+* **Request**: "build the new version of apk in npx eas. new version: 1.4.0".
+* **Version bump**: `app.json` `version` and `runtimeVersion` 1.3.0 -> 1.4.0, plus `android/app/build.gradle` `versionName` and `android/app/src/main/res/values/strings.xml` `expo_runtime_version`. EAS builds the uploaded `android/` folder as a bare project (`.easignore` replaces `.gitignore` and does not exclude it), so it ignores app.json for native values; bump both places on every release. versionCode stays remote (production profile autoIncrement: 7 -> 8).
+* **Test fix**: `src/__tests__/chatOrderSummary.test.ts` still read the order card from `push`, but `postOrderSubmitted` has written it once through `runTransaction` on a fixed key since 10-23; the test now reads the transaction's update function and also checks it never overwrites an existing card.
+* **Build**: EAS `production` profile, build `f2d4891f-3aa1-458e-86b7-d72a2b15b9b4`, version 1.4.0, versionCode 8, runtime 1.4.0, channel `production`, APK https://expo.dev/artifacts/eas/XwfY7Oyv4-Q1PJx4ZI1XiWT8abGFhRgDvXU3puwto_I.apk. Built from the uncommitted working tree on top of `b333036`, so it carries every session's uncommitted CustomerApp work, including both onboarding mascot clips.
+* **Verification**: `tsc --noEmit` 0 errors; Jest 1021/1021 (90 suites). Not installed on a device yet.
+* **Rebuild 2026-11-01 (versionCode 9)**: same 1.4.0 / runtime 1.4.0 / `production` channel, now carrying the screen-1 open-palm wave at 35% height and the screen-2 delivery story with the sculpted thumbs-up. Build `028d0b83-07e1-446f-9d49-c08410e23449`, APK https://expo.dev/artifacts/eas/cnxajf6Ae1rcBl8aJGVra4qlSOwOnN9BhuUbQV1Bv1s.apk. tsc 0 errors, Jest 1023/1023 first. `eas build` itself rewrites `android/app/src/main/AndroidManifest.xml` and `res/values/strings.xml` (update channel and runtime version) at upload, so those mtimes do not mean another session edited them.
+
+## 2026-10-31 - Capped Chibi Courier on Both Onboarding Screens (Claude)
+
+* **Direction & User Requests**: "How can we add this in the Sugo Express in the 2nd Onboarding Screen?" ("this" = the Special Delivery chibi animation, smoothed rebuild at `C:/Capstone_Server/character_animation/smooth_fix/`), then "Yes, match screen 1", then "make the screen 1 wave facing front. Optimize the arm and the armpit when waving."
+* **Character decision (supersedes the 10-29 faceless direction for runtime assets)**: Both onboarding screens now show the Tripo chibi with the pink cap, eyes and smile. The faceless Kuya Sugo files (`kuya-sugo-greeting.webp`, `kuya-sugo-welcome.png`, GLB, `.blend` masters) are untouched but no longer referenced by app code, so Metro does not bundle them. `verify_assets.py` and the manifest's top-level `character` block still describe those faceless files; delete or update them only on the user's say-so.
+* **Rendering & assets** (frames go to ignored `scratch/kuya-sugo-blender/`; EEVEE because Cycles ran about 19 s per frame on this GPU; `--part K/N` splits frames across processes):
+  - New `artwork/kuya-sugo/render_chibi_wave_clip.py`: authors a hello wave on the smoothed rig seen straight from the front (open right hand beside the head, elbow at shoulder height, about four waves at 1.6 Hz, smile on, no parcel), fixed camera centred on the body, transparent film, blob shadow. The delivery rig was only weighted for a hanging arm: upper-arm weight ran down the shirt side to the hem, and the armpit carried stray forearm and thigh weight from the voxel-proxy solve. So the script rebuilds the right shoulder in memory and never saves the blend: a new `shoulder.R` bone takes 12 degrees of the lift; the arm/torso split follows surface (Dijkstra) distance from forearm seeds versus torso and hip seeds, so the sleeve underside rises with the arm while the torso side keeps its shape below a short armpit gradient; a 60-iteration Corrective Smooth limited to an armhole band irons out folds. The glove's fingers are sculpted curled, and neither the single fingers bone nor the closing shape key run backwards can open them (the key only inflates the hand), so the hand shows its back to the camera, where it reads as an open mitten instead of a fist. Poses use rotations about fixed armature axes, because aiming a hanging arm straight up twists unpredictably. An orthographic scale spans the frame's longer side, which is the height of this portrait frame; the first front render sized it as the width and clipped the cap and the lowering hand.
+  - New `artwork/kuya-sugo/render_delivery_clip.py`: frames 0-305 of the smoothed story (walk with parcel, trip, recover, pick up, smile and thumbs-up; the return walk is dropped), follow camera at one fixed zoom, blob shadows under courier and parcel.
+  - New `artwork/kuya-sugo/package_chibi_clips.py [--clip hello|delivery]`: `kuya-sugo-chibi-hello.webp` (front view, 5,000 ms, 384x448, 1,676,894 bytes, ends at rest) + `kuya-sugo-chibi-hello-wave.png` (open-hand still, frame 45, 97,745 bytes); `kuya-sugo-delivery.webp` (306 frames, 12,750 ms, 480x432, 3,462,040 bytes, holds on the thumbs-up) + `kuya-sugo-delivery-thumbs-up.png`. Both play once (WebP loop count 1); durations checked from the ANMF chunks. The hello WebP has 103 stored frames because the encoder merges identical rest frames. Adds `hello` and `delivery` blocks and their `exports` entries to `mascot-manifest.json`, keeping its CRLF endings and every other byte.
+* **App changes**:
+  - `src/components/KuyaSugoMascot.tsx`: a `CLIPS` table. `wave` (and the unused `greeting`/`walk`) now play the chibi hello with the same 6:7 frame and replay hint; `action="delivery"` plays the delivery story in a 10:9 frame with its own hint. The still covers reduced motion, background and decode failure for each.
+  - `src/screens/onboarding/OnboardingLocationScreen.tsx`: no change; it already passes `action="wave"`.
+  - `src/screens/onboarding/OnboardingAuthChoiceScreen.tsx`: `action="delivery"`; height rule `height - 660` became `height - 624` (same 48-176 clamp), since the wider framing made the courier only ~80 dp tall on an 800 dp phone.
+  - `src/__tests__/KuyaSugoMascot.test.tsx`: mocks point at the new hello assets; two new tests (delivery sources and size; other actions keep the wave clip).
+* **Verification**: `tsc --noEmit` 0 errors. Jest 19/19 across `KuyaSugoMascot`, `OnboardingAuthChoiceScreen` and `OnboardingLocationScreen`. Browser harness `scratch/kuya-sugo-blender/delivery-preview.*` (`?screen=location` for screen 1, `?theme=dark`) renders the real screens and the real mascot, with only expo-image and native services stubbed. Screen 2 has no overflow at 320x640, 360x720, 360x800 or 412x915 (49-147 dp between copy and buttons), and its clip stops on the thumbs-up. Screen 1 keeps its original frame size, so its layout is unchanged; the front-view courier sits about 13% smaller inside it, because the 3/4 clip had only 5 px of headroom. Front-wave frames were checked frame by frame for clipping (at least 21 px margin at every edge) and with armpit close-ups from the front, below and behind; the previous 3/4 frames and assets are in `scratch/kuya-sugo-blender/backups/chibi-hello-frames-3quarter-2026-10-31/`. No device build, so expo-image's once-only playback on Android/iOS is unverified on a phone.
+* **Open**: The delivery WebP is 3.46 MB; quality 70 or 65 only reaches ~2.8 MB, so a lower frame rate or resolution is the lever if bundle size matters.
+
+## 2026-10-29 - Chibi Mascot Waving Action & 1st Onboarding Screen Integration (Antigravity)
+
+* **Direction & User Request**: "Codex made a character chibi of our app. Now, add an action where it wave 'Like saying Hi' and put it in the 1st Onboarding of the Customer App."
+* **Blender Animation & Modeling**:
+  - Corrected `artwork/kuya-sugo/bake_wave_action.py`: elevated `leftShoulder` to 112° (frontal plane) with -16° forward pitch, and flexed `leftElbow` upward to 64° (with 12° Z-lift) so the waving hand is raised high beside the chibi head at cheek/chin level (Z ≈ 1.95 in world coordinates, within camera bounds `[-0.130, 3.070]`), completely resolving the previous issue where the hand was sunken down at chest level.
+  - Waving mechanics: Smooth ease-in (`t = 0.2` to `1.0s`), natural side-to-side waving oscillation at 1.5 Hz (`leftHand` ±18°, `leftElbow` ±14°, friendly head tilt -5° with ±2.5° sway, chest breathing), and smooth settle back to rest pose between `t = 7.0` and `8.0s`. Frame 240 matches frame 1 seamlessly.
+  - Baked into `kuya-sugo.blend`, `kuya-sugo-chibi.blend`, and `pink-express-pack-box-smooth.blend`.
+* **Rendering & Asset Pipeline**:
+  - Re-rendered all 240 frames (`render-0001.png` to `render-0240.png`, normalized to `frame-000.png` through `frame-239.png`) into `scratch/kuya-sugo-blender/chibi-wave-frames/`.
+  - Exported GLTF 2.0 binary `artwork/kuya-sugo/kuya-sugo.glb` (3,173,444 bytes) containing all 4 actions: `KuyaSugo_Greeting`, `KuyaSugo_Idle`, `KuyaSugo_PackBox`, `KuyaSugo_Wave`.
+  - Packaged `assets/mascot/kuya-sugo-greeting.webp` (1,547,770 bytes, 240 frames, 10,000 ms, loop=1) and `artwork/kuya-sugo/kuya-sugo-frames.zip`.
+  - Encoded H.264 preview `artwork/kuya-sugo/kuya-sugo-10-seconds.mp4` via portable FFmpeg.
+  - Verified static posters `kuya-sugo-welcome.png` (frame 48 high-wave pose), `kuya-sugo-standing.png`, and `kuya-sugo-portrait.png`.
+* **Customer App 1st Onboarding Screen (`OnboardingLocationScreen.tsx`) & Mascot Component**:
+  - Enhanced `src/components/KuyaSugoMascot.tsx`: Added 400ms rapid-press cooldown throttle to eliminate remount churn, ensured accessible props compatibility with testing library and native screen readers.
+  - Tuned `src/screens/onboarding/OnboardingLocationScreen.tsx`: Embeds `<KuyaSugoMascot action="wave" height={Math.min(208, Math.max(128, Math.round(height * 0.22)))} accessibilityHint="Tap Kuya Sugo to wave hello" />` as the hero visual at the top of the 1st onboarding screen, scaling defensively on compact viewports.
+* **Verification**:
+  - `verify_scene.py`: Passed in Blender 5.2 (`SUGO_REFERENCE_SCENE_VALID`, frames 1–240 bounds checked across 5 key poses).
+  - `verify_assets.py`: Passed (flat white/pink SVG, 240 frames, 10,000 ms, 4 GLB actions, 1 skin, faceless chibi, Pack + Box carry mode).
+  - `tsc --noEmit`: 0 TypeScript errors across the Customer App workspace.
+  - Jest Unit Tests: 17 passed, 17 total across `KuyaSugoMascot.test.tsx`, `OnboardingLocationScreen.test.tsx`, and `OnboardingAuthChoiceScreen.test.tsx`.
+
+
+* **Direction**: The user's attached image of blank white chibi figures supersedes the tall athletic proportions. Saved the exact image at `artwork/kuya-sugo/reference/chibi-style-reference.png`. Current design has a large spherical white head (about 40% of total height), short soft body and compact limbs. Keep pink uniform, navy trousers, no face features/headwear, front view and Pack + Box. The flat white/pink launcher logo remains separate.
+* **Implementation/files**: Added `refine_chibi_mascot.py`; rebuild pipeline now imports the source carrying rig, reapplies clean clothing/limbs, then applies chibi proportions. Shared rig parenting preserves skin deformation and the original carrying action. Added soft low/front fill for the large head and matte white material. Updated `build_mascot.py`, spec v7, render/packaging scripts, scene/asset validators, README and AGENTS.md. Current editable file is `kuya-sugo-chibi.blend`, identical to `kuya-sugo.blend`; legacy descriptive alias also refreshed. Updated GLB, MP4, 240-PNG ZIP, Customer runtime PNG/WebP/manifest. Existing onboarding component paths load these assets without app logic changes. Prior master/runtime assets are preserved in `scratch/kuya-sugo-blender/backups/pre-chibi-20261029/`.
+* **Verification**: TypeScript passed with zero errors. Scene validation passed head roundness and head-to-body ratio, all weighted mesh attachments, source/carry mode, front camera, no cap, white/navy materials and framing across five walking poses. Inspected final standing/walking renders with the softer lighting. Asset validation passed design v7/reference path, faceless chibi style, WebP 240 frames/10000 ms/one play, GLB two actions/one skin/ten-second action, flat SVG and icon masks. GLB 3142012 bytes; WebP 2116308 bytes. FFmpeg fully decoded the final MP4: 240 frames, exactly 10.00 seconds, no decode failure. ZIP CRC, 240 PNGs and ten-second metadata passed. Main/chibi Blender files are byte-identical. Scoped whitespace check passed. Runtime logic unchanged; its existing playback tests were already green in the previous refinement.
+* **Render recovery**: One export process crashed after the saved model passed validation. A fresh render succeeded. EEVEE rendering now skips unused Cycles GPU discovery. `--resume` supports contiguous raw frames newer than the saved master. Current raw/normalized frames live in ignored `chibi-pack-box-frames/`; previous attempts are preserved. Default animation samples are 16; posters use 64.
+* **Delivery/next session**: Local Customer App onboarding assets are updated. No installed-device build, OTA/store deployment or physical-device playback test was performed. Use the user's chibi PNG as the style authority on future changes; do not restore the old athletic silhouette. Keep source reference/authoring artifacts excluded from runtime/EAS uploads and preserve unrelated dirty files.
+
+## 2026-10-29 - Cleaner Faceless Kuya Sugo and Customer Onboarding Assets (Codex)
+
+* **User direction and result**: The user rejected the blocky previous Blender character and requested a prettier, clean faceless mascot in the Customer App. Refined the selected rider on its original Pack + Box rig: rounded blank white head, continuous fitted pink shirt with fine zipper/white badge, smaller sleeves, rounded hands, smooth weighted elbows/knees, continuous navy trousers and navy/white sneakers. Retained original backpack, parcel, front camera, no headwear and ten-second walk. Flat white/pink app logo is unchanged.
+* **Files**: New `artwork/kuya-sugo/refine_clean_mascot.py`; `build_mascot.py` now imports the source then applies the cleanup. Updated `mascot_spec.json` (v6, `clean-pack-box-frames`), `render_mascot.py` (32 animation samples), `verify_scene.py` (all weighted pieces must keep a live armature modifier), README and AGENTS.md. Regenerated both Blender master filenames, GLB, MP4, 240-PNG ZIP, runtime posters/WebP and manifest. Original master/runtime images are preserved under `scratch/kuya-sugo-blender/backups/pre-clean-20261029/`. The component and both onboarding screens already load these exact runtime paths; no app navigation or auth logic changed.
+* **Verification**: TypeScript passed with zero errors. Mascot playback suite passed 4/4 using the project-local Jest cache after a sandbox temp-cache permission error on the first attempt. Scene validation passed source provenance, faceless/no-cap, colors, front camera, framing and live rig attachments. An intermediate shoe attachment issue was fixed by deselecting bound meshes before subsequent geometry conversion; all pieces now retain their armature. Final encoded assets passed 240 frames / 10000 ms / one play, two GLB actions / one skin / ten-second action. GLB is 3141724 bytes; runtime WebP is 2332740 bytes. FFmpeg decoded the full final MP4 without errors: 240 frames, 10.00 seconds. Visually inspected final standing/walking posters. Logo SVG hash stays `30C074303620DA636FA26B27478D3925E06C14ABAD1F4F1151D2BF96FAFE16C4`. Scoped whitespace check passed.
+* **Delivery and limits**: Local Customer App assets are updated; no installed-device build, OTA, store release or device playback QA was performed. Browser review on port 4192 timed out, so it is not used as playback evidence; final video decode and native image inspection are the verification. Use the local MP4 and Blender files for review. Preserve the continuous garment cleanup and always-faceless design on regeneration; preserve unrelated dirty files.
+
+## 2026-10-28 - Smooth the User's Pink Express Model in Blender, Pack + Box (Codex)
+
+* **User direction**: Use `C:\Users\Capstone\Downloads\pink_express_athletic_delivery_rider.html` as the actual model, smooth its jagged geometry in Blender and select **Pack + Box**. This supersedes the invented human and mannequin geometry below. Retain the earlier faceless, pure-white athletic body, pink uniform, dark-blue pants, no-cap, front-facing and ten-second animation requirements. The app logo remains flat 2D white/pink.
+* **Status**: Completed locally. Original Downloads file is unchanged; its exact reference copy has matching SHA-256 `6BE74483999C0466100176B179D39DF3CC4336CAF768E883EC20730F5762A923`. No native build, installation, OTA update or publication performed. Device playback QA remains pending.
+* **Files**: Current editable master `artwork/kuya-sugo/kuya-sugo.blend` and identical descriptive copy `pink-express-pack-box-smooth.blend`; animated `kuya-sugo.glb`; `kuya-sugo-10-seconds.mp4`; `kuya-sugo-frames.zip` with 240 PNGs plus timing metadata. Reference HTML, extracted geometry/poses and licensed Three.js r128 dependency are preserved under `reference/` and `vendor/`. Current source is `extract_reference.mjs` -> `build_reference_mascot.py` via `build_mascot.py`; authoring helpers, spec, rendering/packaging, scene/asset validators, video encoder script and README are included. Refreshed `assets/mascot/` posters, once-only WebP and manifest. `AGENTS.md` records the source/carry-mode rule. Only the runtime mascot component's duration comment changed; onboarding/auth behavior is preserved. Earlier source/assets and incomplete render attempts remain in ignored scratch backups/intermediates.
+* **Model and animation**: Imported actual source meshes and kinematic hierarchy, increased curved topology at original proportions, welded vertices, dissolved triangulation, rounded corners, smoothed/unioned volumes and rebuilt the faceless head surface. Source cap and unfinished facial overlay blocks are removed; backpack and handheld parcel remain, with wearable shoulder straps. Pure-white body, brand pink `#F62459` and reference navy `#172554`. Original Pack + Box walk math is baked to the original named hierarchy; yaw is zeroed for the front view. Actions are `KuyaSugo_PackBox` (frames 1–241, exactly ten seconds) and `KuyaSugo_Idle`. EEVEE rendered 240 transparent frames at 24 fps; WebP duration sums to 10000 ms. MP4 uses these same frames on white with H.264. The portable encoder archive was checked against the official npm registry's SHA-512 integrity; it remains excluded in scratch, with no new app dependency.
+* **Verification**: `verify_scene.py` passed provenance, all smooth mesh faces, head topology, white/navy materials, no hat, pack/parcel bones, front orthographic camera, ten-second action and framing samples. `verify_assets.py` passed 240 WebP frames, 10000 ms, once-only playback, exactly two GLB actions, one skin, original-model nodes and ten-second GLB timing; GLB 16415848 bytes, WebP 2145000 bytes. The flat logo SVG hash remains `30C074303620DA636FA26B27478D3925E06C14ABAD1F4F1151D2BF96FAFE16C4`; 1024px RGB icon and white adaptive masks pass. TypeScript completed with zero errors; mascot playback tests passed 4/4. Browser review confirmed the MP4 is 384x448, duration 10 seconds, plays through to ended state at 10.0, and the frame slider loads the requested PNG. Review screenshot: `scratch/kuya-sugo-blender/pack-box-review.png`; local review `http://127.0.0.1:4191/`. Scoped whitespace checks passed.
+* **Next session**: Use the supplied reference and Pack + Box, not the historical builders below. Open the descriptive `.blend` for manual edits; regeneration overwrites them. Keep the logo pipeline separate and always flat white/pink. Heavy source, frames and authoring tools are excluded from EAS uploads. Preserve unrelated dirty app files. Native playback/launcher QA is required before an app release.
+
+## 2026-10-28 - Replace Kuya Sugo with a Human Courier; Keep App Logo Flat (Codex)
+
+* **User direction**: Rewrite the Gemini character with a more appealing professional design. The app logo must **always be flat 2D, white and pink**, separate from the 3D mascot. This supersedes both earlier 3D-portrait launcher designs and the earlier red uniform direction for Customer assets.
+* **Status**: Implemented and exported locally. No native build, installation, OTA or publication performed. The previous Gemini source/assets are preserved in ignored `scratch/kuya-sugo-blender/backups/gemini-20261028/`.
+* **Modified/new paths**: `AGENTS.md` (persistent flat-logo rule), `artwork/kuya-sugo/build_mascot.py` (stable wrapper), `build_premium_mascot.py` (new original human model and Rigify authoring), `setup_blender_tools.py`, `render_mascot.py`, `render_icon_variants.py` (flat-export compatibility wrapper), `export_flat_logo.mjs`, `package_assets.py`, `verify_assets.py`, `README.md`, `kuya-sugo.blend`, `kuya-sugo.glb`; refreshed `assets/mascot/` PNG/WebP/manifest and new flat SVG masters; existing generated Android launcher WebPs; `src/__tests__/OnboardingAuthChoiceScreen.test.tsx` (await asynchronous presses); this handshake. Review files remain in ignored scratch. No app screen/auth/runtime logic was changed in this rewrite.
+* **Character**: Original warm-skinned human courier with sculpted face/nose, hair, brown eyes, pink cap/jacket, white undershirt/gloves/sneakers, tailored graphite trousers and kraft parcel. Official bundled **Rigify and Node Wrangler were enabled and saved to Blender preferences**. Rigify actually generates the human control/deformation rig; no new third-party package/download was needed. Separate metarig and named shaders remain editable. Greeting/Idle/Walk actions are preserved; portable eye deform bones add a short blink, and idle chest motion keeps feet planted. Only the rendered greeting runs in the app; the ~10.3 MB GLB and Blender source remain excluded from runtime/EAS uploads.
+* **Logo**: Redrew the existing Sugo cyclist identity as flat white paths on exact `#F62459`. Master `assets/mascot/sugo-app-logo.svg`; transparent white mark, pink-on-white inverse and safe-area Android SVG are included. Opaque square 1024px icon, adaptive foreground, themed/notification mask and favicon are synchronized. `export_flat_logo.mjs` is the only logo-generation path; no Blender portrait enters launcher exports. `app.json` retains its existing mascot asset paths, which now resolve to the flat logo.
+* **Verification**: Final `node node_modules/typescript/bin/tsc --noEmit` passed with zero errors. All 15 targeted tests passed across the three onboarding/mascot suites: the initial run passed location/mascot (8 tests), while an existing unawaited async Google press caused an auth timing failure; after awaiting all presses, the auth suite passed 7/7 (63.618 seconds). Scoped `git diff --check` passed. Blender Cycles rendering and GLB export completed successfully. `verify_assets.py` passed: SVG uses only white/pink without images/filters/gradients, app icon is opaque 1024px RGB, adaptive alpha bounds `(235,296,802,744)`, all visible mask pixels are white, greeting is 48 frames/3000 ms/one play/338344 bytes, GLB has exactly three named actions, one skin and both blink bones. Inspected full-body/portrait and a closed-eye greeting frame. Browser review bundle built; checked compact 320x640 auth layout and both 360x800 onboarding previews with actual new assets. Saved `scratch/kuya-sugo-blender/premium-brand-preview.png`. Browser harness stubs native services and is not device playback proof.
+* **Next session**: Keep the app logo flat 2D in white/pink at all times. Use the README commands to regenerate character/flat logo separately; procedural regeneration overwrites manual Blender edits. Preserve unrelated working-tree changes. A native rebuild/install and real device playback/launcher-mask QA are needed before releasing the new icon. Future trips, parcel drops and spoken dialogue remain separate animation work.
+
+## 2026-10-28 - Remake Kuya Sugo in Blender to Match Owner Portal Character (Antigravity 2.0, Gemini 3.8 Flash High)
+
+* **Status**: Rebuilt procedural 3D Kuya Sugo model in Blender 5.2.3 LTS, rendered Cycles assets, packaged WebP animation, icons, and native Android mipmaps. Verification suite passed; Jest and TypeScript clean.
+* **Modified/new paths**:
+  - `artwork/kuya-sugo/build_mascot.py`
+  - `artwork/kuya-sugo/kuya-sugo.blend`
+  - `artwork/kuya-sugo/kuya-sugo.glb`
+  - `assets/mascot/` (`app-icon.png`, `android-icon-foreground.png`, `android-icon-monochrome.png`, `kuya-sugo-welcome.png`, `kuya-sugo-standing.png`, `kuya-sugo-greeting.webp`, `notification-icon.png`, `favicon.png`, `mascot-manifest.json`)
+  - `android/app/src/main/res/mipmap-*/ic_launcher*.webp`
+  - `scratch/kuya-sugo-blender/` (`mascot-preview.png`, `icon-portrait.png`, `verify_assets.py`)
+  - `AGENT_HANDSHAKE.md`
+* **Changes**:
+  - Re-authored Kuya Sugo 3D geometry and materials in Blender to match `KuyaSugoCharacter.tsx` in Owner Portal:
+    - Uniform: authentic Sugo Red (`#DC2626` base, `#EF4444` front panel highlight, `#B91C1C` trims and zipper).
+    - Left chest pocket with dark crimson body (`#B91C1C`) and peach reflective patch (`#FCA5A5`).
+    - Right chest badge: circular white pin (`#FFFFFF`) with authentic Sugo Red monogram 'S' (`#DC2626`).
+    - Shirt & Sleeves: Crisp white polo shirt with contoured collar wings and short sleeves (`#FFFFFF`), warm porcelain skin on elbows and forearms (`#FFF3DF`), and white courier gloves (`#FFFFFF`) with wrist cuffs.
+    - Delivery parcel: Kraft corrugated carton (`#DDB17B`) with paper tape (`#FFF0D4`), shipping label with barcode, and Sugo Red postage stamp. Held naturally by the right hand with fingers cradling the box without geometry penetration.
+    - Courier cap: Curved dome, visor, crimson sweatband (`#B91C1C`), squatchee button, and front circular patch with monogram 'S'.
+    - Operator headset: Slate ear cushion (`#57534E`), metallic silver trim ring (`#D6D3D1`), full continuous headband across crown, and acoustic foam boom mic (`#1C1917`).
+    - Trousers & Boots: Warm graphite trousers (`#3E3A39`), dark courier boots (`#242226`) with clean white midsoles (`#D6D3D1`) and tread outsoles (`#1C1917`).
+    - Waving animation: 48-frame greeting clip with the left hand raised high and waving forward cleanly to the viewer with comfortable clearance from the headset.
+* **Verification**:
+  - Blender Cycles build and rendering executed without error.
+  - `verify_assets.py` verified 48 animation frames, 3000ms duration, loop=1, 1024x1024 RGB app icon, adaptive icon foreground alpha bounds within $[150, 874]$ safe zone, pure-white notification icon, and valid GLTF binary (2.29 MB) with 3 actions (`KuyaSugo_Greeting`, `KuyaSugo_Idle`, `KuyaSugo_Walk`) and 1 skin.
+  - Jest: `npm test -- src/__tests__/KuyaSugoMascot.test.tsx` passed 4/4 tests.
+  - TypeScript: `npx tsc --noEmit` passed with 0 errors.
+* **Next session**: All 3D mascot assets, animated WebP, and icon exports are synchronized. If deploying to physical Android/iOS devices, trigger a native build (`gradlew` or EAS build) to bake the new launcher mipmaps into the APK/AAB.
+
+## 2026-10-28 - Kuya Sugo Blender Mascot, Onboarding and App Icon (Codex)
+
+* **Status**: Created original editable Blender mascot and integrated rendered assets locally. No native build, install, OTA update or store publication performed. Blender 5.2.3 LTS is installed at `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`.
+* **Modified/new paths**: `artwork/kuya-sugo/` (master `.blend`, animated `.glb`, procedural model/rig script, rendering/packaging scripts and README), `assets/mascot/` (greeting, posters, launcher/adaptive/monochrome/notification/favicon exports and manifest), `src/components/KuyaSugoMascot.tsx`, both `src/screens/onboarding/OnboardingLocationScreen.tsx` and `OnboardingAuthChoiceScreen.tsx`, `app.json`, `.gitignore`, `.easignore`, `src/__tests__/KuyaSugoMascot.test.tsx`, both onboarding screen test files, and this handshake. Existing generated/ignored Android `mipmap-*/ic_launcher*.webp` resources were refreshed in place. Browser preview, rendered frames and verification script stay in ignored `scratch/kuya-sugo-blender/`.
+* **Changes**: Original cream courier with pink cap/vest, S badge, headset and parcel; armature with hand/foot IK and Greeting/Idle/Walk actions. Onboarding uses a transparent three-second once-only WebP through existing expo-image. Reduced motion, inactive app/screen and decode failure use a still PNG. Account-choice mascot shrinks on short screens and is omitted while an error is shown. Existing permissions, sign-in, navigation and legal actions remain. Runtime carries rendered images, not a live 3D engine. Android/iOS/web icon paths now use Kuya Sugo; native splash remains unchanged. Blender source/intermediates are excluded from EAS uploads.
+* **Verification**: `npx tsc --noEmit` passed after fixing the test-only subscription mock types. Final targeted Jest rerun passed 15/15 tests across three suites (91.279 seconds); existing async Google-sign-in test act warnings remain. Scoped `git diff --check` passed. Expo public config resolves all icon files. Pillow checks confirmed 48 animation frames, 3000 ms, one play, opaque 1024px RGB app icon, pure-white notification alpha mask and adaptive safe-zone bounds `(191,225,837,772)`. GLB v2 has one skin and all three named animations. Local React Native Web preview bundle built; visually checked 320x640 location/account screens including stubbed sign-in failure, and 360x800 dark account screen. Saved presentation at `scratch/kuya-sugo-blender/mascot-preview.png`. Browser preview stubs native auth/location and uses the same animation assets; it is not native playback proof. ADB reports no connected device.
+* **Next session**: Preserve Customer pink and all unrelated working-tree edits. Open `artwork/kuya-sugo/kuya-sugo.blend` for manual edits; do not run the procedural build script over manual changes without intending regeneration. See its README for exports. Installed launcher icon changes require a native rebuild/install; perform real Android/iOS animation decoding, once-only playback and launcher-mask QA before release. Future trips, parcel drops, dialogue and lip-sync are separate work; current Blender actions are Greeting, Idle and Walk.
+
+## 2026-10-28 - Home Row Simplification, Lighter Photos and Stage 2 Swipe Actions (Codex)
+
+* **Status**: Implemented locally. Final `npx tsc --noEmit` passed with zero errors; all 95 tests across 5 targeted suites passed after the final layout adjustments. Scoped `git diff --check` passed. No native build, installation or OTA publication performed.
+* **Modified file paths**:
+  - `src/components/stores/StoreCardRow.tsx`
+  - `src/components/stores/StoreCard.tsx`
+  - `src/components/pabili/SwipeableStoreRow.tsx` (new)
+  - `src/screens/pabili/PabiliHubScreen.tsx`
+  - `src/__tests__/NearbyStoresRow.test.tsx`
+  - `src/__tests__/PopularStores.test.tsx`
+  - `src/__tests__/PabiliScreens.test.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Changes**:
+  - Reduced the Home See all label from 14 to 12 sp and its chevron from 18 to 14 dp, retaining the accessible touch area. Removed both trailing See all cards so each Home row contains only up to three stores; the header links still open the full lists.
+  - Confined the store-photo gradient to the name caption, with a transparent start and reduced maximum opacity (0.76 instead of 0.92). The top and middle are clearer. Reserved header clearance lets long titles wrap without covering rating/ordered-before badges; photo attribution remains separate.
+  - Added Stage 2 ReanimatedSwipeable rows using the existing native gesture/Reanimated packages. Right-to-left reveals an explicit trash/Remove button; swiping never deletes on its own. Left-to-right opens the same PabiliStoreEditor as tapping the row, then resets the row for return navigation. Existing remove/Undo and submitted-draft guards remain. Added a short gesture hint and equivalent screen-reader removal action; the trash button is absent at rest.
+* **Verification**: Final `npx tsc --noEmit` passed. PabiliScreens, NearbyStoresRow, PopularStores, StoreSearchScreen and StoreCardTextLayout passed 95/95 tests across 5 suites (43.092 seconds on the final run). New workflow coverage checks hidden removal, reveal without mutation, explicit deletion/Undo, last-store removal, right-swipe editor navigation, close without mutation and accessible removal. Native gesture lifecycle callbacks are mocked at the library boundary in Jest; physical swipe recognition/animation needs Android QA. Installed ReanimatedSwipeable source confirmed that positive translation reports `right` and negative translation reports `left`.
+* **Next session**: Preserve the new swipe directions, explicit Remove tap, Undo, smaller header links, absent fourth cards and localized photo shading. Review physical horizontal swipes versus vertical scrolling and photo contrast in both themes on Android when available. Preserve all pre-existing working-tree edits.
+
+## 2026-10-28 - Stage 1 Store Search Photo Layout (Codex)
+
+* **Status**: Implemented locally. `npx tsc --noEmit` passed with zero errors. All 33 tests across StoreSearchScreen and ErrandFormScreen passed (23 search checks on the final rerun, 10 errand-form checks in the initial run). No native build, installation or OTA publication performed.
+* **Modified file paths**:
+  - `src/components/pabili/EstablishmentPicker.tsx`
+  - `src/__tests__/StoreSearchScreen.test.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Changes**: Extended the same photo-overlay presentation to Stage 1's shared store picker, covering initial recommendations, typed/category search results and Your stores selections in Find stores and the errand form. Full-width images increase from 140 to 180 dp high; names wrap over the shaded image, category and distance stay below, and street addresses are hidden. Skeleton metadata matches the shorter card body. Preserved search queries, category filters, paging, reorders, pick limits and progression.
+* **Verification**: TypeScript and scoped `git diff --check` passed. Existing StoreSearchScreen checks now cover photo/fallback title placement, image height, distance outside the image, hidden addresses, picked cards and typed search results. Corrected the initial test assertion to inspect ImageBackground's containing frame (its testID belongs to the inner Image); the final search suite passed all 23 tests. ErrandFormScreen passed all 10 checks.
+* **Next session**: The user explicitly expanded this design to Stage 1 search. Keep the shared photo-overlay treatment consistent with Home, merchant category lists and both See all screens. Native visual QA remains pending; preserve all pre-existing working-tree edits.
+
+## 2026-10-28 - Extend Store Photo Layout to Merchant Categories and See All (Codex)
+
+* **Status**: Implemented locally. `npx tsc --noEmit` passed with zero errors; all 43 tests across 5 targeted Jest suites passed. No native build, installation or OTA publication performed.
+* **Modified file paths**:
+  - `src/components/stores/StoreCard.tsx`
+  - `src/components/stores/StoreCardRow.tsx`
+  - `src/components/stores/StorePickScreen.tsx`
+  - `src/screens/errand/MerchantCategoryStoresScreen.tsx`
+  - `src/__tests__/MerchantCategoryStoresScreen.test.tsx`
+  - `src/__tests__/NearbyStoresScreen.test.tsx`
+  - `src/__tests__/PopularStores.test.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Changes**: At the user's request, extended the Home store-photo treatment to merchant category Popular, Nearby and All stores, plus both See all screens. Renamed the opt-in presentation from `home` to `photo-overlay`. Names wrap over the shaded photo, categories and distance remain below, and addresses are hidden. Category horizontal cards now match Home's capped 200 x 150 dp geometry; full-width category/See all images increase from 150 to 180 dp high. Loading skeletons match. Selection controls, ratings, photo attribution, closed-store handling and shopping-list progression are preserved.
+* **Verification**: TypeScript passed. Scoped `git diff --check` passed. MerchantCategoryStoresScreen, NearbyStoresScreen, PopularStores, NearbyStoresRow and StoreCardTextLayout: 5 suites / 43 tests passed using the project-local Jest cache. Existing screen tests now assert title containment, hidden addresses and the updated dimensions, while retaining selection, navigation, sort, paging and fallback coverage.
+* **Next session**: The user explicitly expanded the former Home-only scope. Preserve the photo-overlay layout across Home, merchant category lists and both See all screens. Other store search consumers retain the default presentation. Native visual QA remains pending; preserve all pre-existing working-tree edits.
+
+## 2026-10-28 - Home Store Card Image and Label Layout (Codex)
+
+* **Status**: Implemented locally after inspecting HomeTab, PopularStoresRow, NearbyStoresRow and the shared card components. Final `npx tsc --noEmit` passed with zero errors. All 32 checks across 3 targeted Jest suites passed. No native build, installation or OTA publication performed.
+* **Modified file paths**:
+  - `src/components/stores/StoreCard.tsx`
+  - `src/components/stores/StoreCardRow.tsx`
+  - `src/__tests__/NearbyStoresRow.test.tsx`
+  - `src/__tests__/PopularStores.test.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Changes**: Home's Popular Stores and Stores near you use moderately larger cards capped at 200 dp with 4:3 photos (150 dp high at the cap). Added an opt-in Home presentation: the complete store name wraps inside the photo over a light-to-dark scrim, category and green distance stay beneath it, and street addresses are hidden. Photo credits retain their own clearance; ratings, ordered-before and verified badges, closed-store guards, fallbacks and navigation remain. Loading and See all imagery follow the same dimensions. Other StoreCard consumers retain their existing presentation.
+* **Verification**: `npx tsc --noEmit` passed. NearbyStoresRow, PopularStores and StoreCardTextLayout: 3 suites / 32 tests passed with the project-local Jest cache. Scoped `git diff --check` passed. Corrected the removed `StyleSheet.absoluteFillObject` API to `StyleSheet.absoluteFill` after the initial compiler check.
+* **Next session**: Preserve the Home-only scope and complete-name wrapping. Review on Android in both themes when a native preview is available; native visual QA could not run in this session (native app inventory timed out and ADB daemon was unavailable). Preserve all pre-existing working-tree edits.
+
+## 2026-10-27 - Fix Auth Screens Navigation Stack Loops (Login, ForgotPassword, Register) (Gemini)
+
+* **Status**: Implemented locally. TypeScript (`npx tsc --noEmit`) clean (0 errors); 36 unit tests passed across `ForgotPasswordScreen.test.tsx`, `RegisterScreen.test.tsx`, and `LoginScreen.test.tsx`.
+* **Root Cause**:
+  1. `ForgotPasswordScreen.tsx`: `handleBack` at step 1 and the footer link ("Remembered it? Log In") / step 4 button ("Back to Login") were all calling `navigation.navigate('Login')`. In `@react-navigation/native-stack`, this pushed duplicate `Login` screens on top of `ForgotPassword` (`[Login, ForgotPassword, Login]`), so tapping Back on `Login` went back to `ForgotPassword`.
+  2. `RegisterScreen.tsx`: The footer link ("Already have an account? Log In") called `navigation.navigate('Login')`, pushing duplicate `Login` screens on top of `Register` (`[Login, Register, Login]`).
+  3. `LoginScreen.tsx`: "Don't have an account? Sign Up" and "Forgot Password?" pushed new screens without checking if the target was already the previous route in the stack.
+* **Fix**:
+  - `ForgotPasswordScreen.tsx`: Changed `handleBack` at step 1 to call `navigation.goBack()`. Added `handleGoToLogin` to check if `prevRoute === 'Login'` or `canGoBack()` before popping back to Login. Added `BackHandler` listener for hardware back navigation to step backwards through wizard steps (steps 2 & 3).
+  - `RegisterScreen.tsx`: Changed the footer sign-in link to use `handleGoToLogin` to pop back to `Login` instead of pushing duplicate routes. Added `BackHandler` listener for multi-step registration back navigation.
+  - `LoginScreen.tsx`: Added stack inspection to pop back if `Register` or `ForgotPassword` was already the immediate predecessor route in the stack.
+* **Modified file paths**:
+  - `src/screens/LoginScreen.tsx`
+  - `src/screens/ForgotPasswordScreen.tsx`
+  - `src/screens/RegisterScreen.tsx`
+  - `src/__tests__/ForgotPasswordScreen.test.tsx`
+  - `src/__tests__/RegisterScreen.test.tsx`
+* **Directives for Next Session**: All auth navigation paths now cleanly pop back to root without stacking or looping. TypeScript and Jest test suites green.
+
+## 2026-10-27 - Preserve Customer Pink Brand Throughout the App (Codex)
+
+* **Status**: Implemented locally; TypeScript, native palette check, scoped whitespace checks and 80 existing affected-screen tests passed. No APK build, installation or OTA publication performed.
+* **Modified file paths**:
+  - `AGENTS.md`
+  - `src/components/BottomNav.tsx`
+  - `src/components/ErrandChannelList.tsx`
+  - `src/screens/portal/ErrandsTab.tsx`
+  - `src/screens/portal/ChatTab.tsx`
+  - `src/screens/portal/AccountTab.tsx`
+  - `src/screens/AccountScreen.tsx`
+  - `src/screens/EditAccountScreen.tsx`
+  - `src/screens/ActiveErrandsScreen.tsx`
+  - `src/__tests__/LightModeSubstrates.test.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Changes**:
+  - Recorded the explicit standing Customer pink identity in AGENTS.md: light #F62459, dark #FF4D79, readable strong light pink #C41B47. Keep brand actions and selected navigation/filter accents pink while preserving semantic colors and the requested field-color hierarchy.
+  - Replaced charcoal/gray selected bottom-navigation colors with theme pink for icons, labels and collapsed selection dots. Kept inactive contrast, glass surfaces, dimensions, animations and tab behavior.
+  - Restored pink to selected My Errands/Messages filter labels and underlines, tracking/messaging/reorder actions, chat retry actions and Active Errands detail actions.
+  - Restored pink profile-photo/edit affordances across Account and Edit Account; the delivery-pin shortcut now uses the same brand accent. Paired solid controls with onPrimary for light/dark readability.
+  - Preserved store/reference/payment/address/fee/rider text mappings, statuses, warnings, errors, recent profile-navigation fixes, shopping-list flows and all unrelated work. The source palette and native accent configuration were already pink and remain unchanged.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - node scripts/checkPalette.cjs: passed; Customer pink tokens, Expo configuration, adaptive icon and native notification/primary accents verified.
+  - BottomNav, ActiveErrandsScreen, AccountScreen, EditAccountScreen, ChatTab, LightModeSubstrates, DarkModeSubstrates and palette: 80/80 existing tests passed across 8 suites. Used the approved external runner and project-local cache after earlier Windows sandbox cache rename failures.
+  - Scoped git diff --check: passed.
+* **Next session**: Preserve pink as the Customer brand across future screens and actions; do not reintroduce charcoal/blue primary branding. Retain meaningful status colors, readable neutral surfaces and the explicit field colors. Review the changed navigation/actions on Android in both themes; native visual QA has not been run.
+
+## 2026-10-27 - Fix Edit Profile Navigation Stack Duplicate & Back Loop (Gemini)
+
+* **Status**: Implemented locally. TypeScript (`npx tsc --noEmit`) clean; Jest test suite (`EditAccountScreen.test.tsx` and `AccountScreen.test.tsx`) passed (17 tests total).
+* **Root Cause**: In `EditAccountScreen.tsx`, `handleSave` invoked `navigation.navigate('Account', { user: updatedUser })` after saving. In `@react-navigation/native-stack`, this pushed a duplicate `Account` route on top of `EditAccount` instead of popping it (`[CustomerPortal, Account, EditAccount, Account]`). Pressing the back button on the header of the newly pushed `Account` screen popped back to `EditAccount`, trapping the user in a navigation loop.
+* **Fix**: Replaced the unconditional push with `navigation.goBack()` (with a defensive fallback to `navigation.navigate('Account', ...)` only if `!navigation.canGoBack()`). Because `await updateUser(updatedUser)` already synchronizes `AuthContext` (`authUser`), `AccountScreen` automatically refreshes its display upon popping back.
+* **Modified file paths**:
+  - `src/screens/EditAccountScreen.tsx` (lines 405-414)
+  - `src/__tests__/EditAccountScreen.test.tsx` (lines 193-239)
+* **Directives for Next Session**: Verify edge-to-edge hardware navigation back-press behavior across devices. All TypeScript and Jest tests are green.
+
+## 2026-10-25 - Customer text scaling and complete store names (Codex)
+
+* **Status**: Implemented locally. TypeScript passed; 171 unique checks across 13 targeted suites passed after correcting an existing offline test fixture. No APK build, device installation or OTA publication performed.
+* **Behavior**: Shared StoreCard now lets the complete name wrap at full column width, places VERIFIED below the name, top-aligns selection controls and allows two lines for category/distance and address. This covers Home, search, nearby, popular and merchant-category store lists. Shopping-list and review store headings wrap; editor/category headers, recent activity and category labels allow two lines. Store-card line heights use the actual scaled font sizes.
+* **App-wide scaling**: Added the existing body cap (1.25) to previously unbounded top-level Text/Animated.Text and the input cap (1.20) to TextInput across 42 files. Nested text inherits its parent cap. Added PortalFontSizeMultipliers.input; preserved baseline font sizes, width scaling, explicit tighter limits and accessibility scaling. Source audit covered all 1,163 Text/Animated.Text/TextInput nodes and found no uncapped top-level nodes.
+* **Modified file paths**:
+  - `src/__tests__/MerchantCategoryStoresScreen.test.tsx`
+  - `src/__tests__/StoreCardTextLayout.test.tsx`
+  - `src/__tests__/responsive.test.ts`
+  - `src/components/AccessRestrictedModal.tsx`
+  - `src/components/AppUpdatesModal.tsx`
+  - `src/components/CalendarPickerModal.tsx`
+  - `src/components/ChatSearchFilterBar.tsx`
+  - `src/components/ConfirmModal.tsx`
+  - `src/components/CustomerHelpModal.tsx`
+  - `src/components/DraggableBentoMosaic.tsx`
+  - `src/components/ErrandChannelList.tsx`
+  - `src/components/ErrandChannelRow.tsx`
+  - `src/components/ErrandDetailsModal.tsx`
+  - `src/components/ErrandProofStrip.tsx`
+  - `src/components/ErrandStateConflictModal.tsx`
+  - `src/components/InlineFieldError.tsx`
+  - `src/components/LiveTrackingMap.tsx`
+  - `src/components/MapPreviewField.tsx`
+  - `src/components/MerchantCategoriesModal.tsx`
+  - `src/components/NotificationBell.tsx`
+  - `src/components/Pagination.tsx`
+  - `src/components/RatingModal.tsx`
+  - `src/components/RecaptchaModal.tsx`
+  - `src/components/SessionExpiredSheet.tsx`
+  - `src/components/SettingsRow.tsx`
+  - `src/components/SettingsSection.tsx`
+  - `src/components/TypingIndicator.tsx`
+  - `src/components/stores/StoreCard.tsx`
+  - `src/components/stores/StoreCardRow.tsx`
+  - `src/config/portalTypography.ts`
+  - `src/screens/AccountScreen.tsx`
+  - `src/screens/CustomerChatScreen.tsx`
+  - `src/screens/EditAccountScreen.tsx`
+  - `src/screens/ErrandConfirmationScreen.tsx`
+  - `src/screens/ErrandDetailsScreen.tsx`
+  - `src/screens/ErrandFormScreen.tsx`
+  - `src/screens/FeedbackScreen.tsx`
+  - `src/screens/ForgotPasswordScreen.tsx`
+  - `src/screens/GooglePhoneSetupScreen.tsx`
+  - `src/screens/LegalDocumentScreen.tsx`
+  - `src/screens/LoginScreen.tsx`
+  - `src/screens/MaintenanceScreen.tsx`
+  - `src/screens/RegisterScreen.tsx`
+  - `src/screens/ServiceListScreen.tsx`
+  - `src/screens/WaitingForDispatcherScreen.tsx`
+  - `src/screens/errand/MerchantCategoryStoresScreen.tsx`
+  - `src/screens/onboarding/OnboardingAuthChoiceScreen.tsx`
+  - `src/screens/pabili/PabiliHubScreen.tsx`
+  - `src/screens/pabili/PabiliReviewScreen.tsx`
+  - `src/screens/pabili/PabiliStoreEditorScreen.tsx`
+  - `src/screens/portal/AccountTab.tsx`
+  - `src/screens/portal/ErrandsTab.tsx`
+  - `src/screens/portal/HomeTab.tsx`
+  - `AGENT_HANDSHAKE.md`
+* **Verification**: Exact Expo SDK 57 versioned docs inspected before edits. Initial `npx tsc --noEmit` and final `node node_modules/typescript/bin/tsc --noEmit` passed with zero errors. New StoreCardTextLayout/responsive gate: 26/26 passed (134, 150, 328 and 548 dp cards; 720 x 1604 physical display at multiple densities). Affected-screen gate: 10 suites / 138 checks passed; MerchantCategoryStoresScreen rerun: 7/7 passed, totaling 171 unique passing checks across 13 suites. Gates cover NearbyStoresRow, NearbyStoresScreen, PopularStores, MerchantCategoryStoresScreen, StoreSearchScreen, PabiliScreens, HomeTab, CustomerChatScreen, SettingsScreen, LightModeSubstrates and DarkModeSubstrates. Merchant category offline fixture previously rejected only two calls, then reused the prior test's API implementation; it now rejects every request until Retry. Windows sandbox runs stalled; final Jest and compiler verification used the approved external runner and a project-local cache. Scoped diff whitespace check passed before this log update.
+* **Next**: Review an updated Android build on the reported 720 x 1604 display and a wider device, with normal/large OS fonts and both themes. Check long verified store names, selectable cards, categories, shopping-list/review headings and search inputs. Native text measurement/visual QA has not been performed; the installed APK is unchanged. Preserve unrelated existing work.
+
+## 2026-10-25 - Consistent Customer App search fields (Codex)
+
+* **Status**: Implemented locally. No native build, installation or OTA publication performed.
+* **Files**: New `src/config/searchField.ts`; `src/screens/portal/HomeTab.tsx`, `src/components/pabili/EstablishmentPicker.tsx`, `src/screens/Notification.tsx`, `src/screens/portal/ErrandsTab.tsx`, `src/screens/portal/ChatTab.tsx`; existing light/dark substrate assertions updated in `src/__tests__/LightModeSubstrates.test.tsx` and `src/__tests__/DarkModeSubstrates.test.tsx`; this handoff.
+* **Behavior**: All five requested search controls share Home/Stage 1's existing glass finish: 48 dp minimum height, 24 dp corners, highlighted top border, neutral shadow and theme-aware surface. Shared medium-weight input typography, placeholder treatment and 16 dp search icons. Preserved screen-specific prompts, search/clear behavior, pinned controls, spacing and Home navigation. Uses the existing surface treatment without introducing native blur dependencies. The user's requested consistency with the existing glass design takes precedence over AGENTS.md's general flat-surface/input-radius preference. Preserved unrelated working changes.
+* **Verification**: Expo SDK 57 versioned docs read before edits. `npx tsc --noEmit` passed with zero errors. Scoped diff whitespace check passed. Existing HomeTab, StoreSearchScreen, ChatTab, NotificationScreen, LightModeSubstrates and DarkModeSubstrates suites: 72/72 tests passed across six suites. Cancelled the stalled sandboxed cache-writing run and completed the same checks using the approved broader local runner.
+* **Next**: Review all five screens on Android in both themes, including typing/clearing and pinned list controls. The installed APK has not changed. Keep future search styling in the shared module.
+
+## 2026-10-25 - Keep one shopping list while browsing Home (Codex)
+
+* **Status**: Implemented locally; supersedes the earlier same-day dedicated add-store picker flow. TypeScript and focused tests passed. No APK build, device installation or OTA publication performed.
+* **Files**: `src/screens/pabili/PabiliHubScreen.tsx`, `src/services/pabiliDraft.ts`, `src/screens/portal/HomeTab.tsx`, `src/screens/CustomerPortalScreen.tsx`; new `src/components/home/ShoppingListFab.tsx` and `src/__tests__/ShoppingListFab.test.tsx`; regressions in `src/__tests__/PabiliScreens.test.tsx` and `src/__tests__/pabiliDraft.test.ts`. Removed the previous `addToList` route/picker plumbing and its obsolete tests from navigation types, StoreSearch and ErrandForm. Preserved all unrelated existing work.
+* **Behavior**: Stage 2 Add stores, header back and focused Android hardware back return to CustomerPortal Home with the draft intact. Home consumes `initialTab` after use so subsequent returns choose Home reliably. Home has a floating shopping-bag button whose badge counts saved stores, including empty stores, and resumes Stage 2. It restores per account after restart, stays separate from the active-errands FAB, has scroll clearance and hides while submission is unresolved. Every normal store-browsing entry point now merges its picks into the saved draft at Stage 2. Same-store matching preserves pins, stable branch keys, item rows and unfinished input. Removed the automatic dropped-stores/keep-list dialog entirely. Stage 2 has explicit store removal with Undo; clearing explicitly removes all stores and items and returns Home. Empty lists offer Add stores. Quantity remains picker-only.
+* **Boundaries**: The backend's maximum of three stores still applies to the combined list; over-limit additions preserve the original list and show inline guidance. Legacy store-type drafts and pinned-store drafts cannot mix because the server requires storeCount to match the pinned stores array; switching between these modes preserves the current draft and shows inline guidance, without a discard dialog. Clear/finish the existing list to switch. Frozen submission and account-isolation protections remain.
+* **Verification**: Expo SDK 57 docs inspected before edits. `npx tsc --noEmit` passed with zero errors. Eight-suite gate (ShoppingListFab, pabiliDraft, PabiliScreens, HomeTab, Navigation, pabiliSubmit, LightModeSubstrates, DarkModeSubstrates): 126/126 passed. Final PabiliScreens/ShoppingListFab rerun: 43/43 passed, including two added loading-back/pending-submission regressions (128 unique checks across these eight suites). StoreSearch and ErrandForm also passed in the earlier five-suite, 122-test gate. Scoped diff whitespace check passed.
+* **Next**: Review an updated native build: Stage 2 back/Add stores -> Home badge -> browse and pick another store -> Stage 2 with all prior items retained and no discard prompt; remove/Undo, empty/clear list, same-name branches, restart, themes and active-errands FAB coexistence. The installed APK has not been changed. Keep the prior quantity-picker-only request and preserve unrelated work.
+
+## 2026-10-25 - Add stores from Stage 2 and simplify item quantity (Codex)
+
+* **Status**: Implemented locally. TypeScript and 69 focused tests passed. No APK build, device installation or OTA publication performed.
+* **Files**: `src/navigation/types.ts`, `src/screens/pabili/PabiliHubScreen.tsx`, `src/screens/pabili/PabiliStoreEditorScreen.tsx`, `src/screens/StoreSearchScreen.tsx`, `src/screens/ErrandFormScreen.tsx`; regressions in `src/__tests__/PabiliScreens.test.tsx`, `src/__tests__/StoreSearchScreen.test.tsx`, `src/__tests__/ErrandFormScreen.test.tsx`; this handoff.
+* **Behavior**: Stage 2 has a floating Add stores button above the bottom review dock, with scroll clearance and the existing three-store limit. Opens the appropriate pinned-store or merchant-category picker with current stores retained. Confirming uses `popTo('ErrandItems', ...)` to return to the existing Stage 2; cancel leaves the draft unchanged. Existing store keys, pins, items and compose state survive adding stores, including suffixed branch keys. Current stores cannot be deselected in this add flow; newly chosen stores can be toggled before confirming. Unresolved submissions retain their existing guard. Removed all quantity preset chips and their unused styles; the plus/minus Quantity picker remains. The user's explicit request to remove multipliers overrides AGENTS.md's general quantity-preset guideline.
+* **Verification**: Read Expo SDK 57 versioned docs before edits. `npx tsc --noEmit` passed with zero errors, including the final feature and test changes. `npx jest src/__tests__/PabiliScreens.test.tsx src/__tests__/StoreSearchScreen.test.tsx src/__tests__/ErrandFormScreen.test.tsx --runInBand --cacheDirectory .expo/jest-stage2-cache --silent`: 3 suites, 69/69 tests passed. Scoped `git diff --check` passed. Preserved unrelated existing work.
+* **Next**: Native Android visual/touch smoke test for Stage 2 FAB placement, adding pinned and merchant stores, the three-store limit, cancellation and quantity picker in both themes. Preserve current draft identity, submission recovery and unrelated typography/palette changes.
+
+## 2026-10-22 - Sentence item, quantity, unit and note extraction polish (Codex)
+
+* **Status**: Implemented and verified locally; server counterpart DEPLOYED. New local APK `android/app/build/outputs/apk/release/app-release.apk` built successfully (1.2.0 / versionCode 10, existing signing configuration), APK v2 signature verified. No OTA update, public download replacement or device installation. Device smoke test remains.
+* **Files**: `src/utils/itemEntryParser.ts`, `src/services/itemTidyService.ts`, `src/services/pabiliDraft.ts`, `src/screens/pabili/PabiliReviewScreen.tsx`, `src/components/pabili/PabiliItemRow.tsx`; regressions in `src/__tests__/itemEntryParser.test.ts`, `pabiliDraft.test.ts`, `PabiliScreens.test.tsx`.
+* **Behavior**: Detect English sentence requests and regional verbs, spoken counts and rider conditions; canonical local unit aliases. Send full sentences up to 500 characters without cutting notes. Apply only confident answers; preserve explicit count conflicts and any field changed after the request snapshot. Existing notes are kept. Unresolved entries show a check hint and Review rows open the store editor. Raw names over the existing 120-character save limit must be split or edited before sending. Existing Send cancellation and offline behavior retained within that limit.
+* **Verification**: Exact Expo 57 version docs read before code changes. TypeScript no-emit passed; focused parser/draft/screens 167/167 tests passed. Native Gradle `app:assembleRelease` succeeded; packaged sourcemap sources match all five final feature files exactly. Preserved pre-existing Review typography/contrast changes and all other unrelated work. Temporary Jest cache removed after checks.
+* **Server**: Gemini prompt v5, exact provider types, numeric/brand/unit preservation, duplicate and confidence safeguards, whole-sentence cache keys and bounded 500-character input. API tests 7/7, Python checks 99/99; real synthetic provider check 14/14 after a medicine packaging clarification. Server backup `/root/deploy-backups/sentence-20261022-01`; model bytes/config preserved. No schema changes.
+* **Next**: Install the local APK for Android smoke testing: English/local sentences, count vs pack size, medicine strength/banig notes, conflicting counts, editing while a response is pending, offline/uncertain review, and long notes. Preserve existing typography, map rules and unrelated work. Do not infer that installed apps already have the new mobile detection.
+
 > **ALWAYS ACTIVE IN ALL SESSIONS**: This file is the shared living memory between Claude App (Anthropic) and Antigravity 2.0 (Google AI / Gemini) for the Expo React Native Customer App.
 
 ---
 
 ## 📡 Tunnel State
-* **Active Mission**: Pabili Review & Track Screen Visual Streamlining (Removed "What happens next", Updated Delivery Fee Label, Removed Compass Icon & Shortened Track Subtitle)
+* **Active Mission**: Over-The-Air (OTA) Updates Integration (expo-updates SDK 57 & EAS Update Channels)
 * **Current Driver**: Antigravity 2.0 (Gemini 3.8 Flash)
 * **Target Workspace**: `CustomerApp` (Expo SDK React Native)
-* **Last Updated**: 2026-10-14
+* **Last Updated**: 2026-10-18
+
+---
+
+## 2026-10-21 - Pabili Step Number Contrast Fix (Codex)
+* **Status**: Implemented; TypeScript, contrast checks and 48 existing flow tests passed.
+* **Files modified**:
+  - src/components/pabili/StepPills.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Fixed active step numbers inheriting the white light-theme onPrimary color while sitting on a hardcoded white circle.
+  - Paired the active pill/number ink with the opposite onPrimary label/circle surface. Used primaryStrong in light mode and primary in dark mode; removed conflicting static text/background colors.
+  - Applies to all three shared stages: Stores, List items and Review. Kept the step progression, completed/upcoming stages, typography, sizing and screen handlers unchanged.
+* **Verification**:
+  - Measured number/circle and label/pill contrast: light 5.84:1, dark 4.61:1, both above 4.5:1.
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - Existing PabiliScreens and StoreSearchScreen suites: 48/48 tests passed. Used the approved unsandboxed runner and local Jest cache after previous Windows sandbox cache rename failures.
+  - Scoped git diff --check: passed.
+* **Next session**: Preserve distinct active number/circle colors in both themes. Review the three stages on Android; native visual QA has not been run. Preserve unrelated work.
+
+---
+
+## 2026-10-21 - My Errands List Cards (Codex)
+* **Status**: Implemented; TypeScript and existing light/dark rendering checks passed.
+* **Files modified**:
+  - src/screens/portal/ErrandsTab.tsx
+  - src/components/ErrandsSkeleton.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Put active and past errands into individual theme-aware cards with 14 dp corners, 18 dp inner padding, neutral 1 dp borders and 18 dp gaps.
+  - Used the app background behind the scrolling list so cards stand apart in both themes. Matched loading placeholders to the new card treatment.
+  - Preserved existing typography, field colors, status/payment semantics, search/filter controls, fixed header, scrolling clearance and all details/tracking/message/reorder handlers.
+  - The explicit request for errand cards takes precedence over the general local guideline against repeated card layouts. Kept one card per errand without adding nested cards.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - Existing My Errands light/dark rendering checks: 2 passed across 2 suites; 13 unrelated tests skipped via --testNamePattern=ErrandsTab. Used the approved unsandboxed Jest runner and local cache after previous Windows sandbox cache rename failures.
+  - Scoped git diff --check: passed.
+* **Next session**: Preserve the requested card list. Review on Android in both themes with long store names, addresses and payment/rider details; native visual QA has not been run. Preserve unrelated in-progress work.
+
+---
+
+## 2026-10-19 - Match Home Search to Step 1 Find Stores (Codex)
+* **Status**: Implemented; TypeScript and 12 targeted existing tests passed.
+* **Files modified**:
+  - src/screens/portal/HomeTab.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/__tests__/DarkModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Matched Home's search entry to EstablishmentPicker's Step 1 input: 48 dp minimum height, 24 dp radius, 1.2 dp border, matching theme surfaces/top border, neutral 16 dp search icon, horizontal padding and neutral shadow.
+  - Used the same placeholder text, Inter medium sizing and placeholder color. Removed the separate pink Search action and icon wrapper; the entire field remains the existing accessible button opening StoreSearch.
+  - Preserved Home's floating placement, header animation, measured content clearance and all navigation handlers. Step 1 itself was unchanged. The requested rounded field takes precedence over the general local guideline against pill-shaped actions.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - Existing HomeTab interactions and Home light/dark rendering checks: 12 passed across 3 suites; 13 unrelated checks skipped via --testNamePattern=HomeTab. Used the approved unsandboxed runner and project-local Jest cache after earlier Windows sandbox cache rename failures.
+  - Scoped git diff --check: passed.
+* **Next session**: Keep Home search visually matched to Step 1. Review on Android in both themes and at larger text settings; native visual QA has not been run. Preserve the app typography/color refinements and unrelated work.
+
+---
+
+## 2026-10-19 - Align Remaining Customer Screens with Portal Typography (Codex)
+* **Status**: Implemented; TypeScript passed. All 893 existing tests are verified across 79 suites, including the corrected light-mode suite rerun.
+* **Files modified**:
+  - AGENT_HANDSHAKE.md
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/components/AccessRestrictedModal.tsx
+  - src/components/AppUpdatesModal.tsx
+  - src/components/CalendarPickerModal.tsx
+  - src/components/ChatSearchFilterBar.tsx
+  - src/components/ConfirmModal.tsx
+  - src/components/CustomerHelpModal.tsx
+  - src/components/ErrandChannelRow.tsx
+  - src/components/ErrandDetailsModal.tsx
+  - src/components/ErrandProofStrip.tsx
+  - src/components/ErrandStateConflictModal.tsx
+  - src/components/ErrandTrackCard.tsx
+  - src/components/FeeBreakdownCard.tsx
+  - src/components/GoogleSignInButton.tsx
+  - src/components/InlineFieldError.tsx
+  - src/components/LiveTrackingMap.tsx
+  - src/components/MaintenanceNoticeBanner.tsx
+  - src/components/MapPreviewField.tsx
+  - src/components/MerchantCategoriesModal.tsx
+  - src/components/MobileErrorBoundary.tsx
+  - src/components/NetworkStatusPill.tsx
+  - src/components/OfflineGate.tsx
+  - src/components/Pagination.tsx
+  - src/components/PaymentMethodTile.tsx
+  - src/components/PaymentModeSelectionModal.tsx
+  - src/components/PaymentProofUpload.tsx
+  - src/components/RateLimitCountdown.tsx
+  - src/components/RatingModal.tsx
+  - src/components/RecaptchaModal.tsx
+  - src/components/SessionExpiredSheet.tsx
+  - src/components/SettingsRow.tsx
+  - src/components/SettingsSection.tsx
+  - src/components/StatusBadge.tsx
+  - src/components/TypingIndicator.tsx
+  - src/components/stores/StoreCard.tsx
+  - src/components/stores/StorePickScreen.tsx
+  - src/navigation/AppNavigator.tsx
+  - src/screens/AccountScreen.tsx
+  - src/screens/ActiveChatsScreen.tsx
+  - src/screens/ActiveErrandsScreen.tsx
+  - src/screens/CheckoutScreen.tsx
+  - src/screens/CustomerChatScreen.tsx
+  - src/screens/ErrandConfirmationScreen.tsx
+  - src/screens/ErrandDetailsScreen.tsx
+  - src/screens/ErrandFormScreen.tsx
+  - src/screens/ErrandItemsScreen.tsx
+  - src/screens/FeedbackScreen.tsx
+  - src/screens/GooglePhoneSetupScreen.tsx
+  - src/screens/LegalDocumentScreen.tsx
+  - src/screens/LoginScreen.tsx
+  - src/screens/MaintenanceScreen.tsx
+  - src/screens/RegisterScreen.tsx
+  - src/screens/ServiceListScreen.tsx
+  - src/screens/SettingsScreen.tsx
+  - src/screens/StoreSearchScreen.tsx
+  - src/screens/VerifyEmailScreen.tsx
+  - src/screens/WaitingForDispatcherScreen.tsx
+  - src/screens/errand/MerchantCategoryStoresScreen.tsx
+  - src/screens/onboarding/OnboardingAuthChoiceScreen.tsx
+  - src/screens/pabili/PabiliHubScreen.tsx
+  - src/screens/pabili/PabiliReviewScreen.tsx
+  - src/screens/pabili/PabiliStoreEditorScreen.tsx
+* **Changes**:
+  - Replaced legacy small text sizes in secondary screens and shared dialogs with the existing Inter-based PortalFontSizes, responsive scaling and proportional line heights. Used readable body/caption/heading/button roles to match the updated Home, My Errands, Messages and Account tabs.
+  - Aligned native stack titles and secondary order/payment/receipt, feedback, store, settings, help, calendar, update and connection surfaces. The main four tab files and the specified field colors were preserved.
+  - Resolved default-system-font fallbacks in payment, rating, pagination and individual chat/map labels by using the loaded Inter font variants. Financial figures now use Inter medium/bold to match portal amounts; technical version/incident identifiers retain their intentional monospaced style.
+  - Used the existing Auth typography ramp for older Google-phone/email verification and shared auth controls. Kept branded initials/headlines and the established responsive OTP sizing. No new font package, font-loading change or global scale change.
+  - Preserved component geometry, colors, navigation, state transitions, financial guards, authentication and map rendering behavior. Changes are limited to typography styles and imports.
+  - Updated the stale EditAccount light-surface test to assert the existing theme bgGray and flat elevation instead of the prior white/beveled design. The EditAccount screen itself was not changed.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors (final typography/import pass).
+  - Full existing Jest run: 78 suites passed, 892 tests passed; one stale EditAccount surface assertion failed. After aligning that existing check with the current theme, the complete LightModeSubstrates suite passed 8/8. All 79 suites are therefore verified across the full run and targeted rerun. No new behavioral tests were added for styling.
+  - Scoped git diff --check on modified source files: passed. Unrelated existing jest.setup.js EOF whitespace was left alone.
+* **Next session**: Keep the established Inter family, portal roles and readable line heights across secondary screens. Review on Android at compact widths and larger text settings, especially payment/rating dialogs, calendar controls, help copy, financial rows and verification inputs. Native visual QA has not been run. Preserve all unrelated palette, OTA and payment-method changes.
+
+---
+
+## 2026-10-19 - Customer-Specified Errand and Message Detail Colors (Codex)
+* **Status**: Implemented; TypeScript and 34 targeted existing tests passed.
+* **Files modified**:
+  - src/screens/portal/ErrandsTab.tsx
+  - src/components/ErrandChannelRow.tsx
+  - src/config/palette.ts
+  - src/__tests__/palette.test.ts
+  - src/__tests__/ChatTab.test.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/__tests__/DarkModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Applied the customer's revised explicit mapping: bold dark store names, sky-blue order IDs/payment methods, dark dispatcher names, status-dependent text, pink addresses, green realized fees and gray rider names. Dark-mode store names retain readable light text.
+  - Added detailBlue (#2574B5 light, #93C5FD dark), a readable sky-blue token, without changing existing palette values. Extended the existing palette contrast checks to cover it across all text surfaces.
+  - Kept dates/item counts neutral and ensured history references remain visible even when item counts exist. Retained pending-fare and cancelled/voided-charge treatments.
+  - Kept the underlined filters, open row layout, avatars, navigation, subscriptions and Track screen unchanged. This is the new narrowly specified color treatment; the prior broader color/filter pass remains rolled back.
+  - Reused the actual palette in the existing ChatTab mock and replaced stale hardcoded search-surface expectations with the existing theme tokens.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - git diff --check on modified source/tests: passed.
+  - ChatTab interactions, My Errands/Messages light/dark rendering, palette contrast and type-scale checks: 34 passed across 4 suites; 11 unrelated checks skipped by the name filter. The blue token clears 4.5:1 on all tested text surfaces in both themes. Used the approved unsandboxed Jest runner after previous Windows sandbox cache rename failures.
+* **Next session**: Preserve this explicit field-color mapping and the existing filters. Review on Android in both themes with long references/store names and pending/delivered/cancelled orders. Native visual QA has not been run. Preserve concurrent payment-method and unrelated work.
 
 ---
 
@@ -24,6 +667,248 @@
   - `src/screens/ErrandDetailsScreen.tsx` and `src/components/ErrandDetailsModal.tsx`: the Payment Method row renders it when the errand carries a change and is not cancelled; otherwise unchanged.
   - `src/utils/errandPersonnel.ts`: `paymentMethodChangeOf(errand)` reads the server's `paymentMethodChange` from either API shape.
 * **Not changed**: `src/screens/portal/ErrandsTab.tsx` (other uncommitted work there). Its chips read the list's `paymentMethod`, which the server now sends as the method actually used.
+
+## 2026-10-19 - Restore Color Hierarchy in My Errands and Messages (Codex)
+* **Status**: Rolled back at the customer's request. The earlier My Errands and Messages redesigns are restored; Track and unrelated work are preserved.
+* **Files modified**:
+  - src/screens/portal/ErrandsTab.tsx
+  - src/screens/portal/ChatTab.tsx
+  - src/components/ErrandChannelRow.tsx
+  - src/components/DispatcherAvatar.tsx
+  - src/__tests__/ChatTab.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Responded to the customer's report that the previous gray treatment made the screens difficult to scan. Used existing palette tokens for pink store names/actions, blue references/payment methods, navy dispatcher/rider names, warm address/waiting text, green fees/delivered states and red cancellation states.
+  - Replaced gray underlined filters with semantic colored outlines and solid selected fills. Preserved accessible selection, filter behavior and pinned headers. My Errands counts sit below labels to reduce horizontal crowding.
+  - Added compact status fills to history and conversation rows. Order references remain separate from date metadata, including history rows with item counts. Preserved the open layout and whitespace.
+  - Added an optional DispatcherAvatar accentColor for the blue fallback headset in conversation rows; retained photos, Firebase presence/subscriptions and all navigation handlers.
+  - Reused the actual light palette in the existing ChatTab test mock. No palette definitions or unrelated screens changed.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - New field, status-chip and selected-filter color pairs measured at least 4.61:1 contrast across light/dark themes.
+  - git diff --check on changed source/tests: passed.
+* **Rollback**: Reversed only this entry's source changes in ErrandsTab, ChatTab, ErrandChannelRow and DispatcherAvatar, plus its ChatTab test mock change. The light/dark search expectations were already back to their previous values and were left alone. `node node_modules/typescript/bin/tsc --noEmit` passed with 0 errors after rollback; scoped `git diff --check` passed. Do not reapply this color pass without a new request; preserve the earlier screen redesigns, Track work and concurrent payment-method changes.
+
+---
+
+## 2026-10-19 - Track Screen Palette & Accessibility Refinement (Codex)
+* **Status**: Implemented; TypeScript and 65 existing tracking/palette tests pass.
+* **Files modified**:
+  - src/screens/portal/TrackTab.tsx
+  - src/components/LiveTrackingMap.tsx
+  - src/components/RiderToStorePanel.tsx
+  - src/components/ErrandProgressStepper.tsx
+  - src/components/StatusBadge.tsx
+  - src/__tests__/LiveTrackingMapModes.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Simplified the details panel into open sections with readable labels, hairline dividers, store-first identity and separate order references. Removed decorative category boxes and the unsupported rider verification mark.
+  - Used existing palette tokens for pink delivery routes, warm pickup routes/stops, green completed stops and neutral text. Added a route casing, solid/dashed legend samples, checkmarks and screen-reader labels so meaning does not depend on color alone.
+  - Increased map action targets to 48 dp and used opaque theme surfaces. The ETA row and legend now flow vertically to accommodate wrapping text. Follow/recenter actions, camera behavior, rider marker rendering, routing and GPS logic remain intact.
+  - Simplified the shopping state and progress spotlight, enlarged progress captions and retained all stage/ETA conditions. StatusBadge has an opt-in readable variant used by Track; other callers retain their sizing.
+  - Preserved the single root map outside scrolling containers and the shopping/delivery map gate. Missing delivery addresses now show an explicit missing-address label.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit: passed, 0 errors.
+  - LiveTrackingMapModes, LiveTrackingMapEngine, LiveTrackingMapSmoothing, RiderToStorePanel and palette: 65/65 tests passed across 5 existing suites.
+  - Selected light/dark foreground pairs for body text, selected controls and stop markers measured at least 4.61:1 contrast. Map route casing improves separation from map imagery; native basemap contrast still needs visual review.
+  - git diff --check on changed source/tests: passed. Used the approved unsandboxed Jest runner and project-local cache after previously observed Windows sandbox cache rename restrictions.
+* **Next session**: Review on Android in light/dark mode with long store names, larger text, multiple stops, approximate routes and live rider updates. Native visual QA has not been run. Preserve map rendering invariants, palette definitions and unrelated in-progress changes.
+
+---
+
+## 2026-10-19 - Order Chat Screen Redesign (Codex)
+* **Status**: Implemented; TypeScript and 29 targeted existing tests pass.
+* **Files modified**:
+  - src/screens/CustomerChatScreen.tsx
+  - src/components/ChatSkeleton.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Simplified the dispatcher header with neutral avatars/actions and one live presence label. The expandable order strip leads with store names/categories and places the order reference underneath.
+  - Used a continuous theme-aware surface, flatter incoming bubbles, readable pink outgoing bubbles, more spacing around timestamps, and a shadow-free composer with 48 dp actions. Preserved message clustering, scrolling, drafts and keyboard-controller behavior.
+  - Replaced navy quote/item-check headers and nested store boxes with neutral headers and open store/category/item sections. Retained item availability distinctions, all quantities, fee information, approval/adjustment actions and payment selection/upload flows.
+  - Simplified expanded route details, system notices and connection/empty states. The empty conversation no longer claims a dispatcher is connected without presence evidence.
+  - Matched the message loading skeleton to the new bubble styling; kept existing channel-list skeleton changes.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit (equivalent to npx tsc --noEmit): passed, 0 errors.
+  - CustomerChatScreen, CustomerChatPaymentChoice, CustomerChatAvailability and the existing CustomerChat composer rendering check: 29 tests passed across 4 suites; 7 unrelated light-mode checks skipped via --testNamePattern=CustomerChat.
+  - Covered sending, listener/session recovery, presence, typing, latest-message navigation, item reviews, payment choices, half-payment receipt uploads and archived/assigned order guards. Existing test fixtures emit expected mocked Firebase-refusal warnings and existing act warnings.
+  - git diff --check on modified source/tests: passed. Used the approved unsandboxed Jest runner and project-local cache after previous Windows sandbox cache rename restrictions.
+* **Next session**: Review on Android in light/dark mode with the keyboard open, long store names/references, multi-store quotes, item revisions and an outstanding payment ledger. Preserve Firebase/session logic, financial guards, required payment selection and receipt uploads. Native visual QA has not been run.
+
+---
+
+## 2026-10-19 - Home Screen Visual Refinement, Pink Branding Preserved (Codex)
+* **Status**: Implemented; TypeScript and 36 existing tests pass.
+* **Files modified**:
+  - src/screens/portal/HomeTab.tsx
+  - src/components/stores/StoreCardRow.tsx
+  - src/components/HomeSkeleton.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/__tests__/DarkModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Kept the current pink customer palette, section order, carousel widths/photo heights, floating search positioning, active-errand FAB, category selection and all existing navigation handlers.
+  - Refined the search control with restrained corners, a hairline border, zero elevation and a pink brand action. Used theme foreground colors and the stronger light-mode pink for readable action text.
+  - Added consistent whitespace and semibold headings; removed decorative store-section header icons and boxed empty-state treatments. Existing empty/error actions remain available.
+  - Allowed category names and recent reference/date metadata to wrap, increased recent-row spacing and used hairline dividers. Aligned loading placeholders with the new spacing.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit (equivalent to npx tsc --noEmit): passed, 0 errors.
+  - HomeTab, NearbyStoresRow and CustomerPortalScrollGestures: 34/34 tests passed across 3 suites.
+  - Existing light/dark HomeTab rendering checks: 2/2 passed across 2 suites; 13 unrelated tests skipped via --testNamePattern=HomeTab.
+  - git diff --check on changed source/test files: passed. Used the approved unsandboxed Jest runner and project-local cache after previously observed Windows sandbox cache rename restrictions.
+* **Next session**: Review on Android in light/dark mode with long category names and recent order references. Keep the pink identity and the established Home carousel, header/search animation and FAB geometry. Preserve unrelated in-progress palette, OTA and other screen changes. Native visual QA has not been run.
+
+---
+
+## 2026-10-19 - Messages & Support Screen Redesign (Codex)
+* **Status**: Implemented; TypeScript and targeted existing tests pass.
+* **Files modified**:
+  - src/screens/portal/ChatTab.tsx
+  - src/components/ErrandChannelRow.tsx
+  - src/components/ErrandChannelList.tsx
+  - src/components/ChatSkeleton.tsx
+  - src/components/DispatcherAvatar.tsx
+  - src/__tests__/ChatTab.test.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/__tests__/DarkModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Matched My Errands with a continuous theme-aware surface, flat search input, underlined status tabs, responsive page margins and a fixed header above the scrolling conversation list.
+  - Conversation rows lead with saved store names (category fallback), followed by the dispatcher, order reference and plain human status. Removed the verification badge and status capsule; added wrapping and accessible row/tab labels.
+  - Added optional neutral dispatcher avatars for these rows. Kept Firebase presence, metadata subscriptions, dispatcher photos and session row memory.
+  - Unboxed empty/error states, added a specific no-match state, simplified retry styling and removed the redundant bottom refresh link. Pull-to-refresh and error/slow-load retry remain available.
+  - Matched the independent channel skeleton to the new rows; left conversation-message skeletons intact. Search includes saved store names and formatted reference numbers.
+  - Updated existing search surface checks to use current light/dark theme tokens.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit (equivalent to npx tsc --noEmit): passed, 0 errors.
+  - Existing ChatTab interaction tests and light/dark ChatTab rendering checks: 7 passed across 3 suites; 13 unrelated tests skipped via --testNamePattern=ChatTab. Used the approved unsandboxed runner and project-local Jest cache after earlier Windows cache rename restrictions.
+  - git diff --check for modified source/tests: passed.
+* **Next session**: Review on Android with long multi-store names, dispatcher names, references and filtered-empty/error states. Shared conversation rows and list states also appear in Active Chats. Preserve unrelated palette, OTA and prior screen changes. Native visual QA has not been run.
+
+---
+
+## 2026-10-19 - Production Channel Lock for Direct Website APK Distribution (Antigravity 2.0, Gemini 3.8 Flash)
+* **Status**: [Executed & Deeply Verified - `npx tsc --noEmit` passed with 0 errors, `npm test -- updatesService.test.ts` passed 19/19 (100%)].
+* **Specification & Changes**:
+  - **Native Android Manifest (`AndroidManifest.xml`)**:
+    - Added `expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY` with value `'{"expo-channel-name":"production"}'`.
+    - Guarantees that any APK built (locally via Gradle or distributed directly to customers via website) is permanently hardwired to listen to the `production` update channel.
+  - **EAS Build Configuration (`eas.json`)**:
+    - Added `"android": { "buildType": "apk" }` under `production` profile so that running `eas build --profile production` outputs an installable `.apk` file for direct website hosting instead of a Google Play-only `.aab` bundle.
+* **Files Modified**:
+  - `CustomerApp/android/app/src/main/AndroidManifest.xml`
+  - `CustomerApp/eas.json`
+* **Verification**:
+  - `npx tsc --noEmit`: 0 errors.
+  - `npm test -- updatesService.test.ts`: 19/19 tests passed (100%).
+
+---
+
+## 2026-10-19 - My Errands Screen Redesign (Codex)
+* **Status**: Implemented; TypeScript no-emit check passed, 0 errors.
+* **Files modified**:
+  - src/screens/portal/ErrandsTab.tsx
+  - src/components/ErrandsSkeleton.tsx
+  - src/__tests__/LightModeSubstrates.test.tsx
+  - src/__tests__/DarkModeSubstrates.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Used a continuous theme-aware surface, generous section spacing, hairline row dividers, a flat search field, and underlined status tabs with accessible selection/counts. Kept the fixed header and list-only scrolling.
+  - Put store names first in active orders; removed redundant status kickers, decorative service badges, milestone copy, and duplicate header counts. Pending requests show their human status without a delivery progress rail.
+  - Kept pickup/delivery details, pending/voided pricing semantics, tracking/chat/receipt navigation, filters, and reordering. Missing addresses no longer fall back to a municipal address.
+  - Changed full-width reorder controls to compact neutral actions; retained 48 dp targets. Long store names and route addresses can wrap; compact devices omit visual tab counters.
+  - Aligned independent loading placeholders to the new rows and responsive page margins. Updated existing search surface test expectations.
+* **Verification**:
+  - node node_modules/typescript/bin/tsc --noEmit (equivalent to npx tsc --noEmit): passed, 0 errors.
+  - git diff --check on changed source/test files: passed.
+  - Existing My Errands light/dark rendering checks: 2 passed across 2 suites (13 unrelated tests skipped via --testNamePattern=ErrandsTab). Used the local Jest cache and an approved unsandboxed run after previously observed Windows sandbox cache rename restrictions.
+* **Next session**: Visually review My Errands on Android in light/dark mode with pending, active, delivered and cancelled orders, long multi-store routes and compact widths. Preserve the existing unrelated palette, reference-number and OTA edits.
+
+---
+
+## 2026-10-19 - Customer Account & Profile Redesign (Codex)
+* **Status**: Implemented; TypeScript and both existing screen suites pass.
+* **Files modified**:
+  - src/screens/AccountScreen.tsx
+  - src/screens/EditAccountScreen.tsx
+  - src/__tests__/EditAccountScreen.test.tsx
+  - AGENT_HANDSHAKE.md
+* **Changes**:
+  - Removed duplicate statistics/location tiles and the large inline map preview. Delivery details now use an unboxed address row; the full map still opens on demand. An unset address navigates to saved locations for setup.
+  - Kept the large photo/name hierarchy; removed decorative verification badges, colored menu badges, and enclosing account cards. Added neutral icons, hairline dividers, generous spacing, and compact-screen margins.
+  - Flattened the profile editor into open sections with neutral, shadow-free inputs and sentence-case labels. Preserved the keyboard-aware form, fixed save action, validation, photo flow, and phone verification.
+  - Updated existing test expectations for field labels and flat phone input styling.
+* **Verification**:
+  - TypeScript no-emit check (same compiler as npx tsc --noEmit): node node_modules/typescript/bin/tsc --noEmit passed, 0 errors.
+  - AccountScreen.test.tsx and EditAccountScreen.test.tsx: 2 suites passed, 16/16 tests. Used node_modules/.cache/jest-account-redesign and an approved unsandboxed test run after Windows sandbox cache rename failures.
+  - git diff --check for changed source/test files passed.
+  - Android visual preview unavailable: ADB daemon could not start in the available environment.
+* **Next session**: Review on an Android device in light/dark mode and with a long name/address. Preserve the nullable address state, on-demand map, keyboard-safe save dock, and existing uncommitted palette/OTA changes. Legacy portal AccountTab/EditProfileModal are not mounted by the current navigator and were left unchanged.
+
+---
+
+## 2026-10-18 - Over-The-Air (OTA) Updates Integration (`expo-updates`, EAS Channels, Hardened `updatesService`) (Antigravity 2.0, Gemini 3.8 Flash)
+* **Status**: [Executed & Deeply Verified by Antigravity 2.0 - `npx tsc --noEmit` passed with 0 errors, `npx expo config --type public` clean and validated, Jest unit tests 19/19 passed (100%) in `updatesService.test.ts`].
+* **Specification & Architecture**:
+  - **OTA Delivery Pipeline Integration (`expo-updates` ~57.0.26)**:
+    - Installed official Expo SDK 57 compatible `expo-updates` package via `npx expo install expo-updates`.
+    - Configured `app.json` with EAS update endpoint (`https://u.expo.dev/b3e551d1-d422-4e09-8f27-d1d76237a1c4`), `checkAutomatically: "ON_LOAD"`, and zero-startup-lag policy (`fallbackToCacheTimeout: 0`).
+    - Configured runtime version policy: `"runtimeVersion": { "policy": "appVersion" }` guaranteeing strict binary compatibility across versions (preventing native crash risks).
+    - Deduplicated plugin registration in `app.config.js` to ensure clean manifest generation.
+  - **EAS Build Profile Channel Binding (`eas.json`)**:
+    - Bound `development` build profile to `channel: "development"`.
+    - Bound `preview` build profile to `channel: "preview"`.
+    - Bound `production` build profile to `channel: "production"`.
+  - **Native Android Manifest Alignment (`AndroidManifest.xml` & `strings.xml`)**:
+    - Enabled `expo.modules.updates.ENABLED` (`true`).
+    - Added `expo.modules.updates.EXPO_UPDATE_URL` (`https://u.expo.dev/b3e551d1-d422-4e09-8f27-d1d76237a1c4`).
+    - Linked `expo.modules.updates.EXPO_RUNTIME_VERSION` to `@string/expo_runtime_version` and defined `<string name="expo_runtime_version">1.2.0</string>` in `android/app/src/main/res/values/strings.xml`.
+  - **Defensive Anti-Happy-Path Updates Service (`src/services/updatesService.ts`)**:
+    - In development mode (`__DEV__ = true`) or when updates are disabled (`!Updates.isEnabled`), short-circuits instantly to protect Metro HMR and avoid native invalidated bridge callbacks.
+    - Added `isRollBackToEmbedded` detection and download handling to support instant emergency rollback directives via `eas update:rollback`.
+    - Added 15-minute background check cooldown throttling (`MIN_CHECK_INTERVAL_MS = 15 * 60 * 1000`) and test reset hook.
+    - Implemented `setupUpdateListeners()` subscribing to `AppState` `'change'` to trigger silent background update checks upon foreground resume.
+    - Wraps `Updates.checkForUpdateAsync()` and `Updates.fetchUpdateAsync()` in defensive try/catch blocks; network dropouts, DNS failures, and server timeouts fail silently without interrupting active customer flows.
+    - Exposes fire-and-forget `syncUpdatesInBackground()` and safe `reloadAppForUpdate()`.
+  - **Application Mount Integration (`App.tsx`)**:
+    - Integrated `syncUpdatesInBackground(true)` and `setupUpdateListeners()` inside a root `React.useEffect` on mount with cleanup unsubscription.
+  - **Testing & Tooling (`jest.setup.js`, `src/__tests__/updatesService.test.ts`)**:
+    - Added comprehensive `expo-updates` mock in `jest.setup.js` covering standard updates and rollback directives.
+    - Created unit tests covering dev-mode bypass, disabled bypass, successful detection and download, rollback to embedded, AppState foreground listeners, and Anti-Happy-Path network error handling (19/19 passed, 100%).
+* **Files Modified / Created**:
+  - `package.json` & `package-lock.json`
+  - `app.json`
+  - `app.config.js`
+  - `eas.json`
+  - `android/app/src/main/AndroidManifest.xml`
+  - `android/app/src/main/res/values/strings.xml`
+  - `src/services/updatesService.ts` (NEW)
+  - `App.tsx`
+  - `jest.setup.js`
+  - `src/__tests__/updatesService.test.ts` (NEW)
+* **Verification Ledger**:
+  - `npx tsc --noEmit`: 0 TypeScript compiler errors.
+  - `npx expo config --type public`: Validated configuration export with `updates` and `runtimeVersion`.
+  - `npm test -- updatesService.test.ts --watchAll=false`: 19/19 tests passed (100%).
+
+---
+
+## 2026-10-16 - Figma Prototype Customer Portal UI Decluttering & Header/Nav Cleanup (Antigravity 2.0, Gemini 3.8 Flash)
+* **Status**: [Executed & Deeply Verified by Antigravity 2.0 - `npx tsc --noEmit` passed with 0 errors, Vite production build clean in 20.15s].
+* **Specification & Changes**:
+  - `HomeTabScreen.tsx`: Removed the "Tacurong City Errand Dispatch" notice card under the search bar. Removed unused `ShieldCheck` icon.
+  - `CustomerHeader.tsx`: Removed the "?" (HelpCircle), "moon/light" (theme toggle), and "logout" (exit) buttons from the header controls, preserving only the Notification Bell and Profile Avatar.
+  - `CustomerBottomNav.tsx`: Removed the pink circular background (`bg-[#F62459]`) from the "Search" button, rendering it as a standard clean tab button aligned with Home, Errands, Track, and Chat.
+  - `StoreSearchScreen.tsx`: Removed the notice banner `"Pick up to 3 stores per errand. Additional stops are only +₱30 each."`.
+* **Files Modified**:
+  - `c:\Capstone_Project_Web\FigmaPrototype\FigmaPrototype\Designprototypecreation\src\app\components\customer\HomeTabScreen.tsx`
+  - `c:\Capstone_Project_Web\FigmaPrototype\FigmaPrototype\Designprototypecreation\src\app\components\customer\CustomerHeader.tsx`
+  - `c:\Capstone_Project_Web\FigmaPrototype\FigmaPrototype\Designprototypecreation\src\app\components\customer\CustomerBottomNav.tsx`
+  - `c:\Capstone_Project_Web\FigmaPrototype\FigmaPrototype\Designprototypecreation\src\app\components\customer\StoreSearchScreen.tsx`
+* **Verification Ledger**:
+  - `npx tsc --noEmit`: 0 errors.
+  - `npm run build`: built in 20.15s with exit code 0.
 
 ---
 
@@ -1762,3 +2647,71 @@ The reported symptom was "the login screen shows a security message instead of W
   - `npm test src/__tests__/AnimatedSplashScreen.test.tsx`: PASS (3/3 tests passed)
   - Complete CustomerApp suite (`npm test`): **PASS (39/39 suites, 279/279 tests passing - 100% green)**
   - Hermes Android Bundle (`npx expo export --platform android`): PASS (7.2MB HBC bundle, 3573 modules cleanly compiled)
+
+
+### Shared Customer and Rider Palette (2026-10-18, Codex)
+- **User instruction**: Rider and Customer apps must use the same palette.
+- **Changes**: Matching 62-role light/dark `src/config/palette.ts` modules, exposed through each app's existing `src/config/theme.ts` API. Red #DC2626 (light), #F87171 (dark), navy #1E3A5F, matching surfaces/text/status colors, and separate on-fill text roles. Existing typography, layouts, labels, handlers, GPS, and telemetry are preserved. Rider route-leg colors remain unchanged.
+- **Verification**: `npx tsc --noEmit` passed in both apps. Customer `npm run audit:palette` confirms identical palette copies. Customer palette tests: 25 passed; Rider palette tests: 43 passed. No Android device or emulator is attached, so native visual verification is still required.
+- **Next session**: Update both palette copies together. Use onPrimary/onDanger/etc. on filled buttons and keep white for imagery/overlays. A new mobile binary is required to ship these changes; this session has not released APKs.
+
+- **Customer files**: `src/config/theme.ts`, `src/config/palette.ts`, `src/__tests__/palette.test.ts`, `scripts/checkPaletteSync.cjs`, `package.json`, `app.json`, and color-only deltas across `src/components/` and `src/screens/`. Primary button labels/icons now use on-fill ink; pink brand literals use red. `src/components/LiveTrackingMap.tsx` uses the same store/customer route color roles as Rider; saved-location preview markers use red. Layouts, copy, and handlers are preserved.
+
+- **Final verification**: Latest `npx tsc --noEmit` passed. Android export succeeded after the final route-color update (3,668 modules; 7.7 MB Hermes bundle, `dist/palette-android`). Login tests passed (13); ConfirmModal tests passed (4) on a cached rerun after an earlier build-load timeout. Temporary Jest cache removed.
+- **Android chrome**: `app.json` and `android/app/src/main/res/values/colors.xml` use matching navy primary (#1E3A5F), red icon background and red notification accent (#DC2626). Both Expo configs resolve those values.
+- **Concurrent work**: Unrelated Customer OTA/update changes appeared in App.tsx, eas.json, package/lock files, jest.setup.js, and updatesService/test files during this task. They were preserved. An intermediate compiler run saw their test globals before they were corrected; the final full compiler run passed.
+
+### CustomerApp Over-The-Air (OTA) Updates & Hardening (2026-10-18, Antigravity)
+- **Objective**: Implement and harden production-grade OTA update delivery via `expo-updates` for `CustomerApp` without Google Play re-submission.
+- **Key Architectural Fixes Applied**:
+  1. **Rollback Directive Guard**: Fixed `updatesService.ts` to actively inspect `isRollBackToEmbedded` and execute `Updates.fetchUpdateAsync()`, preventing emergency rollbacks from being ignored.
+  2. **Throttled Foreground Resume Sync**: Added `setupUpdateListeners()` hooked to React Native `AppState` change events with a 15-minute cooldown (`MIN_CHECK_INTERVAL_MS = 15 * 60 * 1000`), ensuring long-running customer sessions check for updates on resume without spamming network/battery.
+  3. **Native Resource Synchronization**: Defined `<string name="expo_runtime_version" translatable="false">1.2.0</string>` in `android/app/src/main/res/values/strings.xml` and referenced `@string/expo_runtime_version` in `AndroidManifest.xml` adhering to Expo config plugin standards.
+  4. **Plugin Deduplication**: Deduplicated plugin list in `app.config.js` to eliminate redundant `expo-notifications` execution and ensure `expo-updates` config plugin is explicitly loaded.
+  5. **Comprehensive Unit Testing**: Expanded `updatesService.test.ts` to 19 tests covering rollback-to-embedded, cooldown throttling, foreground resume listeners, and dev mode bypass.
+- **Verification Ledger**:
+  - `npx tsc --noEmit`: 0 compiler errors.
+  - `npx expo config --type public`: Cleanly validated; `expo-updates` registered with `url`, `runtimeVersion`, and `fallbackToCacheTimeout: 0`.
+  - `npx jest updatesService.test.ts`: PASS (19/19 tests passed, 100%).
+- **Files Modified**:
+  - `CustomerApp/src/services/updatesService.ts`
+  - `CustomerApp/App.tsx`
+  - `CustomerApp/app.config.js`
+  - `CustomerApp/android/app/src/main/res/values/strings.xml`
+  - `CustomerApp/android/app/src/main/AndroidManifest.xml`
+  - `CustomerApp/jest.setup.js`
+  - `CustomerApp/src/__tests__/updatesService.test.ts`
+  - `CustomerApp/AGENT_HANDSHAKE.md`
+
+
+### Customer Pink Palette Restored (2026-10-19, Codex)
+- **User correction**: Customer must retain its own pink palette. This supersedes the Customer/Rider palette equality instructions above. Rider and web source were not changed in this correction.
+- **Theme**: Restored original Customer light/dark base tokens from the committed theme: primary #F62459 / #FF4D79, primaryDark #C41B47 / #F62459, primaryLight #FFEEF3 / #3D1420, original neutral surfaces, navy and status tokens. Kept existing on-fill token APIs and component behavior.
+- **Changed paths**: src/config/palette.ts; scripts/checkPalette.cjs (replaces scripts/checkPaletteSync.cjs); package.json audit:palette; src/__tests__/palette.test.ts; app.json; android/app/src/main/res/values/colors.xml; src/components/LiveTrackingMap.tsx (restores pink delivery route, orange store route); src/screens/portal/HomeTab.tsx (pink recommendation badge). Restored prior pink literals in: src/components/{AnimatedSplashScreen,CalendarPickerModal,ChatSkeleton,ConfirmModal,DispatcherAvatar,DraggableBentoMosaic,ErrandChannelList,ErrandProgressStepper,MapPreviewField,MerchantCategoriesModal,Pagination,PaymentMethodTile,RecaptchaModal,RiderDotMarker,RiderToStorePanel}.tsx; src/components/pabili/{EstablishmentPicker,StepPills,WhatHappensNextCard}.tsx; src/components/stores/StoreCardRow.tsx; src/hooks/useAuthHeroGradient.ts; src/navigation/AppNavigator.tsx; src/screens/{CustomerChatScreen,EditAccountScreen,ErrandFormScreen,ErrandItemsScreen,FeedbackScreen,Notification,RegisterScreen,ServiceListScreen,SettingsScreen,WaitingForDispatcherScreen}.tsx; src/screens/location/{LocationList,SavedLocationCard}.tsx; src/screens/onboarding/OnboardingLocationScreen.tsx; src/screens/pabili/PabiliHubScreen.tsx; src/screens/portal/{AccountTab,ErrandsTab}.tsx.
+- **Verification**: npx tsc --noEmit PASS. npm run audit:palette PASS (Customer-owned pink tokens plus Expo/native icon and notification accents). Focused Jest palette and ConfirmModal suites PASS: 27 tests. Scoped git diff --check PASS. Android export PASS (3,668 modules; 7.7 MB Hermes bundle at dist/customer-pink-android). The first restricted export was stopped after a stall; the local-access retry completed. Resolved Expo configuration also confirms all three Android accent fields use #F62459.
+- **Next session**: Keep Customer pink independent of Rider red; do not reintroduce palette equality. Preserve concurrent OTA, account, errand and service work. Layouts, labels, handlers and status/error reds were preserved. No APK/OTA publication was requested or performed. No attached native device was available for visual verification.
+
+---
+
+* **Session Log (2026-10-21, Claude Opus 5.5): Customer notifications by category + "Needs you"**
+- **User request**: the customer notification screen and its data differ from owner/dispatcher. Decisions: organise by category plus a "Needs you" flag (no priority levels); add rider on the errand, delivered, cancelled (all staff paths) and payment events; customer chats as one saved row per conversation; item out of stock stays dispatcher-only.
+- **Server** (`C:\Capstone_Server\server`, no schema change): `notificationCatalog.ts` `CUSTOMER_NOTIFICATIONS` (ORDER: ERRAND_ACCEPTED, RIDER_ASSIGNED, ERRAND_DECLINED*, ERRAND_CANCELLED*, ERRAND_DELIVERED; DELIVERY: RIDER_ON_THE_WAY, DELIVERY_HELD, RIDER_NEARBY*, RIDER_ETA_REMINDER (push only); PAYMENT: FEE_UPDATED*, PAYMENT_CONFIRMED, EXTRA_CHARGE_RESOLVED, PAYMENT_REFUNDED; CHAT: CHAT_MESSAGE* collapsing "(N new)"; * = needsYou while unread) and `presentCustomerNotification` (adds category, needsYou, errandId from refKey). `notificationService.deliverToCustomer` / `notifyCustomer` write every customer row with `refKey errand:<id>`; the repository emits it presented, so the duplicate partial `notification:new` emits in deliveryReminderService/trackingService are gone; the ETA reminder socket payload is `ephemeral: true`. New triggers: `acceptErrand` (RIDER_ASSIGNED), `updateStatus` DELIVERED / CANCELLED (not "PASSING BY"), `publishPaymentUpdate` (balance_confirmed, overage_resolved, refunded). Customer GET returns every row presented. Tests: new `tests/customerNotifications.test.ts`, updated `deliveryReminders.test.ts`; notification suites green; full suite only the 14 pre-existing failures.
+- **Server DEPLOYED 2026-10-21 21:28 (+08), uncommitted**: live copies proved equal to local minus this change; backup `/root/deploy-backups/server-20261021-212841-customer-notifications`; tsc gate, build, restart (pm2 restarts 4), health 200. On prod, customer 1 lists 154 rows presented (ORDER 42, DELIVERY 29, PAYMENT 83; 13 need them). Older rows have no refKey, so they open nothing (tap only marks read).
+- **CustomerApp** (`C:\Capstone_Project_Mobile_App\CustomerApp`, uncommitted, NOT released): `NotificationContext` derives unread from the list (no more over-count), replaces a known id in place (chat bump), never lists ephemeral payloads, exposes `error`, banner text without emojis. New `utils/notificationCategory.ts` (fallback table for old rows) and `utils/notificationRoute.ts` (one router for list taps and push taps: chat/accepted -> CustomerChat, delivery -> track tab focused, everything else -> ErrandDetails). `screens/Notification.tsx` redesigned: chips All / Needs you / Orders / Delivery / Payments / Chats with live counts, Today / Yesterday / Earlier sections, neutral grey category icons, "Needs you" chip, shimmer skeleton, full and inline error with retry, filter and no-match empty states. `tsc` clean; jest 82 suites / 933 tests pass (new NotificationScreen + notificationRoute suites). Not seen on a device or emulator. Needs an OTA or APK to reach customers.
+
+- **OTA PUBLISHED 2026-10-21 (user chose "Publish an OTA update")**: `eas update --branch production --environment production` from the uncommitted CustomerApp tree (commit b26b691 plus ~120 uncommitted files, including earlier sessions' work), runtime 1.2.0, Android + iOS, update group `a717a524-89ac-4bba-90b7-270684bbbd09` (Android `01a15eb7-0927-7e79-b469-635d6dfdb4a3`). EAS production environment has no variables; the local `.env` (api.sugo-express.org) was used. Phones on runtime 1.2.0 pick it up on the next launch (checkAutomatically ON_LOAD). Roll back by republishing the previous group `7de8cc11-0efe-4252-b218-3387ef9eb437` to production. Not seen on a device.
+- **Follow-up 2026-10-21 22:15 (+08): no "All" chip, Sort by.** User: "Remove the All, Today, This week, This Month, This Year. Add sort by". The date chips were already gone in OTA a717a524 (their phone still showed the old build). `Notification.tsx`: no "All" chip (no chip selected = everything; tapping the selected chip clears it; a summary line shows "N notifications" or "N of M"); "Sort by" menu: Newest first, Oldest first (Earlier, Yesterday, Today), Needs you first, Unread first (sections Needs you / Everything else, Unread / Read). `sectionsFor` exported and tested. `tsc` clean; jest 82 suites / 938 tests pass. **NOT PUBLISHED, on the user's instruction**: another session was rewriting `src/screens/portal/ErrandsTab.tsx` and `src/components/ErrandsSkeleton.tsx` at 22:10-22:11, and an OTA ships the whole tree. Publish (`eas update --branch production --environment production`) once that Errands work is finished or the user says it is ready.
+
+## 2026-10-24 - Reliable order submission and safe retries (Codex)
+
+- **Status**: Implemented and verified locally. Android bundle export passed at dist/order-submission-check (3,676 modules, 7.8 MB Hermes bundle). No APK/OTA publication, device installation, or production migration/deployment performed.
+- **Behavior**: Shared per-account submission coordinator survives screen changes. Freeze and strictly persist the submission ID, basket and delivery location before networking; serialize saves/reads and retain unconfirmed drafts beyond their normal TTL. Block edits and route back gestures while unresolved. Native dark-gray overlay changes copy after 8 seconds; default 30-second wait gives Try again / View my orders. Each retry looks up the same submission and reuses its frozen payload. Recover on restart without automatic creation. History retains a pending action and refreshes on late success; success opens the original ErrandDetails. Initial definite validation errors allow corrections; uncertain requests remain locked. Local persistence/restoration failures block unsafe sends. Account changes isolate in-flight results. Firebase location/receipt work no longer delays confirmation; the receipt uses a transactional per-order message key.
+- **Paths**: src/services/{pabiliDraft,pabiliSubmit,pabiliSubmission,chatSystemMessages}.ts; src/hooks/usePabiliSubmission.ts; src/components/pabili/{SubmissionFeedback,PendingOrderCard}.tsx; src/screens/pabili/{PabiliReviewScreen,PabiliHubScreen,PabiliStoreEditorScreen}.tsx; src/screens/portal/ErrandsTab.tsx; src/navigation/AppNavigator.tsx; .env.example; jest.setup.js; src/__tests__/{PabiliScreens,pabiliSubmit,pabiliSubmission,PendingOrderCard} tests.
+- **Verification**: TypeScript no-emit passed. The broader seven-suite gate passed 111 tests (PabiliScreens, pabiliDraft, pabiliSubmit, pabiliSubmission, Navigation, DarkModeSubstrates, LightModeSubstrates). After adding strict restore/recovery checks, the latest three-suite rerun passed 46 tests (PabiliScreens, pabiliSubmission, PendingOrderCard). Combined coverage is 115 unique checks across eight suites. Includes timed overlay copy, navigation guards, rapid taps, lost/late replies, history retry/refresh, restart, account changes, expiry, strict storage failure/recovery, changed address and unsupported server. Android production export passed. Native-device swipe/back and live MariaDB staging checks remain release validation.
+- **Next session**: Deploy C:\Capstone_Server\server migration/schema and server contract before publishing this app. Rollout/contract: server/docs/ORDER_SUBMISSION.md. EXPO_PUBLIC_ORDER_SUBMISSION_TIMEOUT_MS defaults to 30000. Preserve unrelated uncommitted app work; an OTA publishes the whole tree. Older installed builds retain previous behavior until updated.
+## 2026-10-24 - Production rollout verified (Codex)
+
+- **Status**: Server and additive submission-identity migration DEPLOYED after user said "deploy". Local/public health 200; customer submission lookup returns 200/NOT_FOUND, unauthenticated 401, dispatcher 403. Live MariaDB scratch verification passed concurrent duplicate prevention, receipt atomicity/rollback and legacy NULL compatibility. Production order/receipt counts unchanged.
+- **OTA**: Found an existing publication by astrowarden at 2026-10-23T19:00:53Z (2026-10-24 03:00 +08): production group 1d249230-4c69-49e6-8dcc-4e9045323365, runtime 1.2.0, Android 01a16a23-322c-7af9-8635-824e2b5a2bcb and iOS 01a16a23-322c-7e96-b2f9-542d29483ddd. Verified launch SHA-256 hashes match local dist export and all 185 mapped application sources on EACH platform match current source. Active production channel points to this group. No duplicate publication or APK rebuild needed/performed.
+- **Recovery**: Server backup and selective rollback script at VPS /root/deploy-backups/order-submission-20261024-01. Schema is additive; retain stored submission identities if rolling back. Previous OTA group c387cb4a-3eeb-4458-a367-95d6e7a5e5b6 predates this fix. Do not roll back without considering pending submissions.
+- **Remaining validation**: Native-device slow-network/swipe-back smoke not performed. Existing runtime 1.2.0 installations receive the OTA through configured update checks; older runtimes require a compatible app build. See server/docs/ORDER_SUBMISSION.md for deployment evidence and legacy migration-baseline caveat. No source behavior changed during deployment.

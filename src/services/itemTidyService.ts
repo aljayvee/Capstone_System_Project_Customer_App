@@ -27,14 +27,14 @@ export async function tidyItemLines(
   try {
     const response = await apiClient.post(
       '/errands/normalize-items',
-      { lines: lines.map(({ id, text }) => ({ id, text: text.slice(0, 120) })) },
+      { lines: lines.map(({ id, text }) => ({ id, text })) },
       { timeout: TIDY_TIMEOUT_MS, signal }
     );
     const data = response.data ?? {};
     const results: TidyResult[] = Array.isArray(data.results)
       ? data.results.map((r: { id: string; items: DraftItem[]; confident: boolean }) => ({
           id: String(r.id),
-          confident: Boolean(r.confident),
+          confident: r.confident === true,
           items: (r.items ?? []).map((item) => ({
             name: String(item.name),
             quantity: Math.max(1, Math.min(99, Number(item.quantity) || 1)),

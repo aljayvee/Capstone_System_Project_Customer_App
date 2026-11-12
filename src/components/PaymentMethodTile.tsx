@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Banknote, Smartphone, Landmark } from 'lucide-react-native';
-import { FontSizes, FontWeights, Spacing, BorderRadius } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius } from '../config/theme';
 import { useThemeColor } from '../hooks/useThemeColor';
 import type { PaymentMethodDefinition, PaymentMethodId } from '../services/paymentMethodStrategy';
 
@@ -61,6 +61,7 @@ export const PaymentMethodTile: React.FC<PaymentMethodTileProps> = ({
         <Icon size={16} color={disabled ? colors.textLight : selected ? colors.primary : colors.textMedium} strokeWidth={2} />
         <View style={styles.labelColumn}>
           <Text
+            maxFontSizeMultiplier={1.2}
             style={[
               styles.text,
               { color: colors.textMedium },
@@ -79,7 +80,7 @@ export const PaymentMethodTile: React.FC<PaymentMethodTileProps> = ({
       </View>
       {disabled && (
         <View style={[styles.badge, { backgroundColor: colors.warningBg }]}>
-          <Text style={[styles.badgeText, { color: colors.warning }]}>Unavailable</Text>
+          <Text style={[styles.badgeText, { color: colors.warning }]} maxFontSizeMultiplier={1.15}>Unavailable</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -97,13 +98,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   labelColumn: { flex: 1, gap: 2 },
-  hint: { fontSize: FontSizes.xs, lineHeight: 15 },
+  hint: { fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.caption), lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label') },
   tileSelected: {},
   tileDisabled: { opacity: 0.55 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  text: { fontSize: FontSizes.lg, fontWeight: FontWeights.semibold },
-  textSelected: { fontWeight: FontWeights.bold },
+  text: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'), fontSize: scaledPortalFontSize(PortalFontSizes.subheading), fontFamily: FontFamily.semibold },
+  textSelected: { fontFamily: FontFamily.bold },
   textDisabled: {},
   badge: { paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: BorderRadius.full },
-  badgeText: { fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
+  badgeText: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.micro), fontFamily: FontFamily.bold },
 });

@@ -1,3 +1,4 @@
+import { usePageLayout } from '../hooks/usePageLayout';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -25,8 +26,8 @@ import { database } from '../firebase/config';
 import { RootStackScreenProps } from '../navigation/types';
 import { apiClient } from '../services/apiClient';
 import { useThemeColor } from '../hooks/useThemeColor';
-import {
-  FontSizes,
+import { PortalFontSizeMultipliers,
+  getPortalLineHeight,
   Spacing,
   BorderRadius,
   FontFamily,
@@ -47,6 +48,7 @@ export default function WaitingForDispatcherScreen({
   route,
   navigation,
 }: RootStackScreenProps<'WaitingForDispatcher'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 24 });
   const { user, errandId } = route.params || {
     user: { id: 1, username: 'testuser', firstName: 'Customer', lastName: 'User' },
     errandId: 'PABILI-123456',
@@ -231,7 +233,7 @@ export default function WaitingForDispatcherScreen({
     >
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, pageLayout.gutterStyle, pageLayout.frameStyle]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.centerSection}>
@@ -286,13 +288,13 @@ export default function WaitingForDispatcherScreen({
             ]}
           >
             <Sparkles size={13} color={colors.primary} strokeWidth={2.2} />
-            <Text style={[styles.orderIdText, { color: colors.textDark }]}>
+            <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.orderIdText, { color: colors.textDark }]}>
               Order {formatErrandId(errandId)}
             </Text>
           </View>
 
           {/* 3. GRACEFUL HEADLINE */}
-          <Text style={[styles.headlineTitle, { color: colors.textDark }]}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headlineTitle, { color: colors.textDark }]}>
             {isDeclined
               ? 'Errand Request Declined'
               : isAccepted
@@ -301,7 +303,7 @@ export default function WaitingForDispatcherScreen({
           </Text>
 
           {/* 4. GRACEFUL REASSURING SUBTITLE */}
-          <Text style={[styles.headlineSubtitle, { color: colors.textGray }]}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.headlineSubtitle, { color: colors.textGray }]}>
             {isDeclined
               ? declineReason
                 ? `Decline reason: ${declineReason}`
@@ -332,21 +334,21 @@ export default function WaitingForDispatcherScreen({
             {isDeclined ? (
               <View style={styles.radarContentRow}>
                 <AlertCircle size={15} color="#EF4444" strokeWidth={2.4} />
-                <Text style={[styles.radarStatusText, { color: '#DC2626' }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.radarStatusText, { color: '#DC2626' }]}>
                   Request cancelled
                 </Text>
               </View>
             ) : isAccepted ? (
               <View style={styles.radarContentRow}>
                 <CheckCircle2 size={15} color="#10B981" strokeWidth={2.4} />
-                <Text style={[styles.radarStatusText, { color: '#059669' }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.radarStatusText, { color: '#059669' }]}>
                   {dispatcherName ? `${dispatcherName} is ready` : 'Dispatcher connected'}
                 </Text>
               </View>
             ) : (
               <View style={styles.radarContentRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.radarStatusText, { color: colors.textMedium }]}>
+                <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.radarStatusText, { color: colors.textMedium }]}>
                   Waiting for dispatcher confirmation...
                 </Text>
               </View>
@@ -365,11 +367,11 @@ export default function WaitingForDispatcherScreen({
           >
             <View style={styles.actionBtnRow}>
               {isDeclined ? (
-                <RotateCcw size={17} color="#FFFFFF" strokeWidth={2.4} />
+                <RotateCcw size={17} color={colors.onPrimary} strokeWidth={2.4} />
               ) : (
-                <MessageCircle size={17} color="#FFFFFF" strokeWidth={2.4} />
+                <MessageCircle size={17} color={colors.onPrimary} strokeWidth={2.4} />
               )}
-              <Text style={styles.primaryActionBtnText}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.primaryActionBtnText, { color: colors.onPrimary }]}>
                 {isDeclined
                   ? 'Place a New Errand'
                   : isAccepted
@@ -394,7 +396,7 @@ export default function WaitingForDispatcherScreen({
           >
             <View style={styles.actionBtnRow}>
               <Home size={16} color={colors.textDark} strokeWidth={2.2} />
-              <Text style={[styles.secondaryActionBtnText, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.secondaryActionBtnText, { color: colors.textDark }]}>
                 Return to Dashboard
               </Text>
             </View>
@@ -461,8 +463,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   headlineTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: FontSizes.xxl,
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     textAlign: 'center',
     marginBottom: Spacing.sm + 2,
     paddingHorizontal: Spacing.sm,

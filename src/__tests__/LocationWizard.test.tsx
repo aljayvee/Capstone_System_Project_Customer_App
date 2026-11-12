@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 
 // Step 2 of saving a place: street name, landmark and notes for the rider,
 // alongside the label and address. These pin what reaches the save call.
@@ -122,3 +122,49 @@ describe('LocationWizard step 2 details', () => {
   });
 });
 
+describe('LocationWizard and Android back', () => {
+  it('leaves Back to a screen in front of Saved Locations, and steps back while in front', async () => {
+    // A chat opened from a push sits on top of Saved Locations while this
+    // listener stays registered and is asked first. It used to step the hidden
+    // wizard back (or drop the draft) and leave the chat open (2026-11-06).
+    const { BackHandler } = require('react-native');
+    const nav = require('@react-navigation/native');
+    let inFront = false;
+    const navSpy = jest.spyOn(nav, 'useNavigation').mockReturnValue({ isFocused: () => inFront });
+    const spy = jest.spyOn(BackHandler, 'addEventListener');
+    try {
+      const onCancel = jest.fn();
+      const res: any = await render(
+        <LocationWizard
+          initialValues={SAVED}
+          saving={false}
+          gpsLoading={false}
+          onUseCurrentLocation={async () => PIN}
+          onSave={jest.fn()}
+          onCancel={onCancel}
+        />
+      );
+      await fireEvent.press(res.getByTestId('mock-step1-next'));
+      expect(res.getByTestId('location-street-input')).toBeTruthy();
+      const handler = () => (spy.mock.calls.filter((args: any[]) => args[0] === 'hardwareBackPress').at(-1)![1] as () => boolean)();
+
+      let handled: boolean | undefined;
+      await act(async () => {
+        handled = handler();
+      });
+      expect(handled).toBe(false);
+      expect(res.getByTestId('location-street-input')).toBeTruthy(); // still on step 2
+      expect(onCancel).not.toHaveBeenCalled();
+
+      inFront = true;
+      await act(async () => {
+        handled = handler();
+      });
+      expect(handled).toBe(true);
+      expect(res.queryByTestId('location-street-input')).toBeNull(); // back to step 1
+    } finally {
+      spy.mockRestore();
+      navSpy.mockRestore();
+    }
+  });
+});

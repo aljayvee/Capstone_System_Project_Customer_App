@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
@@ -7,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ScrollView,
   Modal,
   Pressable,
 } from 'react-native';
@@ -17,7 +17,6 @@ import {
   X,
   Bike,
   Package,
-  ShoppingBag,
   MapPin,
   Store,
   User,
@@ -27,7 +26,6 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
-  Sparkles,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -42,6 +40,7 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { searchFieldStyles, getSearchFieldSurface } from '../../config/searchField';
 import {
   BorderRadius,
   FontSizes,
@@ -51,19 +50,19 @@ import {
   useResponsive,
   MAX_CONTENT_WIDTH,
   scaledFontSize,
-  moderateScale,
   PortalFontSizes,
   scaledPortalFontSize,
   getPortalLineHeight,
   PortalTouchTargets,
   PortalFontSizeMultipliers,
 } from '../../config/theme';
-import ErrandsSkeleton, { ErrandsCardsSkeleton } from '../../components/ErrandsSkeleton';
+import { ErrandsCardsSkeleton } from '../../components/ErrandsSkeleton';
 import { formatErrandId } from '../../utils/formatErrandId';
 import { formatPaymentMethod } from '../../utils/format';
 import { getErrandProgressStage } from '../../utils/errandProgress';
 import { extractMerchantCategories } from '../../utils/merchantCategories';
 import { establishmentsFromStops } from '../../services/establishments';
+import PendingOrderCard from '../../components/pabili/PendingOrderCard';
 
 type StatusFilter = 'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 type DateFilter = 'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
@@ -128,7 +127,7 @@ function getHumanStatusInfo(status: string) {
       };
     default:
       return {
-        label: status || 'Pending',
+        label: 'Awaiting update',
         sublabel: 'Order update',
         badgeBg: '#F3F4F6',
         badgeText: '#6B7280',
@@ -157,9 +156,11 @@ export default function ErrandsTab({
   onViewTrack,
   onScroll,
 }: ErrandsTabProps) {
+  const pageLayout = usePageLayout({ tabletGutter: 24 });
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useThemeColor();
-  const { width: windowWidth, isTablet, isCompact } = useResponsive();
+  const pinkText = isDark ? colors.primary : colors.primaryStrong;
+  const { isCompact } = useResponsive();
   const [filter, setFilter] = useState<StatusFilter>('ACTIVE');
   const [dateFilter, setDateFilter] = useState<DateFilter>('ALL');
   const [sortOption, setSortOption] = useState<SortOption>('NEWEST');
@@ -195,7 +196,7 @@ export default function ErrandsTab({
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const rawId = String(e.id || e.orderId || '').toLowerCase();
-      const formatted = formatErrandId(e.orderId || e.id).toLowerCase();
+      const formatted = formatErrandId(e.orderId || e.id, e.referenceNo).toLowerCase();
       const category = String(e.categories || '').toLowerCase();
       const rider = String(e.riderName || '').toLowerCase();
       const address = String(e.deliveryAddress || '').toLowerCase();
@@ -244,7 +245,7 @@ export default function ErrandsTab({
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const rawId = String(e.id || e.orderId || '').toLowerCase();
-      const formatted = formatErrandId(e.orderId || e.id).toLowerCase();
+      const formatted = formatErrandId(e.orderId || e.id, e.referenceNo).toLowerCase();
       const category = String(e.categories || '').toLowerCase();
       return rawId.includes(q) || formatted.includes(q) || category.includes(q);
     });
@@ -482,20 +483,6 @@ export default function ErrandsTab({
   const showViewAllPrompt = filter === 'ACTIVE' && counts.all > 0 && !hasActiveFilters;
   const isFiltered = hasActiveFilters || filter !== 'ALL';
 
-  /**
-   * A milestone line, shown only on round numbers.
-   *
-   * Reaching one is an identity-reinforcing moment — "I am someone who uses
-   * this" — and those are what turn a useful app into a habit. Gated to
-   * 5/10/25/50/100 precisely so it stays an event: a badge that congratulates
-   * you on every single order is wallpaper within a week and reads as flattery.
-   */
-  const milestone = useMemo(() => {
-    const n = counts.completed;
-    const marks = [100, 50, 25, 10, 5];
-    return marks.includes(n) ? `${n} errands completed — thank you!` : null;
-  }, [counts.completed]);
-
   const resetAllFilters = () => {
     setSearch('');
     setFilter('ACTIVE');
@@ -508,13 +495,12 @@ export default function ErrandsTab({
       style={[
         styles.root,
         {
-          backgroundColor: colors.bgApp,
+          backgroundColor: colors.card,
           paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
-        },
-      ]}
+        }, pageLayout.frameStyle]}
     >
       {/* 1. FIXED TOP HEADER & CONTROLS (NON-SCROLLING) */}
-      <View style={styles.fixedTopSection}>
+      <View style={[styles.fixedTopSection, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl }, pageLayout.gutterStyle]}>
         {/* Header Row (Matching ChatTab) */}
         <View style={styles.headerContainer}>
           <View style={styles.headerTitleRow}>
@@ -522,35 +508,17 @@ export default function ErrandsTab({
               <Text style={[styles.screenTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
                 My Errands
               </Text>
-              {milestone ? (
-                <View style={styles.milestonePill}>
-                  <Sparkles size={11} color={colors.primary} strokeWidth={2.4} />
-                  <Text style={[styles.milestoneText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                    {milestone}
-                  </Text>
-                </View>
-              ) : null}
+              <Text style={[styles.screenSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+                Track deliveries and revisit past orders.
+              </Text>
             </View>
 
             {/* Header Right Actions */}
             <View style={styles.headerRightRow}>
-              {counts.active > 0 && (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.liveHeaderPill}
-                  onPress={() => setFilter('ACTIVE')}
-                  hitSlop={PortalTouchTargets.compactHitSlop}
-                >
-                  <Text style={[styles.liveHeaderPillText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                    {counts.active} Ongoing
-                  </Text>
-                </TouchableOpacity>
-              )}
-
               {/* Date Filter Action Button (Matching ChatTab headerHelpBtn) */}
               <TouchableOpacity
                 activeOpacity={0.7}
-                style={styles.headerActionBtn}
+                style={[styles.headerActionBtn, { backgroundColor: colors.bgGray }]}
                 onPress={() => setShowDateModal(true)}
                 testID="errands-date-filter-btn"
                 accessibilityLabel="Filter by date"
@@ -567,45 +535,45 @@ export default function ErrandsTab({
           </View>
         </View>
 
-        {/* Apple Liquid Glass Search Bar - Full Width */}
+        {/* Search stays visible as the list scrolls. */}
         <View style={styles.searchSection}>
           <View
             style={[
-              styles.searchBar,
-              {
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
-                borderTopColor: isDark ? 'rgba(255, 255, 255, 0.28)' : '#FFFFFF',
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
-                shadowOpacity: isDark ? 0.25 : 0.08,
-              },
+              searchFieldStyles.surface,
+              getSearchFieldSurface(isDark),
             ]}
             testID="errands-search-bar"
           >
-            <Search size={18} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.4} />
+            <Search size={16} color={isDark ? '#94A3B8' : '#64748B'} strokeWidth={2.2} />
             <TextInput
-              style={[styles.searchInput, { color: colors.textDark }]}
-              placeholder="Search stores, items, or errand #..."
-              placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+              style={[searchFieldStyles.input, { color: colors.textDark }]}
+              placeholder="Search your errands"
+              placeholderTextColor={colors.textLight}
               value={search}
               onChangeText={setSearch}
               testID="errands-search-input"
+              accessibilityLabel="Search your errands"
+              maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
             />
             {search.length > 0 && (
               <TouchableOpacity
                 onPress={() => setSearch('')}
                 hitSlop={PortalTouchTargets.compactHitSlop}
                 style={styles.clearBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
               >
-                <X size={14} color={isDark ? '#94A3B8' : '#64748B'} />
+                <X size={16} color={colors.textGray} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Dynamic Status Filter Capsules - Flat Minimalist Flex Row (Matching ChatTab) */}
-        <View style={styles.filterBar}>
+        {/* Underlined status tabs keep selection clear without enclosing pills. */}
+        <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
           {filterTabs.map((tab) => {
             const isActive = filter === tab.key;
+            const tabCount = tab.key === 'ALL' ? counts.all : tab.key === 'ACTIVE' ? counts.active : tab.key === 'COMPLETED' ? counts.completed : counts.cancelled;
             return (
               <TouchableOpacity
                 key={tab.key}
@@ -613,23 +581,31 @@ export default function ErrandsTab({
                 style={[
                   styles.filterTab,
                   {
-                    backgroundColor: isActive ? colors.primary : 'transparent',
+                    borderBottomColor: isActive ? pinkText : 'transparent',
                   },
                 ]}
                 onPress={() => setFilter(tab.key)}
                 testID={`filter-tab-${tab.key}`}
-                hitSlop={PortalTouchTargets.compactHitSlop}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`${tab.label}, ${tabCount} errands`}
               >
                 <Text
                   style={[
                     styles.filterTabText,
-                    { color: isActive ? '#FFFFFF' : colors.textDark },
+                    { color: isActive ? pinkText : colors.textGray },
                     isActive && styles.filterTabTextActive,
                   ]}
                   maxFontSizeMultiplier={PortalFontSizeMultipliers.label}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
                 >
                   {tab.label}
                 </Text>
+                {!isCompact && <Text style={[styles.tabBadgeText, { color: isActive ? pinkText : colors.textGray }]} maxFontSizeMultiplier={1}>
+                  {tabCount > 99 ? '99+' : tabCount}
+                </Text>}
               </TouchableOpacity>
             );
           })}
@@ -638,10 +614,12 @@ export default function ErrandsTab({
 
 
       {/* 4. MAIN LIST / CARDS */}
+      <PendingOrderCard user={user} navigation={navigation} onConfirmed={onRefresh} />
       {loading && errands.length === 0 ? (
-        <ErrandsCardsSkeleton />
+        <ErrandsCardsSkeleton horizontalPadding={pageLayout.isPhone ? pageLayout.gutter : isCompact ? Spacing.lg : Spacing.xl} />
       ) : (
         <FlatList
+          style={{ backgroundColor: colors.bgApp }}
           data={listData}
           keyExtractor={(row) => row.key}
           // The search field above stays put while the keyboard covers the bottom
@@ -649,7 +627,7 @@ export default function ErrandsTab({
           // tap on a row works first time instead of only closing the keyboard.
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={[styles.listContent, { paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }]}
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: isCompact ? Spacing.lg : Spacing.xl, paddingBottom: 80 + Math.max(insets.bottom, 16) + Spacing.md }, pageLayout.gutterStyle]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -662,19 +640,7 @@ export default function ErrandsTab({
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <View
-                style={[
-                  styles.emptyIconHalo,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.06)'
-                      : '#F3F4F6',
-                  },
-                ]}
-              >
-                <Package size={36} color={colors.primary} strokeWidth={1.8} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: colors.textDark }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyTitle, { color: colors.textDark }]}>
                 {search
                   ? 'No Matching Errands'
                   : showViewAllPrompt
@@ -683,7 +649,7 @@ export default function ErrandsTab({
                   ? 'No Matching Errands'
                   : 'No Errands Found'}
               </Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textGray }]}>
+              <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptySubtitle, { color: colors.textGray }]}>
                 {search
                   ? `No errands matching "${search}". Try searching with another store or keyword.`
                   : showViewAllPrompt
@@ -707,7 +673,7 @@ export default function ErrandsTab({
                     onPress={resetAllFilters}
                   >
                     <RotateCcw size={14} color={colors.textDark} strokeWidth={2.2} />
-                    <Text style={[styles.emptyResetBtnText, { color: colors.textDark }]}>
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.emptyResetBtnText, { color: colors.textDark }]}>
                       Reset All Filters
                     </Text>
                   </TouchableOpacity>
@@ -718,7 +684,6 @@ export default function ErrandsTab({
           renderItem={({ item: row, index }) => {
             if (row.kind === 'section') {
               const isFirstSection = listData.findIndex((r) => r.kind === 'section') === index;
-              const isLiveSection = row.tone === 'live' || row.key === 'section-live';
               const firstHistorySectionIndex = listData.findIndex(
                 (r) => r.kind === 'section' && r.key !== 'section-live'
               );
@@ -755,7 +720,7 @@ export default function ErrandsTab({
                     <Text
                       style={[
                         styles.sectionHeaderLabel,
-                        { color: isLiveSection ? colors.primary : colors.textDark },
+                        { color: colors.textDark },
                       ]}
                       maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
                     >
@@ -822,6 +787,11 @@ export default function ErrandsTab({
             const isAssignedOrInTransit = item.status === 'ASSIGNED' || item.status === 'IN_TRANSIT';
             const isDeliveredOrCompleted = COMPLETED_STATUSES.includes(item.status);
             const isOngoing = ACTIVE_STATUSES.includes(item.status);
+            const statusColor = isPendingOrAvailable ? colors.warning
+              : item.status === 'ASSIGNED' ? colors.info
+              : item.status === 'IN_TRANSIT' ? pinkText
+              : isDeliveredOrCompleted ? colors.success
+              : isCancelled ? colors.danger : colors.textGray;
             const statusInfo = getHumanStatusInfo(item.status);
             // Same five-stage model the Track tab uses, so the two screens can
             // never disagree about how far along an errand is.
@@ -833,7 +803,6 @@ export default function ErrandsTab({
               destination: null,
             });
             const itemCount = getItemCount(item);
-            const StatusIcon = statusInfo.icon;
             const displayTitle = getOrderDisplayTitle(item);
 
             const formattedDate = item.createdAt
@@ -860,73 +829,12 @@ export default function ErrandsTab({
                   style={[
                     styles.heroCard,
                     {
-                      borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
                     },
                   ]}
                   testID={`errand-card-${item.orderId || item.id}`}
                 >
-                  {/* Top Live Progress Header */}
-                  <View style={styles.heroTopBar}>
-                    <View style={styles.liveTagRow}>
-                      <Text style={[styles.liveTagLabel, { color: isPendingOrAvailable ? '#D97706' : colors.primary }]}>
-                        {isPendingOrAvailable ? 'REQUEST IN REVIEW' : 'DELIVERY IN PROGRESS'}
-                      </Text>
-                    </View>
-
-                    {/* Humanized Friendly Status (Unboxed Typography) */}
-                    <View style={styles.humanStatusPill}>
-                      <StatusIcon size={12} color={statusInfo.badgeText} strokeWidth={2.4} />
-                      <Text style={[styles.humanStatusText, { color: statusInfo.badgeText }]}>
-                        {statusInfo.label}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* GOAL-GRADIENT RAIL
-                      Five stages, with everything reached so far filled in.
-                      The card previously showed only a status pill — a label
-                      with no sense of distance travelled or distance left, so
-                      "Rider Heading to Store" read the same at minute one as at
-                      minute twenty. Motivation to stay with a task rises as the
-                      finish line looks closer, which is exactly what a status
-                      string alone cannot convey. Completed stages stay filled
-                      rather than greying out; greying reads as regression. */}
-                  <View style={styles.railWrap}>
-                    <View style={styles.railTrack}>
-                      {[0, 1, 2, 3, 4].map((stageIndex) => {
-                        const reached = stageIndex <= progressStage.index;
-                        return (
-                          <View
-                            key={stageIndex}
-                            style={[
-                              styles.railSegment,
-                              {
-                                backgroundColor: reached
-                                  ? colors.primary
-                                  : isDark
-                                  ? 'rgba(255,255,255,0.12)'
-                                  : '#E9EDF2',
-                              },
-                            ]}
-                          />
-                        );
-                      })}
-                    </View>
-                    <View style={styles.railLabelRow}>
-                      <Text style={[styles.railStageLabel, { color: colors.textDark }]} numberOfLines={1}>
-                        {progressStage.label}
-                      </Text>
-                      <Text style={[styles.railStepCount, { color: colors.textLight }]}>
-                        Step {progressStage.index + 1} of 5
-                      </Text>
-                    </View>
-                    {progressStage.subLabel ? (
-                      <Text style={[styles.railSubLabel, { color: colors.primary }]} numberOfLines={1}>
-                        {progressStage.subLabel}
-                      </Text>
-                    ) : null}
-                  </View>
-
                   {/* Main Order Identity */}
                   <TouchableOpacity
                     activeOpacity={0.8}
@@ -938,41 +846,72 @@ export default function ErrandsTab({
                       })
                     }
                     style={styles.heroBodyPressable}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View details for ${displayTitle}`}
                   >
                     <View style={styles.heroTitleRow}>
-                      <View
-                        style={[
-                          styles.serviceBadgeCircle,
-                          { backgroundColor: isDark ? 'rgba(246,36,89,0.15)' : '#FFF0F5' },
-                        ]}
-                      >
-                        <ShoppingBag size={18} color={colors.primary} strokeWidth={2.4} />
-                      </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.heroCardTitle, { color: colors.textDark }]}>
+                        <Text style={[styles.heroCardTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.2}>
                           {displayTitle}
                         </Text>
-                        <Text style={[styles.heroSubText, { color: colors.textLight }]}>
-                          Order {formatErrandId(item.orderId || item.id)} • {formattedDate}
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.heroSubText, { color: colors.textLight }]}>
+                          <Text style={{ color: colors.detailBlue }}>Order {formatErrandId(item.orderId || item.id, item.referenceNo)}</Text> • {formattedDate}
                         </Text>
                       </View>
                       <ChevronRight size={18} color={colors.textLight} />
                     </View>
 
-                    {/* Visual Route Path: Store ➔ Destination */}
+                    <View style={styles.railWrap}>
+                      {!isPendingOrAvailable && <View style={styles.railTrack}>
+                        {[0, 1, 2, 3, 4].map((stageIndex) => {
+                          const reached = stageIndex <= progressStage.index;
+                          return (
+                            <View
+                              key={stageIndex}
+                              style={[
+                                styles.railSegment,
+                                {
+                                  backgroundColor: reached
+                                    ? colors.primary
+                                    : isDark
+                                    ? 'rgba(255,255,255,0.12)'
+                                    : '#E9EDF2',
+                                },
+                              ]}
+                            />
+                          );
+                        })}
+                      </View>}
+                      <View style={styles.railLabelRow}>
+                        <Text style={[styles.railStageLabel, { color: statusColor }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
+                          {statusInfo.label}
+                        </Text>
+                        {!isPendingOrAvailable && <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.railStepCount, { color: colors.textLight }]}>
+                          Step {progressStage.index + 1} of 5
+                        </Text>}
+                      </View>
+                      {progressStage.subLabel ? (
+                        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.railSubLabel, { color: statusColor }]} numberOfLines={1}>
+                          {progressStage.subLabel}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {/* Pickup and delivery details */}
                     <View style={styles.routeContainer}>
                       {/* Store */}
                       <View style={styles.routeStep}>
-                        <View style={[styles.routeIconNode, { backgroundColor: '#FFF7ED' }]}>
-                          <Store size={12} color="#EA580C" strokeWidth={2.4} />
+                        <View style={styles.routeIconNode}>
+                          <Store size={16} color={colors.textGray} strokeWidth={1.8} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.routeLabel, { color: colors.textLight }]}>
-                            PICKUP FROM
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.routeLabel, { color: colors.textLight }]}>
+                            Pickup from
                           </Text>
                           <Text
-                            style={[styles.routeText, { color: colors.textDark }]}
-                            numberOfLines={1}
+                            style={[styles.routeText, { color: colors.textDark, fontFamily: FontFamily.bold }]}
+                            numberOfLines={2}
+                            maxFontSizeMultiplier={1.2}
                           >
                             {storeNames || 'Merchant Store'}
                           </Text>
@@ -980,22 +919,23 @@ export default function ErrandsTab({
                       </View>
 
                       {/* Connector line */}
-                      <View style={styles.routeConnectorLine} />
+                      <View style={[styles.routeConnectorLine, { backgroundColor: colors.border }]} />
 
                       {/* Destination */}
                       <View style={styles.routeStep}>
-                        <View style={[styles.routeIconNode, { backgroundColor: '#FDF2F8' }]}>
-                          <MapPin size={12} color={colors.primary} strokeWidth={2.4} />
+                        <View style={styles.routeIconNode}>
+                          <MapPin size={16} color={pinkText} strokeWidth={1.8} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.routeLabel, { color: colors.textLight }]}>
-                            DELIVER TO
+                          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.routeLabel, { color: colors.textLight }]}>
+                            Deliver to
                           </Text>
                           <Text
-                            style={[styles.routeText, { color: colors.textGray }]}
-                            numberOfLines={1}
+                            style={[styles.routeText, { color: item.deliveryAddress ? pinkText : colors.textGray }]}
+                            numberOfLines={2}
+                            maxFontSizeMultiplier={1.2}
                           >
-                            {item.deliveryAddress || 'Tacurong City'}
+                            {item.deliveryAddress || 'Delivery address not provided'}
                           </Text>
                         </View>
                       </View>
@@ -1005,14 +945,14 @@ export default function ErrandsTab({
                     <View style={styles.heroFooter}>
                       <View>
                         <Text style={[styles.heroPriceLabel, { color: colors.textLight }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
-                          {isPendingOrAvailable ? 'DELIVERY FARE' : 'TOTAL BILL'}
+                          {isPendingOrAvailable ? 'Delivery fare' : 'Total bill'}
                         </Text>
                         {isPendingOrAvailable ? (
                           <Text
                             style={{
                               fontSize: scaledPortalFontSize(PortalFontSizes.caption),
                               lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
-                              color: '#D97706',
+                              color: colors.textGray,
                               fontFamily: FontFamily.semibold,
                               marginTop: 2,
                             }}
@@ -1021,7 +961,7 @@ export default function ErrandsTab({
                             Pending Completion
                           </Text>
                         ) : (
-                          <Text style={[styles.heroPriceText, { color: colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                          <Text style={[styles.heroPriceText, { color: colors.success }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                             ₱{fee}
                           </Text>
                         )}
@@ -1043,7 +983,7 @@ export default function ErrandsTab({
 
                       <View style={styles.heroPillGroup}>
                         <View style={styles.microPill}>
-                          <Text style={[styles.microPillText, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                          <Text style={[styles.microPillText, { color: colors.detailBlue }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                             {isPendingOrAvailable || !item.paymentMethod || String(item.paymentMethod).toUpperCase() === 'PENDING'
                               ? 'Payment: Pending'
                               : formatPaymentMethod(item.paymentMethod, 'full')}
@@ -1066,17 +1006,21 @@ export default function ErrandsTab({
                   {isAssignedOrInTransit ? (
                     <TouchableOpacity
                       activeOpacity={0.88}
-                      style={[styles.trackCtaBtn, { backgroundColor: colors.primary }, Shadows.soft]}
+                      style={[styles.trackCtaBtn, { backgroundColor: pinkText }]}
                       onPress={() => handleTrackShortcut(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Track delivery from ${displayTitle}`}
                     >
-                      <Radio size={16} color="#FFFFFF" strokeWidth={2.4} />
-                      <Text style={styles.trackCtaText}>View Live Rider GPS Map</Text>
-                      <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
+                      <Radio size={16} color={colors.onPrimary} strokeWidth={2.4} />
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.trackCtaText, { color: colors.onPrimary }]}>Track delivery</Text>
+                      <ArrowRight size={16} color={colors.onPrimary} strokeWidth={2.4} />
                     </TouchableOpacity>
                   ) : (
                     <TouchableOpacity
                       activeOpacity={0.88}
-                      style={[styles.trackCtaBtn, { backgroundColor: '#1E3A5F' }, Shadows.soft]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Message dispatcher for ${displayTitle}`}
+                      style={[styles.trackCtaBtn, { backgroundColor: pinkText }]}
                       onPress={() =>
                         navigation.navigate('CustomerChat', {
                           user,
@@ -1085,9 +1029,9 @@ export default function ErrandsTab({
                         })
                       }
                     >
-                      <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.4} />
-                      <Text style={styles.trackCtaText}>Chat with Dispatcher / View Request</Text>
-                      <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
+                      <MessageCircle size={16} color={colors.onPrimary} strokeWidth={2.4} />
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.trackCtaText, { color: colors.onPrimary }]}>Message dispatcher</Text>
+                      <ArrowRight size={16} color={colors.onPrimary} strokeWidth={2.4} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1103,7 +1047,8 @@ export default function ErrandsTab({
                 style={[
                   styles.standardCard,
                   {
-                    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
                   },
                 ]}
                 onPress={() =>
@@ -1118,32 +1063,19 @@ export default function ErrandsTab({
                 {/* Top Row: Store Title + Humanized Status */}
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
-                    <View
-                      style={[
-                        styles.standardServiceIcon,
-                        {
-                          backgroundColor: isDark
-                            ? 'rgba(255,255,255,0.06)'
-                            : statusInfo.badgeBg,
-                        },
-                      ]}
-                    >
-                      <StatusIcon size={16} color={statusInfo.badgeText} strokeWidth={2.2} />
-                    </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={1}>
+                      <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>
                         {displayTitle}
                       </Text>
-                      <Text style={[styles.cardSubText, { color: colors.textLight }]}>
-                        {itemCount > 0
-                          ? `${itemCount} ${itemCount === 1 ? 'item' : 'items'} • ${formattedDate}`
-                          : `${formatErrandId(item.orderId || item.id)} • ${formattedDate}`}
+                      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.cardSubText, { color: colors.textLight }]}>
+                        <Text style={{ color: colors.detailBlue }}>{formatErrandId(item.orderId || item.id, item.referenceNo)}</Text>
+                        {itemCount > 0 ? ` • ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` : ''} • {formattedDate}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.standardStatusPill}>
-                    <Text style={[styles.standardStatusText, { color: statusInfo.badgeText }]}>
+                    <Text style={[styles.standardStatusText, { color: statusColor }]} maxFontSizeMultiplier={1.15}>
                       {statusInfo.label}
                     </Text>
                   </View>
@@ -1151,20 +1083,21 @@ export default function ErrandsTab({
 
                 {/* Delivery Address snippet */}
                 <View style={styles.addressLine}>
-                  <MapPin size={12} color={colors.textLight} strokeWidth={2} />
+                  <MapPin size={12} color={isCancelled ? colors.danger : pinkText} strokeWidth={2} />
                   <Text
-                    style={[styles.addressLineText, { color: isCancelled ? '#EF4444' : colors.textGray }]}
-                    numberOfLines={1}
+                    maxFontSizeMultiplier={PortalFontSizeMultipliers.body}
+                    style={[styles.addressLineText, { color: isCancelled ? colors.textGray : item.deliveryAddress ? pinkText : colors.textGray }]}
+                    numberOfLines={2}
                   >
                     {isCancelled
                       ? 'Order was cancelled • No items delivered'
                       : isPendingOrAvailable
                       ? item.deliveryAddress
                         ? `Deliver to ${item.deliveryAddress}`
-                        : 'Tacurong City'
+                        : 'Delivery address not provided'
                       : item.deliveryAddress
                       ? `Delivered to ${item.deliveryAddress}`
-                      : 'Tacurong City'}
+                      : 'Delivery address not provided'}
                   </Text>
                 </View>
 
@@ -1178,7 +1111,7 @@ export default function ErrandsTab({
                         </Text>
                         <Text
                           style={{
-                            color: '#DC2626',
+                            color: colors.danger,
                             fontSize: scaledPortalFontSize(PortalFontSizes.micro),
                             lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
                             fontFamily: FontFamily.semibold,
@@ -1208,11 +1141,11 @@ export default function ErrandsTab({
                       </View>
                     ) : (
                       <>
-                        <Text style={[styles.standardPriceText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
+                        <Text style={[styles.standardPriceText, { color: colors.success }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.subheading}>
                           ₱{fee}
                         </Text>
                         <View style={styles.dot} />
-                        <Text style={[styles.footerSubText, { color: colors.textMedium }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                        <Text style={[styles.footerSubText, { color: colors.detailBlue }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                           {formatPaymentMethod(item.paymentMethod, 'short')}
                         </Text>
                         {riderFirstName && (
@@ -1231,11 +1164,11 @@ export default function ErrandsTab({
                   </View>
 
                   <View style={styles.viewReceiptRow}>
-                    <ReceiptText size={13} color={isCancelled ? colors.textGray : colors.primary} strokeWidth={2} />
-                    <Text style={[styles.viewReceiptText, { color: isCancelled ? colors.textGray : colors.primary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
+                    <ReceiptText size={13} color={colors.textGray} strokeWidth={2} />
+                    <Text style={[styles.viewReceiptText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
                       {isCancelled ? 'Details' : 'Receipt'}
                     </Text>
-                    <ChevronRight size={14} color={isCancelled ? colors.textGray : colors.primary} />
+                    <ChevronRight size={14} color={colors.textGray} />
                   </View>
                 </View>
 
@@ -1256,8 +1189,7 @@ export default function ErrandsTab({
                     style={[
                       styles.reorderBtn,
                       {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F9FAFB',
-                        borderColor: isDark ? colors.border : '#E5E7EB',
+                        backgroundColor: colors.primarySurface,
                       },
                     ]}
                     onPress={() => handleReorder(item)}
@@ -1265,8 +1197,8 @@ export default function ErrandsTab({
                     accessibilityRole="button"
                     accessibilityLabel={`Order again from ${displayTitle}`}
                   >
-                    <RotateCcw size={13} color={colors.primary} strokeWidth={2.4} />
-                    <Text style={[styles.reorderBtnText, { color: colors.primary }]}>
+                    <RotateCcw size={14} color={pinkText} strokeWidth={2.4} />
+                    <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.reorderBtnText, { color: pinkText }]}>
                       Order again
                     </Text>
                   </TouchableOpacity>
@@ -1580,7 +1512,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   headerContainer: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -1623,12 +1555,11 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 0,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm + 2,
+    marginTop: Spacing.xxl,
+    marginBottom: Spacing.md,
   },
   sectionHeaderRowFirst: {
-    marginTop: Spacing.md,
+    marginTop: Spacing.lg,
   },
   sectionSortLabelBtn: {
     flexDirection: 'row',
@@ -1643,8 +1574,6 @@ const styles = StyleSheet.create({
   },
   sectionHeaderRule: {
     flex: 1,
-    height: 1,
-    marginHorizontal: Spacing.sm + 2,
   },
   sectionHeaderCount: {
     fontFamily: FontFamily.medium,
@@ -1653,21 +1582,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sectionSortBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   // ── Goal-gradient rail ────────────────────────────────────────────────
   railWrap: {
-    marginTop: 10,
-    // 14 dp to the store name below (2026-10-14); it was 4, so "Step 2 of 5"
-    // and its note sat on top of the title while the rest of the card had
-    // 11 to 22 dp between its parts.
-    marginBottom: Spacing.sm + 4,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xl,
   },
   railTrack: {
     flexDirection: 'row',
@@ -1687,9 +1612,9 @@ const styles = StyleSheet.create({
   },
   railStageLabel: {
     flex: 1,
-    fontFamily: FontFamily.semibold,
+    fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   railStepCount: {
     fontFamily: FontFamily.medium,
@@ -1708,12 +1633,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 10,
-    paddingVertical: 8,
-    minHeight: PortalTouchTargets.compact,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    minHeight: 48,
+    borderRadius: 10,
   },
   reorderBtnText: {
     fontFamily: FontFamily.bold,
@@ -1722,21 +1648,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Milestone ─────────────────────────────────────────────────────────
-  milestonePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
-    marginTop: 4,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    backgroundColor: 'transparent',
-  },
-  milestoneText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-  },
 
   screenSubtitle: {
     fontFamily: FontFamily.regular,
@@ -1744,43 +1655,8 @@ const styles = StyleSheet.create({
     lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
     marginTop: 2,
   },
-  liveHeaderPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-    backgroundColor: 'transparent',
-  },
-  liveHeaderPillText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-  },
   searchSection: {
     marginBottom: Spacing.sm,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: Spacing.md,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.2,
-    borderTopWidth: 1.5,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 1.3),
-    padding: 0,
   },
   clearBtn: {
     padding: Spacing.xs,
@@ -1791,28 +1667,27 @@ const styles = StyleSheet.create({
   },
   filterBar: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: Spacing.sm,
   },
   filterTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: moderateScale(8, 0.2),
-    paddingHorizontal: Spacing.xs,
-    minHeight: 36,
-    borderRadius: BorderRadius.full,
+    gap: 4,
+    paddingVertical: Spacing.md,
+    minHeight: 48,
+    borderBottomWidth: 2,
   },
   filterTabText: {
+    flexShrink: 1,
     fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'label'),
   },
   filterTabTextActive: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
-    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 1.2),
+    fontFamily: FontFamily.semibold,
   },
   tabBadge: {
     paddingHorizontal: 0,
@@ -1832,44 +1707,10 @@ const styles = StyleSheet.create({
   },
   // HERO SECTION (HAPPENING NOW)
   heroCard: {
-    paddingHorizontal: 0,
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.lg,
-    borderBottomWidth: 1,
-    marginBottom: Spacing.md,
-  },
-  heroTopBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: Spacing.xs + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-    marginBottom: Spacing.sm,
-  },
-  liveTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  liveTagLabel: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    letterSpacing: 0.6,
-  },
-  humanStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 0,
-    paddingVertical: 2,
-    backgroundColor: 'transparent',
-  },
-  humanStatusText: {
-    fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
   },
   heroBodyPressable: {
     paddingVertical: 2,
@@ -1877,20 +1718,13 @@ const styles = StyleSheet.create({
   heroTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.md,
     marginBottom: Spacing.sm,
-  },
-  serviceBadgeCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   heroCardTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
-    lineHeight: getPortalLineHeight(PortalFontSizes.subheading, 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.price),
+    lineHeight: getPortalLineHeight(PortalFontSizes.price, 'heading'),
     letterSpacing: -0.2,
   },
   heroSubText: {
@@ -1900,26 +1734,24 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   routeContainer: {
-    paddingLeft: 2,
-    marginVertical: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   routeStep: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
   },
   routeIconNode: {
     width: 22,
     height: 22,
-    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   routeLabel: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    letterSpacing: 0.3,
+    marginBottom: 2,
   },
   routeText: {
     fontFamily: FontFamily.medium,
@@ -1927,24 +1759,24 @@ const styles = StyleSheet.create({
     lineHeight: getPortalLineHeight(PortalFontSizes.body, 'body'),
   },
   routeConnectorLine: {
-    width: 2,
+    width: StyleSheet.hairlineWidth,
     height: 14,
-    backgroundColor: '#E5E7EB',
-    marginLeft: 10,
-    marginVertical: 3,
+    marginLeft: 11,
+    marginVertical: Spacing.xs,
   },
   heroFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
     marginTop: Spacing.sm,
-    paddingTop: Spacing.xs + 2,
   },
   heroPriceLabel: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
-    letterSpacing: 0.4,
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
+    marginBottom: 4,
   },
   heroPriceText: {
     fontFamily: FontFamily.bold,
@@ -1953,9 +1785,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   heroPillGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    alignItems: 'flex-end',
+    gap: 4,
+    maxWidth: '100%',
   },
   microPill: {
     flexDirection: 'row',
@@ -1964,8 +1796,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 2,
     backgroundColor: 'transparent',
+    flexShrink: 1,
   },
   microPillText: {
+    flexShrink: 1,
     fontFamily: FontFamily.medium,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'label'),
@@ -1974,30 +1808,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 11,
-    minHeight: PortalTouchTargets.buttonHeight,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.sm + 4,
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.md,
+    minHeight: 48,
+    borderRadius: 10,
+    marginTop: Spacing.xl,
   },
   trackCtaText: {
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
+    flexShrink: 1,
+    fontFamily: FontFamily.semibold,
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
     lineHeight: getPortalLineHeight(PortalFontSizes.body, 'label'),
   },
-  // STANDARD ROW (PAST HISTORY / DELIVERED / CANCELLED)
+  // PAST ERRAND CARDS (DELIVERED / CANCELLED)
   standardCard: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: 0,
-    borderBottomWidth: 1,
-    marginBottom: 0,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   cardHeaderLeft: {
     flexDirection: 'row',
@@ -2005,13 +1841,6 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     flex: 1,
     paddingRight: Spacing.xs,
-  },
-  standardServiceIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   cardTitle: {
     fontFamily: FontFamily.bold,
@@ -2026,9 +1855,9 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   standardStatusPill: {
-    paddingHorizontal: 0,
+    flexShrink: 0,
+    maxWidth: '32%',
     paddingVertical: 2,
-    backgroundColor: 'transparent',
   },
   standardStatusText: {
     fontFamily: FontFamily.bold,
@@ -2050,10 +1879,11 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 4,
-    marginTop: 2,
+    columnGap: Spacing.md,
+    marginTop: Spacing.sm,
   },
   footerLeftGroup: {
     flexDirection: 'row',
@@ -2099,17 +1929,8 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xxl + 8,
-    marginTop: Spacing.md,
-  },
-  emptyIconHalo: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.huge + Spacing.xl,
+    paddingHorizontal: Spacing.md,
   },
   emptyTitle: {
     fontFamily: FontFamily.bold,

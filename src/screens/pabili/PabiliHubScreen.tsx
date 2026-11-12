@@ -1,13 +1,15 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, BackHandler } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight, Clock } from 'lucide-react-native';
+import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight, Clock, Plus } from 'lucide-react-native';
 import { RootStackScreenProps } from '../../navigation/types';
 import { useThemeColor } from '../../hooks/useThemeColor';
+import { getStoresAllowed, storeLimitMessage } from '../../services/storeLimit';
 import { usePabiliDraft } from '../../hooks/usePabiliDraft';
 import {
-  droppedStoresWithItems,
   emptyDraft,
+  mergeStoreSelection,
   pabiliDraftStore,
   readStoredDraft,
   storeCategoryOf,
@@ -19,6 +21,7 @@ import {
 } from '../../services/pabiliDraft';
 import { getCategoryIcon } from '../../constants/pabili';
 import StepPills from '../../components/pabili/StepPills';
+import SwipeableStoreRow from '../../components/pabili/SwipeableStoreRow';
 import ShimmerWave from '../../components/ShimmerWave';
 import ConfirmModal from '../../components/ConfirmModal';
 import {
@@ -39,18 +42,6 @@ import {
 const RECENT_SEND_MS = 2 * 60 * 1000;
 
 /**
- * Stores one errand may visit: ErrandFormScreen's limit, and the server
- * refuses a storeCount above it (errandValidators.ts).
- */
-const MAX_STORES = 3;
-
-/** "Pharmacy", "Pharmacy and Bakery", "Pharmacy, Bakery and Retail". */
-function joinNames(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
-/**
  * Step 2 of a pabili errand: one card per store, each opening its own list.
  *
  * This used to be one screen holding every store's chips, rows and compose box
@@ -62,6 +53,7 @@ function joinNames(names: string[]): string {
  * nothing and needs no "discard?" prompt; Clear list is the explicit way out.
  */
 export default function PabiliHubScreen({ route, navigation }: RootStackScreenProps<'ErrandItems'>) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { user } = route.params || ({} as any);
   const userId = String(user?.id ?? '');
   const routeCats = useMemo(() => {
@@ -72,90 +64,65 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
   // Real stores picked in step 1's "Location" list. Absent for merchant categories.
   const routeStores = route.params?.stores;
 
-  /**
-   * The saved list re-pointed at these stores: picked stores keep their pin
-   * details (from step 1, or from the saved list for one being kept), merchant
-   * categories are plain names.
-   */
-  const repoint = useCallback(
-    (base: PabiliDraft, keys: string[]): PabiliDraft => {
-      if (!routeStores) return withCategories(base, keys);
-      const picked = keys
-        .map((key) => routeStores.find((s) => s.key === key) ?? base.stores?.[key])
-        .filter((s): s is PickedStore => Boolean(s));
-      return withStores(base, picked);
-    },
-    [routeStores]
-  );
-
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
   const draft = usePabiliDraft();
   const [ready, setReady] = useState(false);
-  const [pendingDrop, setPendingDrop] = useState<{ draft: PabiliDraft; dropped: string[] } | null>(null);
+  const [restoreError, setRestoreError] = useState(false);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [showClear, setShowClear] = useState(false);
   const [missingStore, setMissingStore] = useState<string | null>(null);
+  const [removedStore, setRemovedStore] = useState<{ key: string; before: PabiliDraft } | null>(null);
+
+  const browseStores = useCallback(() => {
+    if (pabiliDraftStore.ownerId === userId && pabiliDraftStore.getSnapshot()?.submission) {
+      navigation.navigate('PabiliReview', { user });
+      return;
+    }
+    void pabiliDraftStore.flush();
+    navigation.popTo('CustomerPortal', { user, initialTab: 'home' });
+  }, [navigation, user, userId]);
 
   // Android Three-Key Navigation: Back button dismisses active confirmation modals or returns safely
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const onBackPress = () => {
+      if (navigation.isFocused && !navigation.isFocused()) return false;
       if (showClear) {
         setShowClear(false);
         return true;
       }
-      if (pendingDrop) {
-        setPendingDrop(null);
-        return true;
-      }
-      navigation.goBack();
+      browseStores();
       return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [showClear, pendingDrop, navigation]);
+  }, [showClear, browseStores, navigation]);
 
-  // Picks up where the customer left off, re-pointed at the stores just
-  // chosen: every store still chosen keeps its items and a new one starts
-  // empty. Going back to step 1 to add a store used to mean choosing between a
-  // list without the new store and no list at all.
-  //
-  // The one question left is about a store the customer unselected that still
-  // has items, because only that loses anything. Nothing is started until
-  // they answer, so the saved list on the phone is untouched meanwhile.
+  // All Home browsing entry points add to one saved shopping list. Returning
+  // with different picks never means deleting stores or asking to discard it.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const current = pabiliDraftStore.getSnapshot();
-      const saved = current && pabiliDraftStore.ownerId === userId ? current : userId ? await readStoredDraft(userId) : null;
+      const saved = current && pabiliDraftStore.ownerId === userId ? current : userId ? await readStoredDraft(userId, Date.now(), true) : null;
       if (cancelled) return;
-      if (!saved) {
-        pabiliDraftStore.begin(userId, repoint(emptyDraft(routeCats), routeCats));
-      } else {
-        const dropped = droppedStoresWithItems(saved, routeCats);
-        if (dropped.length === 0) pabiliDraftStore.begin(userId, repoint(saved, routeCats));
-        else setPendingDrop({ draft: saved, dropped });
+      if (saved?.submission) {
+        pabiliDraftStore.begin(userId, saved);
+        setReady(true);
+        navigation.navigate('PabiliReview', { user });
+        return;
       }
+      const merged = mergeStoreSelection(saved ?? emptyDraft([]), routeCats, routeStores);
+      pabiliDraftStore.begin(userId, merged.draft);
+      setSelectionNotice(merged.notice ?? null);
       setReady(true);
-    })();
+    })().catch(() => { if (!cancelled) { setRestoreError(true); setReady(true); } });
     return () => {
       cancelled = true;
     };
-  }, [userId, routeCats, repoint]);
-
-  const droppedUnits = pendingDrop
-    ? pendingDrop.dropped.reduce(
-        (sum, cat) => sum + (pendingDrop.draft.rowsByCategory[cat] ?? []).reduce((n, r) => n + r.quantity, 0),
-        0
-      )
-    : 0;
-  // A dropped store is kept only alongside its own kind: a merchant category
-  // next to picked stores would reach the dispatcher as neither.
-  const canKeepDropped = pendingDrop
-    ? routeCats.length + pendingDrop.dropped.length <= MAX_STORES &&
-      pendingDrop.dropped.every((key) => Boolean(pendingDrop.draft.stores?.[key]) === Boolean(routeStores))
-    : false;
-  const droppedNames = pendingDrop ? joinNames(pendingDrop.dropped) : '';
+  }, [userId, routeCats, routeStores, restoreAttempt]);
 
   const categories = draft?.categories ?? routeCats;
   const units = draft ? totalUnits(draft) : 0;
@@ -167,8 +134,46 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
   );
 
   const openStore = (category: string) => {
+    if (draft?.submission) { navigation.navigate('PabiliReview', { user }); return; }
     setMissingStore(null);
     navigation.navigate('PabiliStoreEditor', { user, category });
+  };
+
+  const addStores = () => {
+    setMissingStore(null);
+    browseStores();
+  };
+
+  const removeStore = (key: string) => {
+    const current = pabiliDraftStore.getSnapshot();
+    if (!current || current.submission) return;
+    const keys = current.categories.filter((category) => category !== key);
+    pabiliDraftStore.update((d) => d.mode === 'location'
+      ? withStores(d, keys.map((category) => d.stores?.[category]).filter((s): s is PickedStore => Boolean(s)))
+      : withCategories(d, keys));
+    setRemovedStore({ key, before: current });
+    setMissingStore(null);
+    setSelectionNotice(null);
+  };
+
+  const undoRemove = () => {
+    const current = pabiliDraftStore.getSnapshot();
+    if (!current || current.submission || !removedStore) return;
+    const { key, before } = removedStore;
+    if (current.categories.includes(key)) { setRemovedStore(null); return; }
+    if (current.categories.length >= getStoresAllowed()) {
+      setSelectionNotice(`Remove another store first to restore this one. ${storeLimitMessage(getStoresAllowed())}`);
+      return;
+    }
+    pabiliDraftStore.update((d) => ({
+      ...d,
+      categories: [...d.categories, key],
+      rowsByCategory: { ...d.rowsByCategory, [key]: before.rowsByCategory[key] ?? [] },
+      composeByCategory: { ...d.composeByCategory, ...(before.composeByCategory[key] ? { [key]: before.composeByCategory[key] } : {}) },
+      ...(before.stores?.[key] ? { mode: 'location', stores: { ...d.stores, [key]: before.stores[key] } } : {}),
+    }));
+    setRemovedStore(null);
+    setSelectionNotice(null);
   };
 
   /**
@@ -176,6 +181,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
    * the tap names the store that is still empty, on the card where the fix is.
    */
   const goToReview = () => {
+    if (draft?.submission) { navigation.navigate('PabiliReview', { user }); return; }
     const empty = categories.find((cat) => countFor(cat) === 0);
     if (empty) {
       setMissingStore(empty);
@@ -184,11 +190,32 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
     navigation.navigate('PabiliReview', { user });
   };
 
+  if (restoreError) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp, justifyContent: 'center', padding: Spacing.lg, gap: Spacing.lg }, pageLayout.safeAreaFrameStyle]}>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.title} style={{ color: colors.textDark, fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) }}>
+          We couldn’t restore your shopping list
+        </Text>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={{ color: colors.textGray, fontFamily: FontFamily.regular, lineHeight: 22 }}>
+          Try again so we can safely restore any request still awaiting confirmation before you start another order.
+        </Text>
+        <TouchableOpacity testID="retry-draft-restoration" accessibilityRole="button"
+          style={{ minHeight: 50, borderRadius: BorderRadius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+          onPress={() => { setRestoreError(false); setReady(false); setRestoreAttempt((attempt) => attempt + 1); }}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.button} style={{ color: colors.onPrimary, fontFamily: FontFamily.bold }}>Try again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }} onPress={() => navigation.goBack()}>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.button} style={{ color: colors.textDark, fontFamily: FontFamily.bold }}>Go back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.navRow}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgApp }, pageLayout.safeAreaFrameStyle]} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={[styles.navRow, pageLayout.gutterStyle]}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={browseStores}
           hitSlop={PortalTouchTargets.compactHitSlop}
           style={styles.backBtn}
           testID="back-button"
@@ -202,8 +229,35 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <View style={styles.listArea}>
+      <ScrollView contentContainerStyle={[styles.scroll, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
         <StepPills step={2} storeCount={categories.length} />
+
+        {ready && categories.length > 0 && !draft?.submission ? (
+          <Text style={[styles.swipeHint, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+            Tap a store to add items. Swipe left or tap « on the right to remove.
+          </Text>
+        ) : null}
+
+        {removedStore ? (
+          <View style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.border }]} testID="removed-store-notice">
+            <Text style={[styles.noticeText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+              {removedStore.key} removed
+            </Text>
+            <TouchableOpacity onPress={undoRemove} accessibilityRole="button" testID="undo-remove-store" style={styles.undoBtn}>
+              <Text style={[styles.clearText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>Undo</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {selectionNotice ? (
+          <View style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.border }]} testID="store-selection-notice">
+            <AlertCircle size={16} color={colors.textGray} />
+            <Text style={[styles.noticeText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
+              {selectionNotice}
+            </Text>
+          </View>
+        ) : null}
 
         {recentlySent ? (
           <View style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.border }]} testID="recent-send-notice">
@@ -221,6 +275,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
                 key={cat}
                 style={[
                   styles.storeRow,
+                  styles.skeletonRow,
                   { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' },
                 ]}
               >
@@ -233,37 +288,47 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
             ))}
           </View>
         ) : (
-          categories.map((cat) => {
+          categories.map((cat, index) => {
             const kind = storeCategoryOf(draft, cat);
             const Icon = getCategoryIcon(kind);
             const count = countFor(cat);
             const flagged = missingStore === cat;
             // A picked store says what kind of shop it is under its name.
             const picked = draft?.stores?.[cat];
+            const rowBorderColor = flagged
+              ? colors.danger
+              : isDark
+              ? 'rgba(255, 255, 255, 0.08)'
+              : '#F1F5F9';
             return (
-              <TouchableOpacity
+              <SwipeableStoreRow
                 key={cat}
+                storeName={cat}
+                disabled={Boolean(draft?.submission)}
+                peekOnMount={index === 0}
+                borderBottomColor={rowBorderColor}
+                onOpen={() => openStore(cat)}
+                onRemove={() => removeStore(cat)}
+              >
+              <View style={styles.storeRow}>
+              <TouchableOpacity
+                style={styles.storeOpen}
                 activeOpacity={0.7}
                 onPress={() => openStore(cat)}
-                style={[
-                  styles.storeRow,
-                  {
-                    borderBottomColor: flagged
-                      ? colors.danger
-                      : isDark
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : '#F1F5F9',
-                  },
-                ]}
                 testID={`store-card-${cat}`}
                 accessibilityRole="button"
                 accessibilityLabel={`${cat}, ${count === 0 ? 'no items yet' : `${count} ${count === 1 ? 'item' : 'items'}`}`}
+                accessibilityHint="Swipe right to add items, or swipe left to show Remove."
+                accessibilityActions={[{ name: 'remove', label: `Remove ${cat} from your list` }]}
+                onAccessibilityAction={(event) => {
+                  if (event.nativeEvent.actionName === 'remove') removeStore(cat);
+                }}
               >
                 <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(246, 36, 89, 0.12)' : '#FFF0F5' }]}>
                   <Icon size={18} color={colors.primary} strokeWidth={2.2} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.storeName, { color: colors.textDark }]} numberOfLines={2} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
+                  <Text style={[styles.storeName, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.card}>
                     {cat}
                   </Text>
                   {picked ? (
@@ -289,6 +354,8 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
                 </View>
                 <ChevronRight size={18} color={colors.textLight} />
               </TouchableOpacity>
+              </View>
+              </SwipeableStoreRow>
             );
           })
         )}
@@ -300,12 +367,12 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
           >
             <AlertCircle size={16} color={colors.danger} />
             <Text style={[styles.errorText, { color: colors.danger }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
-              {`Add at least one item for ${missingStore}, or go back and remove that store.`}
+              {`Add at least one item for ${missingStore} before reviewing your list.`}
             </Text>
           </View>
         ) : null}
 
-        {units > 0 ? (
+        {categories.length > 0 ? (
           <TouchableOpacity onPress={() => setShowClear(true)} style={styles.clearBtn} hitSlop={PortalTouchTargets.compactHitSlop} testID="clear-list">
             <Text style={[styles.clearText, { color: colors.textGray }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.label}>
               Clear list
@@ -313,6 +380,23 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+
+      {ready && !draft?.submission ? (
+        <TouchableOpacity
+          testID="add-stores-fab"
+          accessibilityRole="button"
+          accessibilityLabel="Add stores"
+          onPress={addStores}
+          activeOpacity={0.85}
+          style={[styles.addStoresFab, Shadows.liftedUp, { backgroundColor: colors.card, borderColor: colors.border }, pageLayout.isPhone && { right: pageLayout.gutter }]}
+        >
+          <Plus size={21} color={colors.textDark} />
+          <Text style={[styles.addStoresText, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+            Add stores
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+      </View>
 
       <View
         style={[
@@ -322,8 +406,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
             borderTopColor: colors.border,
             paddingBottom: Math.max(insets.bottom, Spacing.md),
           },
-          Shadows.liftedUp,
-        ]}
+          Shadows.liftedUp, pageLayout.gutterStyle]}
       >
         <Text style={[styles.summary, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.body}>
           {units === 0
@@ -334,7 +417,7 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
           testID="review-list-button"
           activeOpacity={0.85}
           style={[styles.primaryBtn, { backgroundColor: units === 0 ? (isDark ? 'rgba(246,36,89,0.35)' : '#F7A8BE') : colors.primary }]}
-          onPress={units === 0 ? () => openStore(categories[0]) : goToReview}
+          onPress={categories.length === 0 ? browseStores : units === 0 ? () => openStore(categories[0]) : goToReview}
           disabled={!ready}
         >
           {/* One line, shortened with "..." (2026-10-14): a long store name,
@@ -346,51 +429,24 @@ export default function PabiliHubScreen({ route, navigation }: RootStackScreenPr
             maxFontSizeMultiplier={PortalFontSizeMultipliers.button}
             testID="review-list-button-label"
           >
-            {units === 0 ? `Start with ${categories[0]}` : 'Review my list'}
+            {categories.length === 0 ? 'Add stores' : units === 0 ? `Start with ${categories[0]}` : 'Review my list'}
           </Text>
           <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.4} style={styles.primaryIcon} />
         </TouchableOpacity>
       </View>
 
       <ConfirmModal
-        visible={Boolean(pendingDrop)}
-        title={`Remove your ${droppedNames} items?`}
-        message={
-          `You didn't pick ${droppedNames} this time, but ${droppedUnits} ${droppedUnits === 1 ? 'item is' : 'items are'} still on your list for it.` +
-          (canKeepDropped ? '' : ` An errand can visit up to ${MAX_STORES} stores, so to keep them, change your stores.`)
-        }
-        confirmLabel="Remove them"
-        cancelLabel={canKeepDropped ? `Keep ${pendingDrop?.dropped.length === 1 ? droppedNames : 'them'}` : 'Change my stores'}
-        destructive
-        onConfirm={() => {
-          if (pendingDrop) pabiliDraftStore.begin(userId, repoint(pendingDrop.draft, routeCats));
-          setPendingDrop(null);
-        }}
-        onCancel={() => {
-          const pending = pendingDrop;
-          setPendingDrop(null);
-          if (!pending) return;
-          if (canKeepDropped) {
-            pabiliDraftStore.begin(userId, repoint(pending.draft, [...routeCats, ...pending.dropped]));
-          } else {
-            // Nothing was started, so the saved list is exactly as it was.
-            navigation.goBack();
-          }
-        }}
-        testID="drop-stores-modal"
-      />
-
-      <ConfirmModal
         visible={showClear}
         title="Clear your list?"
-        message="Every item in every store is removed. This can't be undone."
+        message="Every store and item is removed. This can't be undone."
         confirmLabel="Clear list"
         cancelLabel="Keep my list"
         destructive
         onConfirm={() => {
           setShowClear(false);
           setMissingStore(null);
-          void pabiliDraftStore.clear().then(() => pabiliDraftStore.begin(userId, emptyDraft(categories)));
+          setRemovedStore(null);
+          void pabiliDraftStore.clear().then(browseStores);
         }}
         onCancel={() => setShowClear(false)}
         testID="clear-modal"
@@ -409,8 +465,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(17), lineHeight: getPortalLineHeight(17, 'heading') },
-  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xl * 2 },
+  navTitle: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading), lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading') },
+  listArea: { flex: 1 },
+  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 110 },
+  addStoresFab: {
+    position: 'absolute', right: Spacing.md, bottom: Spacing.md,
+    minHeight: 52, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md,
+    borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  addStoresText: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
   title: {
     fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.title),
@@ -434,15 +497,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   noticeText: { flex: 1, fontFamily: FontFamily.medium, fontSize: scaledPortalFontSize(PortalFontSizes.caption) },
+  swipeHint: { fontFamily: FontFamily.regular, fontSize: scaledPortalFontSize(PortalFontSizes.micro), lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'body'), marginBottom: Spacing.sm },
   storeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: Spacing.md,
     paddingHorizontal: 4,
-    borderBottomWidth: 1,
     minHeight: 64,
   },
+  skeletonRow: {
+    borderBottomWidth: 1,
+  },
+  storeOpen: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
+  undoBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   storeName: { fontFamily: FontFamily.bold, fontSize: scaledPortalFontSize(PortalFontSizes.subheading) },
   storeCount: { fontFamily: FontFamily.medium, fontSize: scaledPortalFontSize(PortalFontSizes.caption), marginTop: 2 },

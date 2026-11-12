@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { usePageLayout } from '../hooks/usePageLayout';
 import {
   Modal,
   View,
@@ -12,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WifiOff, ArrowLeft, Lock } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
 import { useNetworkStatus } from '../context/NetworkContext';
-import { FontSizes, FontFamily, Spacing, BorderRadius, scaledFontSize } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing, BorderRadius } from '../config/theme';
 import { RETRY_LABEL } from '../services/errorMessages';
 import {
   readCachedActiveErrand,
@@ -39,6 +40,7 @@ import StatusBadge from './StatusBadge';
  * inert. Looking is not functioning.
  */
 export const OfflineGate: React.FC = () => {
+  const pageLayout = usePageLayout();
   const { isConnected, retry } = useNetworkStatus();
   const { colors, isDark } = useThemeColor();
   const insets = useSafeAreaInsets();
@@ -90,13 +92,14 @@ export const OfflineGate: React.FC = () => {
         style={[
           styles.root,
           { backgroundColor: colors.bgApp, paddingTop: insets.top, paddingBottom: insets.bottom },
+          pageLayout.frameStyle,
         ]}
         testID="offline-gate"
       >
         {showSnapshot && cached ? (
           <ErrandSnapshot cached={cached} onBack={() => setShowSnapshot(false)} />
         ) : (
-          <View style={styles.center}>
+          <View style={[styles.center, pageLayout.gutterStyle]}>
             <View style={[styles.halo, { backgroundColor: haloBg }]}>
               <WifiOff size={34} color={colors.danger} strokeWidth={2} />
             </View>
@@ -170,13 +173,14 @@ const ErrandSnapshot: React.FC<{ cached: CachedActiveErrand; onBack: () => void 
   cached,
   onBack,
 }) => {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true });
   const { colors } = useThemeColor();
   const { errand } = cached;
   const category = errand.category || extractMerchantCategories(errand);
 
   return (
     <View style={styles.snapshotRoot}>
-      <View style={styles.snapshotNav}>
+      <View style={[styles.snapshotNav, pageLayout.gutterStyle]}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.backBtn}
@@ -195,7 +199,7 @@ const ErrandSnapshot: React.FC<{ cached: CachedActiveErrand; onBack: () => void 
         <View style={styles.backBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.snapshotBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.snapshotBody, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
         <View style={[styles.staleRow, { backgroundColor: colors.warningBg }]}>
           <Lock size={13} color={colors.warning} strokeWidth={2.2} />
           <Text style={[styles.staleText, { color: colors.warning }]} maxFontSizeMultiplier={1.15}>
@@ -298,16 +302,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   title: {
-    fontSize: scaledFontSize(FontSizes.xxl, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   body: {
-    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     maxWidth: 300,
     marginBottom: Spacing.xl,
   },
@@ -320,8 +325,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryBtnText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
-    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.semibold,
   },
   divider: {
@@ -338,11 +344,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ghostBtnText: {
-    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.semibold,
   },
   ghostBtnHint: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.regular,
     marginTop: 2,
   },
@@ -357,7 +365,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   snapshotNavTitle: {
-    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     fontFamily: FontFamily.semibold,
   },
   snapshotBody: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, gap: Spacing.md },
@@ -370,9 +379,9 @@ const styles = StyleSheet.create({
   },
   staleText: {
     flex: 1,
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.medium,
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   snapshotCard: {
     borderWidth: 1,
@@ -387,35 +396,38 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   snapshotRef: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.mono,
     flexShrink: 1,
   },
   snapshotTitle: {
-    fontSize: scaledFontSize(FontSizes.lg, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     fontFamily: FontFamily.semibold,
   },
   snapshotBodyText: {
-    fontSize: scaledFontSize(FontSizes.md, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
-    lineHeight: 21,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   snapshotMeta: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.regular,
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   sectionLabel: {
-    fontSize: scaledFontSize(FontSizes.xs, 0.2),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   snapshotFootnote: {
-    fontSize: scaledFontSize(FontSizes.sm, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     paddingHorizontal: Spacing.md,
   },
 });

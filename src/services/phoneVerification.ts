@@ -27,6 +27,37 @@ export function toPhilippineE164(phone: string): string | null {
   return ten.length === 10 && ten.startsWith('9') ? `+63${ten}` : null;
 }
 
+export type MfaSmsResult =
+  | { status: 'verified'; idToken: string }
+  | { status: 'cancelled' }
+  | { status: 'failed'; error: unknown };
+
+/**
+ * The second sign-in factor by SMS. Same portal page, `purpose=mfa`: the
+ * customer is not signed in yet, so the app never puts the full number in the
+ * URL, only `hint` (the last four digits the server sent) for the page to show.
+ * The returned ID token goes to `POST /auth/verify-login-otp`, which checks
+ * it against the account's number; nothing is posted here. Never throws.
+ */
+export async function verifyLoginBySms(phoneHint: string | null | undefined): Promise<MfaSmsResult> {
+  try {
+    const redirectUrl = Linking.createURL('mfa-verified');
+    const hint = (phoneHint || '').replace(/\D/g, '').slice(-4);
+    const authUrl =
+      `https://portal.sugo-express.org/verify-phone?purpose=mfa` +
+      (hint ? `&hint=${encodeURIComponent(hint)}` : '') +
+      `&redirect=${encodeURIComponent(redirectUrl)}`;
+    const authResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+    if (authResult.type !== 'success' || !authResult.url) return { status: 'cancelled' };
+    const token = (Linking.parse(authResult.url).queryParams?.token as string) || null;
+    if (!token) return { status: 'cancelled' };
+    return { status: 'verified', idToken: token };
+  } catch (error) {
+    return { status: 'failed', error };
+  }
+}
+
 export async function verifyPhoneBySms(phone: string): Promise<PhoneVerificationResult> {
   const fullPhone = toPhilippineE164(phone);
   if (!fullPhone) return { status: 'failed', error: new Error('Enter a 10-digit number starting with 9.') };

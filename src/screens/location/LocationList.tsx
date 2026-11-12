@@ -1,3 +1,4 @@
+import { usePageLayout } from '../../hooks/usePageLayout';
 import React from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Plus, RotateCw } from 'lucide-react-native';
@@ -43,10 +44,11 @@ export default function LocationList({
   onEdit,
   onDelete,
 }: LocationListProps) {
+  const pageLayout = usePageLayout({ horizontalSafeAreaApplied: true, tabletGutter: 18 });
   const { colors, isDark } = useThemeColor();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, pageLayout.gutterStyle]} showsVerticalScrollIndicator={false}>
       <Text style={[styles.headerTitle, { color: colors.textDark }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.title}>
         My Delivery Locations
       </Text>
@@ -67,8 +69,8 @@ export default function LocationList({
           onPress={onAddNew}
           hitSlop={PortalTouchTargets.compactHitSlop}
         >
-          <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
-          <Text style={styles.addBtnText} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
+          <Plus size={18} color={colors.onPrimary} strokeWidth={2.4} />
+          <Text style={[styles.addBtnText, { color: colors.onPrimary }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.button}>
             Add New Location
           </Text>
         </TouchableOpacity>

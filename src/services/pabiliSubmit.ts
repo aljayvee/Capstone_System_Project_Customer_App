@@ -3,7 +3,7 @@ import { database } from '../firebase/config';
 import { saveCustomerLocation } from '../firebase/location';
 import { apiClient } from './apiClient';
 import { postOrderSubmitted, type OrderSummaryItem } from './chatSystemMessages';
-import { allRows, type PabiliDraft, type PickedStore } from './pabiliDraft';
+import { allRows, type PabiliDraft, type PickedStore, type PabiliSubmission } from './pabiliDraft';
 import type { DeliveryLocation } from '../hooks/useDefaultDeliveryLocation';
 
 /** Every listed row, as the order's items. Pure, so the payload is tested without a network. */
@@ -92,42 +92,46 @@ export function buildErrandPayload(draft: PabiliDraft, location: DeliveryLocatio
  * Creates the errand and opens its chat with the order.
  *
  * Only the POST can fail the send. The chat line and the chat's metadata
- * narrate an errand that already exists, so they are awaited (to land before
- * the customer reaches the chat) but never allowed to throw.
+ * narrate an errand that already exists, so they must not delay confirmation.
  */
 export async function submitPabili(
   draft: PabiliDraft,
   location: DeliveryLocation,
-  userId: string | number
+  userId: string | number,
+  submission?: PabiliSubmission
 ): Promise<string> {
-  try {
-    await saveCustomerLocation(userId, location.latitude, location.longitude, location.address);
-  } catch (e) {
-    console.warn('[Firebase RTDB] Location write warning:', e);
-  }
-
-  const response = await apiClient.post('/errands', buildErrandPayload(draft, location, userId));
+  const response = await apiClient.post('/errands', submission?.payload ?? buildErrandPayload(draft, location, userId), { timeout: 120000 });
   const created = response.data;
-  const errandId = String(created?.id ?? `PABILI-${Date.now().toString().slice(-6)}`);
+  if (!created?.id || (submission && created.submissionId !== submission.id)) {
+    throw new Error('Missing order confirmation');
+  }
+  const errandId = String(created.id);
+  publishSubmittedPabili(draft, location, userId, created);
+  return errandId;
+}
+
+/** Supporting Firebase writes must never hold the confirmed order hostage. */
+export function publishSubmittedPabili(draft: PabiliDraft, location: DeliveryLocation, userId: string | number, created: { id: string; deliveryFee?: number }) {
+  const errandId = String(created.id);
+  void saveCustomerLocation(userId, location.latitude, location.longitude, location.address).catch(() => {});
 
   // The chat used to start empty, so a dispatcher opening it saw nothing and
   // the customer had no visible record of what they had just asked for.
-  await postOrderSubmitted(errandId, {
+  void postOrderSubmitted(errandId, {
     items: draftItems(draft),
     deliveryAddress: location.address,
     categories: draft.categories,
     deliveryFee: Number(created?.deliveryFee ?? 0),
-  });
+  }).catch(() => {});
 
   try {
-    await update(ref(database, `chats/${errandId}/meta`), {
+    void update(ref(database, `chats/${errandId}/meta`), {
       categories: draft.categories,
       merchantCategories: draft.categories.join(', '),
       updatedAt: Date.now(),
-    });
+    }).catch(() => {});
   } catch {
     // Metadata for the chat list. The errand is already created.
   }
 
-  return errandId;
 }

@@ -498,7 +498,7 @@ export default function DraggableBentoMosaic({
           <View style={styles.tileFooter}>
             <Text
               style={[styles.tileLabel, isTall && styles.tileLabelTall]}
-              numberOfLines={isTall ? 2 : 1}
+              numberOfLines={2}
               maxFontSizeMultiplier={isTall ? PortalFontSizeMultipliers.subheading : PortalFontSizeMultipliers.label}
             >
               {label}

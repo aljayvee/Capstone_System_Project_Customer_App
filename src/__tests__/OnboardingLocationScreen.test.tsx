@@ -4,6 +4,12 @@ import * as Location from 'expo-location';
 import * as SplashScreen from 'expo-splash-screen';
 import OnboardingLocationScreen from '../screens/onboarding/OnboardingLocationScreen';
 
+jest.mock('expo-image', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { Image: (props: any) => React.createElement(View, props) };
+});
+
 jest.mock('expo-splash-screen', () => ({
   hideAsync: jest.fn(() => Promise.resolve()),
   preventAutoHideAsync: jest.fn(() => Promise.resolve()),
@@ -40,6 +46,7 @@ describe('OnboardingLocationScreen', () => {
     const res: any = await render(<OnboardingLocationScreen navigation={navigation} />);
 
     expect(res.getByText('Set your delivery location')).toBeTruthy();
+    expect(res.getByTestId('kuya-sugo-mascot')).toBeTruthy();
     expect(res.getByText('Allow location access for:')).toBeTruthy();
     expect(res.getByText('Searching the best shops near you.')).toBeTruthy();
     expect(res.getByText('Receiving more accurate and faster delivery.')).toBeTruthy();

@@ -57,26 +57,25 @@ export function ErrandsUtilityBarSkeleton() {
  * 4. ERRAND CARD SKELETON
  */
 export function ErrandsCardSkeleton() {
-  const { colors, isDark } = useThemeColor();
+  const { colors } = useThemeColor();
 
   return (
     <View
       style={[
         styles.cardSkeleton,
-        { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' },
+        { backgroundColor: colors.card, borderColor: colors.border },
       ]}
       testID="errands-card-skeleton"
     >
-      {/* Header Row: Icon + Title + Status Pill */}
+      {/* Store name, metadata and status */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <ShimmerWave width={34} height={34} borderRadius={17} style={{ marginRight: 10 }} />
           <View style={styles.cardHeaderTextCol}>
             <ShimmerWave width={140} height={15} borderRadius={4} style={{ marginBottom: 5 }} />
             <ShimmerWave width={100} height={11} borderRadius={3} />
           </View>
         </View>
-        <ShimmerWave width={68} height={22} borderRadius={BorderRadius.full} />
+        <ShimmerWave width={60} height={12} borderRadius={3} />
       </View>
 
       {/* Address line */}
@@ -96,7 +95,7 @@ export function ErrandsCardSkeleton() {
 
       {/* Reorder Button */}
       <View style={styles.reorderSkeletonWrap}>
-        <ShimmerWave width="100%" height={34} borderRadius={BorderRadius.md} />
+        <ShimmerWave width={124} height={48} borderRadius={BorderRadius.md} />
       </View>
     </View>
   );
@@ -105,9 +104,10 @@ export function ErrandsCardSkeleton() {
 /**
  * 5. CARDS-ONLY SKELETON (Used when header and filters are already mounted)
  */
-export function ErrandsCardsSkeleton() {
+export function ErrandsCardsSkeleton({ horizontalPadding = Spacing.xl }: { horizontalPadding?: number } = {}) {
+  const { colors } = useThemeColor();
   return (
-    <View style={styles.cardsContainer} testID="errands-cards-skeleton">
+    <View style={[styles.cardsContainer, { paddingHorizontal: horizontalPadding, backgroundColor: colors.bgApp }]} testID="errands-cards-skeleton">
       {[1, 2, 3].map((key) => (
         <ErrandsCardSkeleton key={key} />
       ))}
@@ -163,19 +163,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardsContainer: {
-    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
   },
   cardSkeleton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: 0,
-    borderBottomWidth: 1,
-    marginBottom: 0,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   cardHeaderLeft: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { usePageLayout } from '../hooks/usePageLayout';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   MapPin,
@@ -13,7 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { BorderRadius, FontSizes, Spacing, FontFamily, Shadows, scaledFontSize, moderateScale } from '../config/theme';
+import { PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, BorderRadius, Spacing, FontFamily, Shadows, moderateScale } from '../config/theme';
 import StatusBadge from './StatusBadge';
 import LiveTrackingMap from './LiveTrackingMap';
 import ErrandProgressStepper from './ErrandProgressStepper';
@@ -34,6 +35,7 @@ export interface ErrandTrackCardProps {
 }
 
 export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
+  const pageLayout = usePageLayout();
   const { colors, isDark } = useThemeColor();
   const [isMapOpen, setIsMapOpen] = useState(false);
   const {
@@ -87,6 +89,8 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
     degraded: routeDegraded,
     lineEngine: routeLineEngine,
     unroutable: routeUnroutable,
+    routeKey,
+    routeUpdatedAt,
   } = useLiveRoute(riderLocation, customerCoordinate, waypoints, {
     // The rider's own route and map (see TrackTab), reused for this errand,
     // then on the chosen map's roads only.
@@ -138,7 +142,7 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
         <View style={styles.headerLeftCol}>
           <View style={styles.idRow}>
             <Text style={[styles.cardTitle, { color: colors.textDark }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
-              #{formatErrandId(errand.orderId)}
+              #{formatErrandId(errand.orderId, errand.referenceNo)}
             </Text>
             {errand.categories && (
               <View
@@ -238,7 +242,7 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
 
             {delivering && (
               <View style={[styles.expandBtn, { backgroundColor: colors.primary }]}>
-                <Maximize2 size={13} color="#FFFFFF" strokeWidth={2.4} />
+                <Maximize2 size={13} color={colors.onPrimary} strokeWidth={2.4} />
               </View>
             )}
           </View>
@@ -370,10 +374,10 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
       {/* 6. Full Screen Interactive Live GPS Map Modal */}
       <Modal visible={isMapOpen} animationType="slide" transparent={false} onRequestClose={() => setIsMapOpen(false)}>
         <View style={[styles.modalRoot, { backgroundColor: colors.bgApp }]}>
-          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }, pageLayout.insetStyle]}>
             <View>
               <Text style={[styles.modalTitle, { color: colors.textDark }]} maxFontSizeMultiplier={1.25}>
-                Errand #{formatErrandId(errand.orderId)}
+                Errand #{formatErrandId(errand.orderId, errand.referenceNo)}
               </Text>
               <Text style={[styles.modalSubtitle, { color: colors.textGray }]} maxFontSizeMultiplier={1.2}>
                 Live Route & Real-Time GPS
@@ -408,6 +412,8 @@ export default function ErrandTrackCard({ errand }: ErrandTrackCardProps) {
                 phase={stage.index >= 3 ? 'delivering' : 'shopping'}
                 mapStyle={mapStyle}
                 lineEngine={routeLineEngine}
+                routeKey={routeKey}
+                routeUpdatedAt={routeUpdatedAt}
               />
             )}
           </View>
@@ -443,8 +449,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm + 1, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
     letterSpacing: -0.2,
   },
   categoryPill: {
@@ -458,8 +465,9 @@ const styles = StyleSheet.create({
     maxWidth: '65%',
   },
   categoryText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(9.5, 0.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     textTransform: 'capitalize',
     flexShrink: 1,
   },
@@ -475,8 +483,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   liveStatusText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.semibold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   mapHeroCard: {
     padding: Spacing.md,
@@ -505,12 +514,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mapHeroTitle: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.subheading), 'heading'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.sm, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.subheading),
   },
   mapHeroSub: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   expandBtn: {
     width: 28,
@@ -534,11 +545,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   metricChipText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
   etaNoteText: {
-    fontSize: scaledFontSize(11, 0.3),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginTop: 6,
     marginLeft: 2,
   },
@@ -552,9 +566,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   delayNoticeText: {
+    fontFamily: FontFamily.regular,
     flex: 1,
-    fontSize: scaledFontSize(11.5, 0.3),
-    lineHeight: moderateScale(16, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
   },
   infoSection: {
     borderRadius: BorderRadius.lg,
@@ -582,14 +597,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.regular,
-    fontSize: scaledFontSize(10, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   infoValue: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.xs, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     marginTop: 1,
   },
   riderNameRow: {
@@ -604,12 +621,14 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xs,
   },
   totalLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: scaledFontSize(FontSizes.sm, 0.3),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
   },
   totalAmount: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.price), 'price'),
     fontFamily: FontFamily.bold,
-    fontSize: scaledFontSize(FontSizes.lg, 0.35),
+    fontSize: scaledPortalFontSize(PortalFontSizes.price),
   },
   modalRoot: { flex: 1 },
   modalHeader: {
@@ -621,8 +640,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
     borderBottomWidth: 1,
   },
-  modalTitle: { fontSize: scaledFontSize(FontSizes.md, 0.35), fontFamily: FontFamily.bold },
-  modalSubtitle: { fontSize: scaledFontSize(FontSizes.xs, 0.3), fontFamily: FontFamily.regular, marginTop: 2 },
+  modalTitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'), fontSize: scaledPortalFontSize(PortalFontSizes.title), fontFamily: FontFamily.bold },
+  modalSubtitle: { lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'), fontSize: scaledPortalFontSize(PortalFontSizes.caption), fontFamily: FontFamily.regular, marginTop: 2 },
   closeBtn: {
     width: 36,
     height: 36,

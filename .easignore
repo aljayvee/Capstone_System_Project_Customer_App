@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build artifacts & caches
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+
+# Native keys & artifacts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# TypeScript build info
+*.tsbuildinfo
+
+example
+
+# Runtime mascot exports live in assets/mascot, not in the authoring folders.
+artwork/kuya-sugo/
+scratch/kuya-sugo-blender/

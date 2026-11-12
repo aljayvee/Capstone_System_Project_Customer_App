@@ -1,0 +1,220 @@
+import React from 'react';
+import { render, fireEvent, within } from '@testing-library/react-native';
+import NotificationScreen, { dayBucket, matchesFilter, sectionsFor } from '../screens/Notification';
+import type { CustomerNotification } from '../context/NotificationContext';
+
+const mockState: {
+  notifications: CustomerNotification[];
+  loading: boolean;
+  error: boolean;
+} = { notifications: [], loading: false, error: false };
+const mockMarkAsRead = jest.fn(async () => undefined);
+const mockMarkAll = jest.fn(async () => undefined);
+const mockRefresh = jest.fn(async () => undefined);
+
+jest.mock('../context/NotificationContext', () => ({
+  useNotifications: () => ({
+    notifications: mockState.notifications,
+    unreadCount: mockState.notifications.filter((n) => !n.isRead).length,
+    loading: mockState.loading,
+    error: mockState.error,
+    markAsRead: mockMarkAsRead,
+    markAllAsRead: mockMarkAll,
+    refreshNotifications: mockRefresh,
+    syncActiveErrands: jest.fn(),
+  }),
+}));
+
+jest.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 9, firstName: 'Juan' } }),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+const now = Date.now();
+const hoursAgo = (h: number) => new Date(now - h * 3600_000).toISOString();
+
+function row(over: Partial<CustomerNotification>): CustomerNotification {
+  return {
+    id: 1,
+    type: 'ERRAND_ACCEPTED',
+    title: 'Ana is handling your errand',
+    body: 'Tap to chat about your errand.',
+    isRead: false,
+    createdAt: hoursAgo(0.1),
+    ...over,
+  };
+}
+
+const LIST: CustomerNotification[] = [
+  row({ id: 1, type: 'ERRAND_ACCEPTED', category: 'ORDER', needsYou: false, errandId: 'e-1' }),
+  row({ id: 2, type: 'FEE_UPDATED', title: 'Delivery Fee Updated', body: 'Errand 261021-ABCDE-0001 total is now 350.00.', category: 'PAYMENT', needsYou: true, errandId: 'e-1' }),
+  row({ id: 3, type: 'RIDER_NEARBY', title: 'Your rider is almost there', body: 'Within 500m.', category: 'DELIVERY', needsYou: true, errandId: 'e-2' }),
+  row({ id: 4, type: 'CHAT_MESSAGE', title: 'Message from Ana (3 new)', body: 'Nasa store na po', category: 'CHAT', needsYou: true, errandId: 'e-1', createdAt: hoursAgo(30) }),
+  // Written before rows carried a category or an errand.
+  row({ id: 5, type: 'ERRAND_DELIVERED', title: 'Your order was delivered', body: 'Delivered by Renen.', isRead: true, createdAt: hoursAgo(24 * 9) }),
+];
+
+async function setup(state: Partial<typeof mockState> = {}) {
+  mockState.notifications = state.notifications ?? LIST;
+  mockState.loading = state.loading ?? false;
+  mockState.error = state.error ?? false;
+  const navigation = { navigate: jest.fn(), goBack: jest.fn() } as any;
+  const screen: any = await render(<NotificationScreen navigation={navigation} route={{ key: 'n', name: 'Notification', params: undefined } as any} />);
+  return { screen, navigation };
+}
+
+beforeEach(() => jest.clearAllMocks());
+
+describe('Notification screen', () => {
+  it('counts each filter live', async () => {
+    const { screen } = await setup();
+    const count = (key: string) => screen.getByTestId(`notification-filter-count-${key}`).props.children;
+    // No "All" chip (user, 2026-10-21); the summary line carries the total.
+    expect(screen.queryByTestId('notification-filter-ALL')).toBeNull();
+    expect(screen.getByText('5 notifications')).toBeTruthy();
+    expect(count('NEEDS_YOU')).toBe(3);
+    expect(count('ORDER')).toBe(2); // the legacy delivered row derives Order from its type
+    expect(count('DELIVERY')).toBe(1);
+    expect(count('PAYMENT')).toBe(1);
+    expect(count('CHAT')).toBe(1);
+  });
+
+  it('shows only what needs the customer under Needs you, each with the chip', async () => {
+    const { screen } = await setup();
+    await fireEvent.press(screen.getByTestId('notification-filter-NEEDS_YOU'));
+    expect(screen.queryByTestId('notification-card-1')).toBeNull();
+    for (const id of [2, 3, 4]) {
+      expect(screen.getByTestId(`notification-card-${id}`)).toBeTruthy();
+      expect(screen.getByTestId(`notification-needs-you-${id}`)).toBeTruthy();
+    }
+  });
+
+  it('clears a topic by tapping it again, showing everything', async () => {
+    const { screen } = await setup();
+    await fireEvent.press(screen.getByTestId('notification-filter-PAYMENT'));
+    expect(screen.queryByTestId('notification-card-1')).toBeNull();
+    expect(screen.getByText('1 of 5')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('notification-filter-PAYMENT'));
+    expect(screen.getByTestId('notification-card-1')).toBeTruthy();
+    expect(screen.getByText('5 notifications')).toBeTruthy();
+  });
+
+  it('sorts from the Sort by menu', async () => {
+    const { screen } = await setup();
+    expect(screen.getByText('Sort by: Newest first')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('notification-sort-button'));
+    expect(screen.getByTestId('notification-sort-menu')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('notification-sort-NEEDS_YOU'));
+    expect(screen.queryByTestId('notification-sort-menu')).toBeNull();
+    expect(screen.getByText('Sort by: Needs you first')).toBeTruthy();
+    expect(screen.getByTestId('notification-section-Needs you')).toBeTruthy();
+    expect(screen.getByTestId('notification-section-Everything else')).toBeTruthy();
+  });
+
+  it('groups rows under Today, Yesterday and Earlier', async () => {
+    const { screen } = await setup();
+    expect(screen.getByTestId('notification-section-Today')).toBeTruthy();
+    expect(screen.getByTestId('notification-section-Earlier')).toBeTruthy();
+    const today = new Date();
+    const yesterdayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 12).toISOString();
+    expect(dayBucket(yesterdayNoon, today)).toBe('Yesterday');
+  });
+
+  it('says so when a search matches nothing, and clears it', async () => {
+    const { screen } = await setup();
+    await fireEvent.changeText(screen.getByTestId('notification-search-input'), 'zzz');
+    expect(within(screen.getByTestId('notification-empty')).getByText('No matches')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('notification-empty-clear-search'));
+    expect(screen.getByTestId('notification-card-1')).toBeTruthy();
+  });
+
+  it('searches title and body', async () => {
+    const { screen } = await setup();
+    await fireEvent.changeText(screen.getByTestId('notification-search-input'), 'nasa store');
+    expect(screen.getByTestId('notification-card-4')).toBeTruthy();
+    expect(screen.queryByTestId('notification-card-1')).toBeNull();
+  });
+
+  it('shows the filter empty state', async () => {
+    const { screen } = await setup({ notifications: [LIST[0]] });
+    await fireEvent.press(screen.getByTestId('notification-filter-PAYMENT'));
+    expect(within(screen.getByTestId('notification-empty')).getByText('No payment updates')).toBeTruthy();
+  });
+
+  it('shows skeleton rows while the first load runs', async () => {
+    const { screen } = await setup({ notifications: [], loading: true });
+    expect(screen.getByTestId('notification-skeleton')).toBeTruthy();
+  });
+
+  it('offers a retry when nothing could be loaded', async () => {
+    const { screen } = await setup({ notifications: [], error: true });
+    await fireEvent.press(screen.getByTestId('notification-error-retry'));
+    expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it('keeps the list and says it is stale when only a refresh failed', async () => {
+    const { screen } = await setup({ error: true });
+    expect(screen.getByTestId('notification-refresh-error')).toBeTruthy();
+    expect(screen.getByTestId('notification-card-1')).toBeTruthy();
+  });
+
+  it('opens the chat for a message and marks it read', async () => {
+    const { screen, navigation } = await setup();
+    await fireEvent.press(screen.getByTestId('notification-card-4'));
+    expect(mockMarkAsRead).toHaveBeenCalledWith(4);
+    expect(navigation.navigate).toHaveBeenCalledWith('CustomerChat', expect.objectContaining({ errandId: 'e-1' }));
+  });
+
+  it('opens the live map for a delivery update', async () => {
+    const { screen, navigation } = await setup();
+    await fireEvent.press(screen.getByTestId('notification-card-3'));
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'CustomerPortal',
+      expect.objectContaining({ initialTab: 'track', focusedErrandId: 'e-2' }),
+      // Back to the portal underneath, not a second one pushed on top.
+      { pop: true }
+    );
+  });
+
+  it('opens the errand details for a payment update', async () => {
+    const { screen, navigation } = await setup();
+    await fireEvent.press(screen.getByTestId('notification-card-2'));
+    expect(navigation.navigate).toHaveBeenCalledWith('ErrandDetails', expect.objectContaining({ errandId: 'e-1' }));
+  });
+
+  it('only marks read an old row with no errand to open', async () => {
+    const { screen, navigation } = await setup({ notifications: [{ ...LIST[4], isRead: false }] });
+    await fireEvent.press(screen.getByTestId('notification-card-5'));
+    expect(mockMarkAsRead).toHaveBeenCalledWith(5);
+    expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('sectionsFor', () => {
+  const at = new Date();
+  it('puts the oldest first, earliest day first', () => {
+    const sections = sectionsFor(LIST, 'OLDEST', at);
+    expect(sections[0].title).toBe('Earlier');
+    expect(sections[0].data[0].id).toBe(5);
+  });
+
+  it('puts unread before read, newest first within each', () => {
+    const sections = sectionsFor(LIST, 'UNREAD', at);
+    expect(sections.map((s) => s.title)).toEqual(['Unread', 'Read']);
+    expect(sections[1].data.map((n) => n.id)).toEqual([5]);
+  });
+
+  it('puts what needs the customer first', () => {
+    const sections = sectionsFor(LIST, 'NEEDS_YOU', at);
+    expect(sections[0].data.map((n) => n.id).sort()).toEqual([2, 3, 4]);
+  });
+});
+
+describe('matchesFilter', () => {
+  it('drops a read row from Needs you', () => {
+    expect(matchesFilter(row({ type: 'FEE_UPDATED', needsYou: true, isRead: true }), 'NEEDS_YOU')).toBe(false);
+  });
+});

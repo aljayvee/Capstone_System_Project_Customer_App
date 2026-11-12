@@ -87,7 +87,7 @@ describe('Dark Mode Neutral Frosted Substrates & Pure Black Backdrop', () => {
     jest.clearAllMocks();
   });
 
-  it('renders HomeTab sticky search bar with pure black backdrop and neutral frosted substrate in Dark Mode', async () => {
+  it('renders HomeTab search with the Find Stores field design in Dark Mode', async () => {
     mockIsDark = true;
     const res: any = await render(
       <HomeTab
@@ -102,17 +102,17 @@ describe('Dark Mode Neutral Frosted Substrates & Pure Black Backdrop', () => {
     const stickyWrapper = res.getByTestId('home-sticky-search');
     const flattenedWrapperStyle = StyleSheet.flatten(stickyWrapper.props.style);
     // A soft charcoal since 2026-10-11 (theme bgAppTranslucent), not pure black.
-    expect(flattenedWrapperStyle.backgroundColor).toBe('rgba(18, 18, 18, 0.95)');
+    expect(flattenedWrapperStyle.backgroundColor).toBe(require('../config/theme').DarkColors.bgAppTranslucent);
 
     const searchBar = res.getByTestId('home-store-search');
     const flattenedBarStyle = StyleSheet.flatten(searchBar.props.style);
+    expect(flattenedBarStyle.elevation).toBe(3);
+    expect(flattenedBarStyle.shadowOpacity).toBe(0.08);
     expect(flattenedBarStyle.backgroundColor).toBe('rgba(255, 255, 255, 0.08)');
-    expect(flattenedBarStyle.shadowColor).toBe('#000000');
 
-    const searchAction = res.getByTestId('home-store-search-action');
-    const flattenedActionStyle = StyleSheet.flatten(searchAction.props.style);
-    expect(flattenedActionStyle.backgroundColor).toBe('rgba(255, 255, 255, 0.10)');
-    expect(flattenedActionStyle.borderColor).toBe('rgba(255, 255, 255, 0.14)');
+    expect(flattenedBarStyle.borderColor).toBe('rgba(255, 255, 255, 0.12)');
+    expect(flattenedBarStyle.borderRadius).toBe(24);
+    expect(res.queryByTestId('home-store-search-action')).toBeNull();
   });
 
   it('renders EstablishmentPicker search bar with neutral frosted glass and black shadow in Dark Mode', async () => {
@@ -132,17 +132,20 @@ describe('Dark Mode Neutral Frosted Substrates & Pure Black Backdrop', () => {
     expect(flattened.shadowColor).toBe('#000000');
   });
 
-  it('renders ChatTab search bar with neutral frosted glass and black shadow in Dark Mode', async () => {
+  it('renders ChatTab search bar with the Home glass finish in Dark Mode', async () => {
     mockIsDark = true;
     const res: any = await render(<ChatTab user={mockUser} navigation={mockNavigation} />);
 
     const searchBar = res.getByTestId('chat-search-bar');
     const flattened = StyleSheet.flatten(searchBar.props.style);
+    expect(flattened.elevation).toBe(3);
+    expect(flattened.shadowOpacity).toBe(0.08);
     expect(flattened.backgroundColor).toBe('rgba(255, 255, 255, 0.08)');
-    expect(flattened.shadowColor).toBe('#000000');
+    expect(flattened.borderTopColor).toBe('rgba(255, 255, 255, 0.28)');
+    expect(flattened.borderRadius).toBe(24);
   });
 
-  it('renders ErrandsTab search bar with neutral frosted glass and black shadow in Dark Mode', async () => {
+  it('renders ErrandsTab search bar with the Home glass finish in Dark Mode', async () => {
     mockIsDark = true;
     const res: any = await render(
       <ErrandsTab
@@ -157,8 +160,11 @@ describe('Dark Mode Neutral Frosted Substrates & Pure Black Backdrop', () => {
 
     const searchBar = res.getByTestId('errands-search-bar');
     const flattened = StyleSheet.flatten(searchBar.props.style);
+    expect(flattened.elevation).toBe(3);
+    expect(flattened.shadowOpacity).toBe(0.08);
     expect(flattened.backgroundColor).toBe('rgba(255, 255, 255, 0.08)');
-    expect(flattened.shadowColor).toBe('#000000');
+    expect(flattened.borderTopColor).toBe('rgba(255, 255, 255, 0.28)');
+    expect(flattened.borderRadius).toBe(24);
   });
 
   it('renders BottomNav floating capsule with neutral dark charcoal in Dark Mode and optical white in Light Mode', async () => {

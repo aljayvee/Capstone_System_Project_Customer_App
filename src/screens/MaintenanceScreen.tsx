@@ -4,7 +4,7 @@ import { Wrench, RefreshCw, CheckCircle2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { apiClient } from '../services/apiClient';
 import { RETRY_LABEL } from '../services/errorMessages';
-import { FontSizes, FontFamily, Spacing } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, Spacing } from '../config/theme';
 
 interface MaintenanceScreenProps {
   onRestored?: () => void;
@@ -68,7 +68,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ onRestored
           Sugo is down for a quick update
         </Text>
 
-        <Text style={[styles.description, { color: colors.textGray }]}>
+        <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.description, { color: colors.textGray }]}>
           We are making Sugo faster. Everything comes back on its own, no need to reinstall.
         </Text>
 
@@ -76,7 +76,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ onRestored
           <Text style={[styles.infoLabel, { color: colors.textLight }]} maxFontSizeMultiplier={1.2}>
             Usually back within
           </Text>
-          <Text style={[styles.infoValue, { color: colors.textDark }]}>Under 15 minutes</Text>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.infoValue, { color: colors.textDark }]}>Under 15 minutes</Text>
         </View>
 
         {isOnline ? (
@@ -91,11 +91,11 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ onRestored
             style={[styles.button, { backgroundColor: colors.primary }]}
           >
             {isChecking ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
               <>
-                <RefreshCw size={15} color="#FFFFFF" />
-                <Text style={styles.buttonText} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
+                <RefreshCw size={15} color={colors.onPrimary} />
+                <Text style={[styles.buttonText, { color: colors.onPrimary }]} maxFontSizeMultiplier={1.15}>{RETRY_LABEL}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -137,21 +137,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   badgeText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.micro), 'label'),
     color: '#92400E',
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
     fontFamily: FontFamily.bold,
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: FontSizes.lg,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.title), 'heading'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.title),
     fontFamily: FontFamily.bold,
     textAlign: 'center',
   },
   description: {
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
   },
   infoBox: {
     width: '100%',
@@ -164,11 +166,13 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.xs,
   },
   infoLabel: {
-    fontSize: FontSizes.xs,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.medium,
   },
   infoValue: {
-    fontSize: FontSizes.xs,
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.bold,
   },
   button: {
@@ -182,8 +186,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   buttonText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.body), 'body'),
     color: '#FFFFFF',
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.body),
     fontFamily: FontFamily.bold,
   },
   successRow: {
@@ -193,8 +198,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   successText: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     color: '#065F46',
-    fontSize: FontSizes.xs,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     fontFamily: FontFamily.bold,
   },
 });

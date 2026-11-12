@@ -1,22 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { onValue, ref } from 'firebase/database';
-import { ChevronRight, ShieldCheck } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { database } from '../firebase/config';
 import { useThemeColor } from '../hooks/useThemeColor';
 import {
-  FontSizes,
   Spacing,
   FontFamily,
   PortalFontSizes,
   scaledPortalFontSize,
   getPortalLineHeight,
-  PortalTouchTargets,
   PortalFontSizeMultipliers,
 } from '../config/theme';
 import { formatErrandId } from '../utils/formatErrandId';
 import { extractMerchantCategories } from '../utils/merchantCategories';
-import StatusBadge from './StatusBadge';
 import DispatcherAvatar from './DispatcherAvatar';
 import type { ErrandSummary } from '../hooks/useActiveErrands';
 
@@ -65,7 +62,26 @@ export default function ErrandChannelRow({ errand, onSelect }: ErrandChannelRowP
     };
   }, [errand.id]);
 
-  const displayCategory = extractMerchantCategories(errand, chatMeta);
+  const displayCategory = (errand.pinpoints || [])
+    .map((pin) => String(pin.storeName || '').trim())
+    .filter(Boolean)
+    .join(' & ') || extractMerchantCategories(errand, chatMeta);
+  const statusLabels: Record<string, string> = {
+    AVAILABLE: 'Awaiting assignment',
+    PENDING: 'Awaiting assignment',
+    ASSIGNED: 'Rider assigned',
+    IN_TRANSIT: 'Out for delivery',
+    DELIVERED: 'Delivered',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  };
+  const status = String(errand.status || '').toUpperCase();
+  const statusLabel = statusLabels[status] || 'Awaiting update';
+  const statusColor = status === 'PENDING' || status === 'AVAILABLE' ? colors.warning
+    : status === 'ASSIGNED' ? colors.info
+    : status === 'IN_TRANSIT' ? (isDark ? colors.primary : colors.primaryStrong)
+    : status === 'DELIVERED' || status === 'COMPLETED' ? colors.success
+    : status === 'CANCELLED' ? colors.danger : colors.textGray;
 
   return (
     <TouchableOpacity
@@ -73,21 +89,23 @@ export default function ErrandChannelRow({ errand, onSelect }: ErrandChannelRowP
       style={[
         styles.rowContainer,
         {
-          borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+          borderBottomColor: colors.border,
         },
       ]}
       onPress={() => onSelect(errand.id, errand.status)}
       testID={`chat-channel-row-${errand.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${displayCategory}, ${dispatcherName}, ${statusLabel}. Open conversation.`}
     >
       {/* AVATAR WITH LIVE ONLINE / OFFLINE BADGE */}
       <View style={styles.avatarWrapper}>
-        <DispatcherAvatar dispatcherId={dispatcherId} size={44} />
+        <DispatcherAvatar dispatcherId={dispatcherId} size={44} neutral />
         <View
           style={[
             styles.onlineDot,
             {
-              backgroundColor: isDispatcherOnline ? '#10B981' : '#9CA3AF',
-              borderColor: isDark ? colors.bgApp : '#FFFFFF',
+              backgroundColor: isDispatcherOnline ? colors.successAccent : colors.textLight,
+              borderColor: colors.card,
             },
           ]}
           testID={`channel-presence-dot-${errand.id}`}
@@ -96,36 +114,35 @@ export default function ErrandChannelRow({ errand, onSelect }: ErrandChannelRowP
 
       {/* CHANNEL CONTENT */}
       <View style={styles.textBodyCol}>
-        {/* Top Line: Category / Store Lead & Status Badge */}
+        {/* Store identity leads; dispatcher and order context sit below. */}
         <View style={styles.topLine}>
           <Text
             style={[styles.categoryPreview, { color: colors.textDark }]}
-            numberOfLines={1}
+            numberOfLines={2}
             maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
           >
             {displayCategory}
           </Text>
-          <StatusBadge status={errand.status} />
         </View>
-
-        {/* Subtitle Row: Order ID & Dispatcher Tag */}
+        <Text
+          style={[styles.dispatcherText, { color: colors.textDark }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
+        >
+          {dispatcherName}
+        </Text>
+        {/* The reference and current status can wrap on compact devices. */}
         <View style={styles.subMetaRow}>
           <Text
-            style={[styles.errandId, { color: colors.textGray }]}
-            maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
+            style={[styles.errandId, { color: colors.detailBlue }]}
+            maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}
           >
-            {formatErrandId(errand.id)}
+            {formatErrandId(errand.id, errand.referenceNo)}
           </Text>
-          <Text style={[styles.dotDivider, { color: colors.textLight }]}>·</Text>
-          <View style={styles.dispatcherBadge}>
-            <ShieldCheck size={12} color="#10B981" />
-            <Text
-              style={[styles.dispatcherText, { color: colors.textGray }]}
-              maxFontSizeMultiplier={PortalFontSizeMultipliers.card}
-            >
-              {dispatcherName}
-            </Text>
-          </View>
+          <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.dotDivider, { color: colors.textLight }]}>·</Text>
+          <Text style={[styles.statusText, { color: statusColor }]} maxFontSizeMultiplier={PortalFontSizeMultipliers.caption}>
+            {statusLabel}
+          </Text>
         </View>
       </View>
 
@@ -139,10 +156,9 @@ const styles = StyleSheet.create({
   rowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
-    paddingVertical: 14,
-    paddingHorizontal: Spacing.xs,
-    borderBottomWidth: 1,
+    minHeight: 96,
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatarWrapper: {
     position: 'relative',
@@ -162,41 +178,40 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   topLine: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   categoryPreview: {
     fontFamily: FontFamily.bold,
     fontSize: scaledPortalFontSize(PortalFontSizes.body),
-    lineHeight: getPortalLineHeight(PortalFontSizes.body, 1.25),
-    flex: 1,
-    marginRight: 6,
+    lineHeight: getPortalLineHeight(PortalFontSizes.body, 'heading'),
   },
   subMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
+    columnGap: 5,
+    rowGap: 2,
+    marginTop: 6,
   },
   errandId: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
   },
   dotDivider: {
+    fontFamily: FontFamily.regular,
     fontSize: scaledPortalFontSize(PortalFontSizes.micro),
   },
-  dispatcherBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+  statusText: {
+    flexShrink: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
+    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 'body'),
   },
   dispatcherText: {
     fontFamily: FontFamily.regular,
-    fontSize: scaledPortalFontSize(PortalFontSizes.micro),
-    lineHeight: getPortalLineHeight(PortalFontSizes.micro, 1.2),
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
+    lineHeight: getPortalLineHeight(PortalFontSizes.caption, 'body'),
   },
   chevron: {
     marginLeft: 2,

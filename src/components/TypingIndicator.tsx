@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useThemeColor } from '../hooks/useThemeColor';
-import { FontFamily, BorderRadius } from '../config/theme';
+import { PortalFontSizeMultipliers, PortalFontSizes, scaledPortalFontSize, getPortalLineHeight, FontFamily, BorderRadius } from '../config/theme';
 import DispatcherAvatar from './DispatcherAvatar';
 
 export interface TypingIndicatorProps {
@@ -64,7 +64,7 @@ export default function TypingIndicator({
 
   return (
     <View style={styles.container} testID="chat-typing-indicator">
-      <Text style={[styles.senderLabel, { color: colors.textGray }]}>
+      <Text maxFontSizeMultiplier={PortalFontSizeMultipliers.body} style={[styles.senderLabel, { color: colors.textGray }]}>
         {name} is typing...
       </Text>
 
@@ -117,8 +117,9 @@ const styles = StyleSheet.create({
     maxWidth: '85%',
   },
   senderLabel: {
+    lineHeight: getPortalLineHeight(scaledPortalFontSize(PortalFontSizes.caption), 'label'),
     fontFamily: FontFamily.medium,
-    fontSize: 10,
+    fontSize: scaledPortalFontSize(PortalFontSizes.caption),
     marginBottom: 3,
     marginLeft: 34,
   },
